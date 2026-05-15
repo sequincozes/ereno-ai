@@ -1,0 +1,6 @@
+{
+  "accuracy": 0.9342,
+  "precision_masquerade": 0.928,
+  "recall_masquerade": 0.941,
+  "f1_score_masquerade": 0.9345
+}

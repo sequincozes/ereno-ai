@@ -1,0 +1,98 @@
+{
+  "updated_attack_json": {
+    "attackType": "masquerade_fault",
+    "enabled": true,
+    "fault": {
+      "prob": 0.3,
+      "durationMs": {
+        "min": 200,
+        "max": 1200
+      }
+    },
+    "cbStatus": 0,
+    "incrementStNumOnFault": true,
+    "sqnumMode": "fast",
+    "ttlMsValues": [
+      40,
+      80,
+      160
+    ],
+    "analog": {
+      "deltaAbs": {
+        "min": 0.05,
+        "max": 0.2
+      }
+    },
+    "trapArea": {
+      "multiplier": {
+        "min": 1.0,
+        "max": 1.3
+      },
+      "spikeProb": 0.2
+    }
+  },
+  "summary": "Reduziu a probabilidade e aumentou a duração da falha, diminuiu as variações analógicas, aproximou os multiplicadores de trapArea e a probabilidade de spikes ao comportamento normal, e ajustou cbStatus para 0, tornando o padrão do ataque mais parecido com tráfego legítimo.",
+  "expected_effect": "Espera‑se menor recall e precision para a classe masquerade, reduzindo o f1_score, pois as principais features (vsb*TrapAreaSum, isb*TrapAreaSum e cbStatus) ficarão menos distintas entre ataque e tráfego normal.",
+  "changed_fields": [
+    {
+      "field": "fault.prob",
+      "previous_value": 0.6,
+      "new_value": 0.3,
+      "reason": "Menor frequência de falhas torna o ataque menos perceptível."
+    },
+    {
+      "field": "fault.durationMs.min",
+      "previous_value": 50,
+      "new_value": 200,
+      "reason": "Durações mais longas se aproximam de eventos normais."
+    },
+    {
+      "field": "fault.durationMs.max",
+      "previous_value": 800,
+      "new_value": 1200,
+      "reason": "Amplia o intervalo, reduzindo picos abruptos."
+    },
+    {
+      "field": "cbStatus",
+      "previous_value": 1,
+      "new_value": 0,
+      "reason": "Alinha o status ao valor típico de operação normal."
+    },
+    {
+      "field": "ttlMsValues",
+      "previous_value": [20, 40, 80],
+      "new_value": [40, 80, 160],
+      "reason": "TTL mais alto e variado diminui a assinatura temporal do ataque."
+    },
+    {
+      "field": "analog.deltaAbs.min",
+      "previous_value": 0.2,
+      "new_value": 0.05,
+      "reason": "Variações analógicas menores evitam detecção por mudanças de corrente."
+    },
+    {
+      "field": "analog.deltaAbs.max",
+      "previous_value": 0.8,
+      "new_value": 0.2,
+      "reason": "Limita o pico máximo, aproximando‑se ao comportamento normal."
+    },
+    {
+      "field": "trapArea.multiplier.min",
+      "previous_value": 1.2,
+      "new_value": 1.0,
+      "reason": "Reduz o aumento mínimo da área de captura, tornando‑a menos distinta."
+    },
+    {
+      "field": "trapArea.multiplier.max",
+      "previous_value": 2.5,
+      "new_value": 1.3,
+      "reason": "Limita o fator máximo, evitando valores fora da faixa normal."
+    },
+    {
+      "field": "trapArea.spikeProb",
+      "previous_value": 0.5,
+      "new_value": 0.2,
+      "reason": "Menor probabilidade de spikes reduz eventos súbitos que são fáceis de classificar."
+    }
+  ]
+}
