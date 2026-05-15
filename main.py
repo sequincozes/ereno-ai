@@ -23,7 +23,8 @@ from tools.ereno_runner import ErenoRunner
 from tools.experiment_memory import ExperimentMemory
 from tools.ids_evaluator import IdsEvaluator
 from tools.json_loader import load_json, load_text, save_json, save_text
-from tools.llm_response_parser import extract_updated_attack_json
+from tools.json_patch_applier import apply_patch_to_json
+from tools.llm_response_parser import extract_patch_from_llm_response
 from tools.results_logger import append_metrics_to_csv
 
 
@@ -47,10 +48,7 @@ def main() -> None:
         suggested_config_path=str(SUGGESTED_CONFIG_PATH),
     )
 
-    evaluator = IdsEvaluator(
-        drop_cb_status=False,
-    )
-
+    evaluator = IdsEvaluator(drop_cb_status=False)
     memory = ExperimentMemory()
 
     print("\n==============================")
@@ -82,7 +80,7 @@ def main() -> None:
             base_prompt=base_prompt,
             attack_json=attack_json,
             performance_results=performance_results,
-            history=memory.get_history()[-3:],
+            history=memory.get_history()[-1:],
         )
 
         save_text(LLM_RESPONSE_PATH, llm_response)
@@ -94,13 +92,23 @@ def main() -> None:
 
         print(f"[LLM] Resposta salva em: {iteration_llm_response_path}")
 
-        updated_attack_json = extract_updated_attack_json(
-            llm_response=llm_response,
-            fallback_attack_json=attack_json,
-        )
+        patch = extract_patch_from_llm_response(llm_response)
 
-        if updated_attack_json == attack_json:
-            print("[MAIN] Nenhum JSON novo válido foi extraído. Mantendo JSON anterior.")
+        if patch:
+            updated_attack_json = apply_patch_to_json(
+                original_json=attack_json,
+                patch=patch,
+            )
+        else:
+            print("[MAIN] Nenhum patch válido. Mantendo configuração anterior.")
+            updated_attack_json = attack_json
+
+        config_changed = updated_attack_json != attack_json
+
+        if config_changed:
+            print("[MAIN] Configuração alterada nesta iteração.")
+        else:
+            print("[MAIN] Configuração NÃO mudou nesta iteração.")
 
         attack_json = updated_attack_json
 
@@ -117,6 +125,8 @@ def main() -> None:
         )
 
         metrics = evaluator.evaluate_variant(dataset_path)
+        metrics["config_changed"] = config_changed
+
         performance_results = metrics
 
         append_metrics_to_csv(

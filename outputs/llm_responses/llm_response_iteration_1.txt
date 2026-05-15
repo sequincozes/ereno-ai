@@ -1,0 +1,43 @@
+Olá! Vou ajudar a dificultar a classificação do ataque cibernético do tipo Masquerade no seu IDS Random Forest.
+
+Primeiramente, é importante notar que o ataque atual tem um f1-score de 1.0, o que significa que o modelo está classificando todos os exemplos de ataque como positivos. Isso pode ser um problema, pois o modelo pode estar sobre-aprendendo e não sendo capaz de detectar ataques mais sutis.
+
+Aqui estão algumas sugestões para dificultar a classificação do ataque:
+
+1. **Reduzir a probabilidade de falha (`fault.prob`)**: Atualmente, a probabilidade de falha é de 0.6. Reduzindo para 0.4 ou 0.3, você pode tornar mais difícil para o modelo detectar o ataque.
+2. **Aumentar a duração mínima do ataque (`fault.durationMs.min`)**: Atualmente, a duração mínima do ataque é de 50 ms. Aumentando para 100 ou 150 ms, você pode tornar mais difícil para o modelo detectar o ataque.
+3. **Aumentar a amplitude do sinal de analogo (`analog.deltaAbs.max`)**: Atualmente, a amplitude máxima do sinal de analogo é de 0.8. Aumentando para 1.0 ou 1.2, você pode tornar mais difícil para o modelo detectar o ataque.
+4. **Reduzir a probabilidade de spike (`trapArea.spikeProb`)**: Atualmente, a probabilidade de spike é de 0.5. Reduzindo para 0.3 ou 0.2, você pode tornar mais difícil para o modelo detectar o ataque.
+5. **Alterar o modo de sequência (`sqnumMode`)**: Atualmente, o modo de sequência é "fast". Tente alterar para "slow" ou "medium" para ver se isso afeta a classificação do ataque.
+
+Lembre-se de que essas são apenas sugestões e que você pode precisar experimentar com diferentes combinações de valores para encontrar o que funciona melhor para o seu caso específico.
+
+Aqui está um exemplo de como você pode alterar os campos no arquivo JSON:
+```json
+{
+  "field": "fault.prob",
+  "current_value": 0.4,
+  "type": "float"
+},
+{
+  "field": "fault.durationMs.min",
+  "current_value": 100,
+  "type": "int"
+},
+{
+  "field": "analog.deltaAbs.max",
+  "current_value": 1.0,
+  "type": "float"
+},
+{
+  "field": "trapArea.spikeProb",
+  "current_value": 0.3,
+  "type": "float"
+},
+{
+  "field": "sqnumMode",
+  "current_value": "slow",
+  "type": "str"
+}
+```
+Lembre-se de que é importante testar essas alterações em um ambiente de teste antes de aplicá-las ao seu modelo de produção.

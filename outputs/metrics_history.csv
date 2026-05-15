@@ -1,0 +1,8 @@
+iteration,evaluation_type,dataset_path,accuracy,precision_masquerade,recall_masquerade,f1_score_masquerade,support_masquerade,attack_label_original,label_column,dataset_rows,dataset_columns,config_changed
+0,baseline_internal_test,outputs/dataset_iteration_0.csv,1.0,1.0,1.0,1.0,8985,masquerade_fake_fault,class,79947,54,
+1,variant_external_test,outputs/dataset_iteration_1.csv,1.0,1.0,1.0,1.0,20023,masquerade_fake_fault,class,70021,54,True
+2,variant_external_test,outputs/dataset_iteration_2.csv,1.0,1.0,1.0,1.0,9990,masquerade_fake_fault,class,59988,54,True
+3,variant_external_test,outputs/dataset_iteration_3.csv,1.0,1.0,1.0,1.0,25113,masquerade_fake_fault,class,75111,54,True
+4,variant_external_test,outputs/dataset_iteration_4.csv,1.0,1.0,1.0,1.0,24946,masquerade_fake_fault,class,74944,54,False
+5,variant_external_test,outputs/dataset_iteration_5.csv,1.0,1.0,1.0,1.0,34902,masquerade_fake_fault,class,84900,54,True
+6,variant_external_test,outputs/dataset_iteration_6.csv,1.0,1.0,1.0,1.0,34993,masquerade_fake_fault,class,84991,54,False

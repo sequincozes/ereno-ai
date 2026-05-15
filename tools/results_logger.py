@@ -24,6 +24,7 @@ def append_metrics_to_csv(
         "label_column",
         "dataset_rows",
         "dataset_columns",
+        "config_changed",
     ]
 
     row = {
@@ -39,8 +40,10 @@ def append_metrics_to_csv(
         "label_column": metrics.get("label_column"),
         "dataset_rows": metrics.get("dataset_rows"),
         "dataset_columns": metrics.get("dataset_columns"),
+        "config_changed": metrics.get("config_changed"),
     }
-
+    
+    
     file_exists = csv_path.exists()
 
     with open(csv_path, "a", newline="", encoding="utf-8") as file:

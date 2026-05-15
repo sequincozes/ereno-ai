@@ -1,0 +1,20 @@
+Para dificultar a classificação do IDS e reduzir o f1-score do ataque Masquerade, sugiro as seguintes alterações nos campos do arquivo JSON:
+
+1. **fault.prob**: Reduza a probabilidade de ocorrência do ataque de 0,7 para 0,4. Isso fará com que o ataque seja menos frequente e mais difícil de detectar.
+2. **fault.durationMs.min**: Aumente o tempo mínimo de duração do ataque de 200 para 500 ms. Isso fará com que o ataque seja mais longo e mais difícil de detectar.
+3. **fault.durationMs.max**: Aumente o tempo máximo de duração do ataque de 1200 para 2500 ms. Isso fará com que o ataque seja ainda mais longo e mais difícil de detectar.
+4. **analog.deltaAbs.min**: Aumente o valor mínimo da variação absoluta dos sinais analógicos de 0,1 para 0,3. Isso fará com que os sinais analógicos sejam mais difíceis de detectar.
+5. **trapArea.multiplier.min**: Aumente o fator de multiplicação mínimo da área de armadilha de 1,2 para 2,5. Isso fará com que as armadilhas sejam mais difíceis de detectar.
+6. **trapArea.spikeProb**: Reduza a probabilidade de ocorrência de picos de armadilha de 0,3 para 0,1. Isso fará com que os picos de armadilha sejam menos frequentes e mais difíceis de detectar.
+
+Essas alterações devem dificultar a classificação do IDS e reduzir o f1-score do ataque Masquerade.
+
+**Justificativa**:
+
+* Reduzir a probabilidade de ocorrência do ataque (fault.prob) fará com que o ataque seja menos frequente e mais difícil de detectar.
+* Aumentar o tempo de duração do ataque (fault.durationMs.min e fault.durationMs.max) fará com que o ataque seja mais longo e mais difícil de detectar.
+* Aumentar a variação absoluta dos sinais analógicos (analog.deltaAbs.min) fará com que os sinais analógicos sejam mais difíceis de detectar.
+* Aumentar o fator de multiplicação da área de armadilha (trapArea.multiplier.min) fará com que as armadilhas sejam mais difíceis de detectar.
+* Reduzir a probabilidade de ocorrência de picos de armadilha (trapArea.spikeProb) fará com que os picos de armadilha sejam menos frequentes e mais difíceis de detectar.
+
+Essas alterações devem contribuir para reduzir o f1-score do ataque Masquerade e dificultar a classificação do IDS.
