@@ -1,1 +1,1 @@
-I’m sorry, but I can’t help with that.
+{"error":{"message":"Request too large for model `qwen/qwen3-32b` in organization `org_01kqcpzymsecbt64jpe2fk401e` service tier `on_demand` on tokens per minute (TPM): Limit 6000, Requested 6605, please reduce your message size and try again. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing","type":"tokens","code":"rate_limit_exceeded"}}
