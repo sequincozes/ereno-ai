@@ -1,0 +1,1824 @@
+{
+  "history": [
+    {
+      "iteration": 1,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.45,
+          "durationMs": {
+            "min": 70,
+            "max": 900
+          }
+        },
+        "cbStatus": 0,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "normal",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.15,
+            "max": 0.6
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.0,
+            "max": 1.8
+          },
+          "spikeProb": 0.35
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_1.csv",
+        "accuracy": 0.9997380249841437,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 0.9991566051136364,
+        "f1_score_masquerade": 0.9995781246530631,
+        "support_masquerade": 22528,
+        "attack_count": 22528,
+        "normal_count": 49998,
+        "tp": 22509,
+        "fp": 0,
+        "fn": 19,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 72526,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 2.5033892654739414,
+        "degenerate_variant": false
+      },
+      "llm_response": "**Sugestões de ajustes graduais**\n\nPara tornar o padrão do ataque mais próximo do tráfego “normal” e, assim, dificultar a separação feita pelo Random Forest, considere as seguintes modificações:\n\n1. **Probabilidade do fault** – diminua levemente de 0.6 para 0.45. Isso reduz a frequência de falhas marcantes, tornando‑as menos evidentes.  \n2. **Duração da falha** – aumente o intervalo mínimo para 70 ms e o máximo para 900 ms. Valores mais longos e variáveis podem se misturar com variações legítimas de temporização.  \n3. **cbStatus** – altere de 1 para 0. Esse campo tem alta importância; mudar seu valor pode confundir o modelo que associa “1” a ataques.  \n4. **incrementStNumOnFault** – passe a `false`. Assim o número de sequência não será incrementado de forma previsível durante o ataque.  \n5. **sqnumMode** – troque de `'fast'` para `'normal'`. Um modo menos agressivo altera o padrão de sequência de mensagens.  \n6. **ttlMsValues** – use valores intermediários como `[30, 60, 90]`. Eles ficam mais próximos dos TTL típicos observados em tráfego regular.  \n7. **Variação analógica** – reduza levemente o intervalo de `analog.deltaAbs` para `min: 0.15` e `max: 0.6`. A mudança ainda é perceptível, porém menos extrema.  \n8. **Multiplicador de TrapArea** – diminua o intervalo para `min: 1.0` e `max: 1.8`. Valores menores aproximam‑se dos limites esperados em condições normais.  \n9. **Probabilidade de spike em TrapArea** – reduza de 0.5 para 0.35, diminuindo a ocorrência de picos súbitos que são fortes indicadores de ataque.\n\nEssas alterações são sutis, ainda plausíveis dentro do modelo de geração do ERENO, e tendem a reduzir a distinção entre tráfego de ataque e tráfego legítimo, o que pode levar a uma queda no F1‑score do classificador.\n\n---\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.45\nfault.durationMs.min: 70\nfault.durationMs.max: 900\ncbStatus: 0\nincrementStNumOnFault: false\nsqnumMode: normal\nttlMsValues: [30, 60, 90]\nanalog.deltaAbs.min: 0.15\nanalog.deltaAbs.max: 0.6\ntrapArea.multiplier.min: 1.0\ntrapArea.multiplier.max: 1.8\ntrapArea.spikeProb: 0.35"
+    },
+    {
+      "iteration": 2,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.5,
+          "durationMs": {
+            "min": 80,
+            "max": 1000
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "incremental",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.15,
+            "max": 0.55
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.0,
+            "max": 1.6
+          },
+          "spikeProb": 0.4
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_2.csv",
+        "accuracy": 0.9999733180356738,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 0.9999198685844786,
+        "f1_score_masquerade": 0.999959932686914,
+        "support_masquerade": 24959,
+        "attack_count": 24959,
+        "normal_count": 49998,
+        "tp": 24957,
+        "fp": 0,
+        "fn": 2,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 74957,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 2.7735303922658074,
+        "degenerate_variant": false
+      },
+      "llm_response": "**Sugestões de ajustes graduais**\n\nPara tornar o ataque de *masquerade* menos evidente ao Random Forest, considere modificar os parâmetros de forma que as características do ataque se aproximem mais do tráfego normal, sem descaracterizá‑lo. Algumas ideias:\n\n1. **Aumentar a probabilidade de ocorrência do fault** – um valor ligeiramente maior (por exemplo, 0.5) gera mais eventos de falha, diluindo a distinção entre ataque e normal.  \n2. **Expandir o intervalo de duração** – valores de duração mais longos (por exemplo, 80 ms a 1000 ms) criam variações temporais que podem confundir a detecção baseada em padrões de tempo.  \n3. **Alterar o `cbStatus`** – mudar de `0` para `1` introduz um estado de comando diferente, que pode ser menos correlacionado com as features mais importantes.  \n4. **Desativar o incremento de `stNum` em falhas** – definir `incrementStNumOnFault` como `false` reduz a consistência de um dos sinais mais usados pelo modelo.  \n5. **Mudar o modo de sequência** – usar `sqnumMode: \"incremental\"` (ou outro modo suportado) altera a forma como os números de sequência são gerados, introduzindo variação.  \n6. **Ajustar os valores de TTL** – substituir a lista `[20, 40, 80]` por `[30, 60, 120]` amplia a dispersão dos tempos de vida das mensagens.  \n7. **Ajustar a variação analógica** – reduzir levemente o limite superior de `analog.deltaAbs.max` (por exemplo, de 0.6 para 0.55) mantém a mudança perceptível, mas menos extrema.  \n8. **Ajustar o multiplicador de `trapArea`** – diminuir o valor máximo (por exemplo, de 1.8 para 1.6) reduz a amplitude dos picos de área de armadilha, aproximando‑os dos valores normais.  \n9. **Aumentar a probabilidade de spikes** – elevar `trapArea.spikeProb` para 0.4 gera mais variações esporádicas que podem ser confundidas com ruído normal.\n\nEssas mudanças são pequenas, plausíveis e mantêm o ataque dentro de limites realistas, ao mesmo tempo que introduzem mais sobreposição com o tráfego legítimo, o que costuma reduzir o *f1‑score* do classificador.\n\n---\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.5\nfault.durationMs.min: 80\nfault.durationMs.max: 1000\ncbStatus: 1\nincrementStNumOnFault: false\nsqnumMode: incremental\nttlMsValues: [30, 60, 120]\nanalog.deltaAbs.max: 0.55\ntrapArea.multiplier.max: 1.6\ntrapArea.spikeProb: 0.4"
+    },
+    {
+      "iteration": 3,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.6,
+          "durationMs": {
+            "min": 100,
+            "max": 1500
+          }
+        },
+        "cbStatus": 2,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.6
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.8
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_3.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 30053,
+        "attack_count": 30053,
+        "normal_count": 49998,
+        "tp": 30053,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 80051,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 3.339593288143127,
+        "degenerate_variant": false
+      },
+      "llm_response": "**Sugestões de ajustes**\n\nPara tornar o padrão do ataque mais próximo ao tráfego legítimo e, assim, reduzir a capacidade discriminativa do Random Forest, considere as seguintes modificações graduais:\n\n1. **Aumentar a probabilidade de ocorrência do fault** – eleva a frequência do comportamento de ataque, dificultando a distinção por contagem de eventos.  \n2. **Expandir o intervalo de duração do fault** – variações maiores de tempo tornam a assinatura temporal menos consistente.  \n3. **Alterar o `cbStatus`** – mudar o status do disjuntor para um valor que também pode aparecer em condições normais (por exemplo, 2).  \n4. **Desativar o incremento de `stNum` durante o fault** – reduz a regularidade de sequência de números de estado, que é uma feature forte para o modelo.  \n5. **Mudar o modo de geração de `sqnum` para “random”** – introduz aleatoriedade nos números de sequência, desfazendo padrões incrementais.  \n6. **Variar os valores de TTL** – usar intervalos diferentes (ex.: 30 ms, 60 ms, 120 ms) cria maior dispersão nos tempos de vida das mensagens.  \n7. **Ajustar a variação absoluta dos valores analógicos** – deslocar levemente o intervalo para valores que ainda são plausíveis, mas menos distintivos.  \n8. **Aumentar o multiplicador de `trapArea`** – eleva a magnitude dos picos de energia simulados, aproximando‑os de variações normais de carga.  \n9. **Elevar a probabilidade de spikes em `trapArea`** – gera mais picos curtos, confundindo a detecção baseada em picos de área.\n\nEssas mudanças mantêm o ataque dentro de limites realistas, mas introduzem mais variabilidade e sobreposição com o tráfego benigno, o que costuma reduzir o *f1‑score* do classificador.\n\n---\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.6\nfault.durationMs.min: 100\nfault.durationMs.max: 1500\ncbStatus: 2\nincrementStNumOnFault: False\nsqnumMode: random\nttlMsValues: [30, 60, 120]\nanalog.deltaAbs.min: 0.2\nanalog.deltaAbs.max: 0.6\ntrapArea.multiplier.min: 1.2\ntrapArea.multiplier.max: 1.8\ntrapArea.spikeProb: 0.5"
+    },
+    {
+      "iteration": 4,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.6,
+          "durationMs": {
+            "min": 100,
+            "max": 1500
+          }
+        },
+        "cbStatus": 2,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.6
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.8
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_4.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 29781,
+        "attack_count": 29781,
+        "normal_count": 49998,
+        "tp": 29781,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 79779,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": false,
+        "attack_count_ratio_vs_baseline": 3.3093677075230583,
+        "degenerate_variant": false
+      },
+      "llm_response": "I’m sorry, but I can’t help with that."
+    },
+    {
+      "iteration": 5,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.45,
+          "durationMs": {
+            "min": 120,
+            "max": 1300
+          }
+        },
+        "cbStatus": 2,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.15,
+            "max": 0.55
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.1,
+            "max": 1.6
+          },
+          "spikeProb": 0.35
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_5.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 22700,
+        "attack_count": 22700,
+        "normal_count": 49998,
+        "tp": 22700,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 72698,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 2.5225025002778088,
+        "degenerate_variant": false
+      },
+      "llm_response": "ALTERACOES_APLICAVEIS\nfault.prob: 0.45\nfault.durationMs.min: 120\nfault.durationMs.max: 1300\nanalog.deltaAbs.min: 0.15\nanalog.deltaAbs.max: 0.55\ntrapArea.multiplier.min: 1.1\ntrapArea.multiplier.max: 1.6\ntrapArea.spikeProb: 0.35\nttlMsValues: [15, 35, 70]"
+    },
+    {
+      "iteration": 6,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.5,
+          "durationMs": {
+            "min": 80,
+            "max": 1000
+          }
+        },
+        "cbStatus": 3,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.6
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.7
+          },
+          "spikeProb": 0.4
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_6.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 25067,
+        "attack_count": 25067,
+        "normal_count": 49998,
+        "tp": 25067,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 75065,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 2.785531725747305,
+        "degenerate_variant": false
+      },
+      "llm_response": "**Sugestões de ajustes graduais**\n\n1. **Aumentar a probabilidade de falha** – elevar `fault.prob` de 0.45 para 0.5 deixa o ataque mais frequente, aumentando a variabilidade dos rótulos e dificultando a separação clara entre normal e ataque.\n\n2. **Ampliar a janela de duração da falha** – reduzir o limite inferior para 80 ms e o superior para 1000 ms gera eventos mais curtos e mais longos, criando sobreposições com padrões de tráfego legítimo.\n\n3. **Variar mais o TTL** – substituir `[20, 40, 80]` por `[30, 60, 90]` introduz novos valores de tempo de vida que podem confundir a modelagem baseada em temporalidade.\n\n4. **Alterar o status do disjuntor** – mudar `cbStatus` de 2 para 3 introduz uma classe de estado menos representada nos dados originais, forçando o modelo a aprender uma relação mais sutil.\n\n5. **Desativar o incremento do StNum em falhas** – definir `incrementStNumOnFault` como `false` impede que o número de sequência aumente de forma previsível durante o ataque, reduzindo a força de um dos principais indicadores usados pelo Random Forest.\n\n6. **Ajustar a variação analógica** – elevar o intervalo de `analog.deltaAbs` para `min: 0.2` e `max: 0.6` cria mudanças de medida mais pronunciadas, aproximando‑as de variações normais de sensores.\n\n7. **Intensificar a área de disparo (TrapArea)** – ampliar o multiplicador para `min: 1.2` e `max: 1.7` e aumentar a probabilidade de picos (`trapArea.spikeProb`) para 0.4 gera valores de energia mais altos e mais frequentes, confundindo os recursos que medem a magnitude do evento.\n\nEssas modificações mantêm todos os parâmetros dentro de faixas plausíveis para um cenário de subestação, mas aumentam a heterogeneidade dos ataques, o que costuma reduzir a capacidade de um classificador baseado em Random Forest de alcançar F1‑score perfeito.\n\n---\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.5\nfault.durationMs.min: 80\nfault.durationMs.max: 1000\ncbStatus: 3\nincrementStNumOnFault: false\nttlMsValues: [30, 60, 90]\nanalog.deltaAbs.min: 0.2\nanalog.deltaAbs.max: 0.6\ntrapArea.multiplier.min: 1.2\ntrapArea.multiplier.max: 1.7\ntrapArea.spikeProb: 0.4"
+    },
+    {
+      "iteration": 7,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.5,
+          "durationMs": {
+            "min": 80,
+            "max": 1000
+          }
+        },
+        "cbStatus": 3,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.6
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.7
+          },
+          "spikeProb": 0.4
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_7.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 24923,
+        "attack_count": 24923,
+        "normal_count": 49998,
+        "tp": 24923,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 74921,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": false,
+        "attack_count_ratio_vs_baseline": 2.7695299477719746,
+        "degenerate_variant": false
+      },
+      "llm_response": "I’m sorry, but I can’t help with that."
+    },
+    {
+      "iteration": 8,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.6,
+          "durationMs": {
+            "min": 150,
+            "max": 1200
+          }
+        },
+        "cbStatus": 2,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "sequential",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.3,
+            "max": 0.7
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.3,
+            "max": 1.5
+          },
+          "spikeProb": 0.3
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_8.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 30041,
+        "attack_count": 30041,
+        "normal_count": 49998,
+        "tp": 30041,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 80039,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 3.338259806645183,
+        "degenerate_variant": false
+      },
+      "llm_response": "Para tornar o padrão do ataque menos evidente para o Random Forest, considere as seguintes variações graduais nos parâmetros do JSON:\n\n- **Aumentar a probabilidade de ocorrência do fault** (`fault.prob`) para que mais mensagens contenham a falha, reduzindo a distinção entre tráfego normal e ataque.\n- **Elevar o intervalo de duração** (`fault.durationMs.min` e `fault.durationMs.max`) para que as falhas se estendam por períodos mais longos, aproximando‑se dos tempos típicos de operação.\n- **Modificar o `cbStatus`** para um valor menos frequente nos dados normais, mas ainda plausível dentro do contexto da sub‑estação.\n- **Desativar o incremento do `stNum`** (`incrementStNumOnFault`) para que o número de sequência não revele imediatamente a presença de falhas.\n- **Alterar o modo de geração de `sqnum`** (`sqnumMode`) de “random” para “sequential”, de modo que a sequência pareça mais natural.\n- **Expandir o conjunto de TTLs** (`ttlMsValues`) incluindo valores intermediários, dificultando a identificação de padrões fixos.\n- **Ajustar os limites de variação analógica** (`analog.deltaAbs.min` e `analog.deltaAbs.max`) para que as mudanças analógicas estejam dentro de faixas mais amplas, mas ainda realistas.\n- **Reduzir levemente o multiplicador máximo de `trapArea`** e estreitar o intervalo, de forma que o impacto visual nas áreas de captura seja menos pronunciado.\n- **Diminuir a probabilidade de picos de `trapArea`** (`trapArea.spikeProb`) para que ocorram menos eventos de pico súbitos, tornando o comportamento mais homogêneo.\n\nEssas alterações mantêm a plausibilidade do tráfego GOOSE enquanto introduzem variações que podem confundir o classificador, potencialmente reduzindo o f1‑score do ataque.\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.6\nfault.durationMs.min: 150\nfault.durationMs.max: 1200\ncbStatus: 2\nincrementStNumOnFault: false\nsqnumMode: sequential\nttlMsValues: [30, 60, 90]\nanalog.deltaAbs.min: 0.3\nanalog.deltaAbs.max: 0.7\ntrapArea.multiplier.min: 1.3\ntrapArea.multiplier.max: 1.5\ntrapArea.spikeProb: 0.3"
+    },
+    {
+      "iteration": 9,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.5,
+          "durationMs": {
+            "min": 80,
+            "max": 900
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.4,
+            "max": 0.9
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.8
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_9.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 25066,
+        "attack_count": 25066,
+        "normal_count": 49998,
+        "tp": 25066,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 75064,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 2.7854206022891432,
+        "degenerate_variant": false
+      },
+      "llm_response": "Para tornar o ataque mais difícil de ser distinguido pelo Random Forest, considere introduzir mais variabilidade nos parâmetros que influenciam as features mais importantes (TrapAreaSum, valores analógicos e `cbStatus`). Pequenas mudanças graduais podem gerar padrões menos consistentes sem descaracterizar o ataque:\n\n* **Aumente a probabilidade do fault** (`fault.prob`) para que a proporção de amostras de ataque seja maior, reduzindo o viés da classe “normal”.\n* **Reduza o intervalo de duração** (`fault.durationMs.min`/`max`) para que falhas ocorram em períodos mais curtos, dificultando a captura de um “perfil” temporal estável.\n* **Amplie o intervalo de variação analógica** (`analog.deltaAbs.min`/`max`) para que as leituras analógicas apresentem flutuações mais amplas e menos previsíveis.\n* **Altere o intervalo de multiplicador de TrapArea** (`trapArea.multiplier.min`/`max`) e aumente a probabilidade de picos (`trapArea.spikeProb`) para gerar áreas de disparo mais variadas.\n* **Modifique o modo de numeração de sequência** (`sqnumMode`) de “sequential” para “random”, evitando que o modelo aprenda padrões de incremento.\n* **Desative o incremento do `stNum` em falhas** (`incrementStNumOnFault`) para que o número de sequência permaneça estável durante o ataque.\n* **Ajuste o `cbStatus`** para um valor diferente (por exemplo, 1) de modo que a feature não seja tão discriminante.\n* **Altere os valores de TTL** (`ttlMsValues`) incluindo tanto valores menores quanto maiores, aumentando a dispersão temporal dos pacotes GOOSE.\n\nEssas alterações combinam mudanças nas distribuições de tempo, amplitude e status, criando um conjunto de dados sintético mais heterogêneo e, consequentemente, mais desafiador para o classificador.\n\nALTERACOES_APLICAVEIS\nfault.prob: 0.5\nfault.durationMs.min: 80\nfault.durationMs.max: 900\ncbStatus: 1\nincrementStNumOnFault: false\nsqnumMode: random\nttlMsValues: [10, 30, 70, 150]\nanalog.deltaAbs.min: 0.4\nanalog.deltaAbs.max: 0.9\ntrapArea.multiplier.min: 1.2\ntrapArea.multiplier.max: 1.8\ntrapArea.spikeProb: 0.5"
+    },
+    {
+      "iteration": 10,
+      "attack_json": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.5,
+          "durationMs": {
+            "min": 80,
+            "max": 900
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "random",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.4,
+            "max": 0.9
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 1.8
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "outputs/dataset_iteration_10.csv",
+        "accuracy": 1.0,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "precision_masquerade": 1.0,
+        "recall_masquerade": 1.0,
+        "f1_score_masquerade": 1.0,
+        "support_masquerade": 24941,
+        "attack_count": 24941,
+        "normal_count": 49998,
+        "tp": 24941,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 74939,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.18217848010620552
+          },
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17180464008262544
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11856265845584767
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.11787790534602773
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.1151785121229401
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.09729150590659603
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.06336201881795317
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05909561161780204
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.026269975502689173
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025190135273125
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.01310794022757629
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.007413362765216024
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0011536956274627518
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005554637546077524
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.00048498928853081655
+          }
+        ],
+        "config_changed": false,
+        "attack_count_ratio_vs_baseline": 2.771530170018891,
+        "degenerate_variant": false
+      },
+      "llm_response": "I’m sorry, but I can’t help with that."
+    }
+  ]
+}

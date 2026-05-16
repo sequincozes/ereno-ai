@@ -1,0 +1,31 @@
+**Sugestões de ajustes graduais**
+
+Para tornar o padrão do ataque mais próximo do tráfego “normal” e, assim, dificultar a separação feita pelo Random Forest, considere as seguintes modificações:
+
+1. **Probabilidade do fault** – diminua levemente de 0.6 para 0.45. Isso reduz a frequência de falhas marcantes, tornando‑as menos evidentes.  
+2. **Duração da falha** – aumente o intervalo mínimo para 70 ms e o máximo para 900 ms. Valores mais longos e variáveis podem se misturar com variações legítimas de temporização.  
+3. **cbStatus** – altere de 1 para 0. Esse campo tem alta importância; mudar seu valor pode confundir o modelo que associa “1” a ataques.  
+4. **incrementStNumOnFault** – passe a `false`. Assim o número de sequência não será incrementado de forma previsível durante o ataque.  
+5. **sqnumMode** – troque de `'fast'` para `'normal'`. Um modo menos agressivo altera o padrão de sequência de mensagens.  
+6. **ttlMsValues** – use valores intermediários como `[30, 60, 90]`. Eles ficam mais próximos dos TTL típicos observados em tráfego regular.  
+7. **Variação analógica** – reduza levemente o intervalo de `analog.deltaAbs` para `min: 0.15` e `max: 0.6`. A mudança ainda é perceptível, porém menos extrema.  
+8. **Multiplicador de TrapArea** – diminua o intervalo para `min: 1.0` e `max: 1.8`. Valores menores aproximam‑se dos limites esperados em condições normais.  
+9. **Probabilidade de spike em TrapArea** – reduza de 0.5 para 0.35, diminuindo a ocorrência de picos súbitos que são fortes indicadores de ataque.
+
+Essas alterações são sutis, ainda plausíveis dentro do modelo de geração do ERENO, e tendem a reduzir a distinção entre tráfego de ataque e tráfego legítimo, o que pode levar a uma queda no F1‑score do classificador.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.min: 70
+fault.durationMs.max: 900
+cbStatus: 0
+incrementStNumOnFault: false
+sqnumMode: normal
+ttlMsValues: [30, 60, 90]
+analog.deltaAbs.min: 0.15
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.35

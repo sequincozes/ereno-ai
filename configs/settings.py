@@ -19,7 +19,8 @@ METRICS_CSV_PATH = OUTPUTS_DIR / "metrics_history.csv"
 LLM_RESPONSES_DIR = OUTPUTS_DIR / "llm_responses"
 ATTACK_CONFIGS_DIR = OUTPUTS_DIR / "attack_configs"
 
-MODEL_ID = "qwen/qwen3-32b"
+MODEL_ID = "openai/gpt-oss-120b"
+
 TEMPERATURE = 0.4
 
 TOTAL_ITERATIONS = 10

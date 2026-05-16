@@ -1,0 +1,26 @@
+Para tornar o ataque mais difícil de ser distinguido pelo Random Forest, considere introduzir mais variabilidade nos parâmetros que influenciam as features mais importantes (TrapAreaSum, valores analógicos e `cbStatus`). Pequenas mudanças graduais podem gerar padrões menos consistentes sem descaracterizar o ataque:
+
+* **Aumente a probabilidade do fault** (`fault.prob`) para que a proporção de amostras de ataque seja maior, reduzindo o viés da classe “normal”.
+* **Reduza o intervalo de duração** (`fault.durationMs.min`/`max`) para que falhas ocorram em períodos mais curtos, dificultando a captura de um “perfil” temporal estável.
+* **Amplie o intervalo de variação analógica** (`analog.deltaAbs.min`/`max`) para que as leituras analógicas apresentem flutuações mais amplas e menos previsíveis.
+* **Altere o intervalo de multiplicador de TrapArea** (`trapArea.multiplier.min`/`max`) e aumente a probabilidade de picos (`trapArea.spikeProb`) para gerar áreas de disparo mais variadas.
+* **Modifique o modo de numeração de sequência** (`sqnumMode`) de “sequential” para “random”, evitando que o modelo aprenda padrões de incremento.
+* **Desative o incremento do `stNum` em falhas** (`incrementStNumOnFault`) para que o número de sequência permaneça estável durante o ataque.
+* **Ajuste o `cbStatus`** para um valor diferente (por exemplo, 1) de modo que a feature não seja tão discriminante.
+* **Altere os valores de TTL** (`ttlMsValues`) incluindo tanto valores menores quanto maiores, aumentando a dispersão temporal dos pacotes GOOSE.
+
+Essas alterações combinam mudanças nas distribuições de tempo, amplitude e status, criando um conjunto de dados sintético mais heterogêneo e, consequentemente, mais desafiador para o classificador.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 80
+fault.durationMs.max: 900
+cbStatus: 1
+incrementStNumOnFault: false
+sqnumMode: random
+ttlMsValues: [10, 30, 70, 150]
+analog.deltaAbs.min: 0.4
+analog.deltaAbs.max: 0.9
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.5

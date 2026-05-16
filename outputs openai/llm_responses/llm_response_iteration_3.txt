@@ -1,0 +1,31 @@
+**Sugestões de ajustes**
+
+Para tornar o padrão do ataque mais próximo ao tráfego legítimo e, assim, reduzir a capacidade discriminativa do Random Forest, considere as seguintes modificações graduais:
+
+1. **Aumentar a probabilidade de ocorrência do fault** – eleva a frequência do comportamento de ataque, dificultando a distinção por contagem de eventos.  
+2. **Expandir o intervalo de duração do fault** – variações maiores de tempo tornam a assinatura temporal menos consistente.  
+3. **Alterar o `cbStatus`** – mudar o status do disjuntor para um valor que também pode aparecer em condições normais (por exemplo, 2).  
+4. **Desativar o incremento de `stNum` durante o fault** – reduz a regularidade de sequência de números de estado, que é uma feature forte para o modelo.  
+5. **Mudar o modo de geração de `sqnum` para “random”** – introduz aleatoriedade nos números de sequência, desfazendo padrões incrementais.  
+6. **Variar os valores de TTL** – usar intervalos diferentes (ex.: 30 ms, 60 ms, 120 ms) cria maior dispersão nos tempos de vida das mensagens.  
+7. **Ajustar a variação absoluta dos valores analógicos** – deslocar levemente o intervalo para valores que ainda são plausíveis, mas menos distintivos.  
+8. **Aumentar o multiplicador de `trapArea`** – eleva a magnitude dos picos de energia simulados, aproximando‑os de variações normais de carga.  
+9. **Elevar a probabilidade de spikes em `trapArea`** – gera mais picos curtos, confundindo a detecção baseada em picos de área.
+
+Essas mudanças mantêm o ataque dentro de limites realistas, mas introduzem mais variabilidade e sobreposição com o tráfego benigno, o que costuma reduzir o *f1‑score* do classificador.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 100
+fault.durationMs.max: 1500
+cbStatus: 2
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: [30, 60, 120]
+analog.deltaAbs.min: 0.2
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.5

@@ -1,0 +1,29 @@
+**Sugestões de ajustes graduais**
+
+Para tornar o ataque de *masquerade* menos evidente ao Random Forest, considere modificar os parâmetros de forma que as características do ataque se aproximem mais do tráfego normal, sem descaracterizá‑lo. Algumas ideias:
+
+1. **Aumentar a probabilidade de ocorrência do fault** – um valor ligeiramente maior (por exemplo, 0.5) gera mais eventos de falha, diluindo a distinção entre ataque e normal.  
+2. **Expandir o intervalo de duração** – valores de duração mais longos (por exemplo, 80 ms a 1000 ms) criam variações temporais que podem confundir a detecção baseada em padrões de tempo.  
+3. **Alterar o `cbStatus`** – mudar de `0` para `1` introduz um estado de comando diferente, que pode ser menos correlacionado com as features mais importantes.  
+4. **Desativar o incremento de `stNum` em falhas** – definir `incrementStNumOnFault` como `false` reduz a consistência de um dos sinais mais usados pelo modelo.  
+5. **Mudar o modo de sequência** – usar `sqnumMode: "incremental"` (ou outro modo suportado) altera a forma como os números de sequência são gerados, introduzindo variação.  
+6. **Ajustar os valores de TTL** – substituir a lista `[20, 40, 80]` por `[30, 60, 120]` amplia a dispersão dos tempos de vida das mensagens.  
+7. **Ajustar a variação analógica** – reduzir levemente o limite superior de `analog.deltaAbs.max` (por exemplo, de 0.6 para 0.55) mantém a mudança perceptível, mas menos extrema.  
+8. **Ajustar o multiplicador de `trapArea`** – diminuir o valor máximo (por exemplo, de 1.8 para 1.6) reduz a amplitude dos picos de área de armadilha, aproximando‑os dos valores normais.  
+9. **Aumentar a probabilidade de spikes** – elevar `trapArea.spikeProb` para 0.4 gera mais variações esporádicas que podem ser confundidas com ruído normal.
+
+Essas mudanças são pequenas, plausíveis e mantêm o ataque dentro de limites realistas, ao mesmo tempo que introduzem mais sobreposição com o tráfego legítimo, o que costuma reduzir o *f1‑score* do classificador.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 80
+fault.durationMs.max: 1000
+cbStatus: 1
+incrementStNumOnFault: false
+sqnumMode: incremental
+ttlMsValues: [30, 60, 120]
+analog.deltaAbs.max: 0.55
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.4
