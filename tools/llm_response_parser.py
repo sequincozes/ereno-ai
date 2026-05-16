@@ -7,11 +7,16 @@ def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
     """
     Extrai alterações da resposta da LLM.
 
-    Aceita três formatos:
-    1. JSON estruturado com chave "patch";
-    2. Texto com sugestões do tipo:
+    Aceita:
+    1. JSON com chave "patch";
+    2. JSON achatado com campos do ataque como chaves:
+       {
+         "fault.prob": 0.5,
+         "analog.deltaAbs.max": 1.5
+       }
+    3. Texto do tipo:
        - `fault.prob`: 0,4
-    3. Blocos quase JSON do tipo:
+    4. Blocos do tipo:
        {
          "field": "fault.prob",
          "current_value": 0.4,
@@ -46,6 +51,11 @@ def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
     if json_patch:
         return json_patch
 
+    flat_json_patch = _try_extract_flat_json_patch(llm_response)
+    if flat_json_patch:
+        print(f"[PARSER] Patch extraído de JSON achatado com {len(flat_json_patch)} alteração(ões).")
+        return flat_json_patch
+
     field_objects_patch = _try_extract_field_objects_patch(llm_response)
     if field_objects_patch:
         print(
@@ -63,7 +73,7 @@ def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
     return []
 
 
-def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
+def _extract_json_candidates(llm_response: str) -> list[str]:
     candidates: list[str] = []
 
     fenced_blocks = re.findall(
@@ -71,8 +81,14 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
         llm_response,
         flags=re.DOTALL | re.IGNORECASE,
     )
-
     candidates.extend(fenced_blocks)
+
+    object_matches = re.findall(
+        r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}",
+        llm_response,
+        flags=re.DOTALL,
+    )
+    candidates.extend(object_matches)
 
     object_match = re.search(r"\{.*\}", llm_response, flags=re.DOTALL)
     if object_match:
@@ -80,7 +96,11 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
 
     candidates.append(llm_response.strip())
 
-    for candidate in candidates:
+    return candidates
+
+
+def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
+    for candidate in _extract_json_candidates(llm_response):
         try:
             parsed = json.loads(candidate)
         except json.JSONDecodeError:
@@ -110,7 +130,7 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
             if operation != "replace":
                 continue
 
-            if not field:
+            if not field or not _looks_like_field_path(field):
                 continue
 
             valid_patch.append(item)
@@ -121,19 +141,52 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
     return []
 
 
-def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
+def _try_extract_flat_json_patch(llm_response: str) -> list[dict[str, Any]]:
     """
-    Extrai objetos do tipo:
+    Extrai JSON achatado como:
 
     {
-      "field": "fault.prob",
-      "current_value": 0.4,
-      "type": "float"
+      "fault.prob": 0.5,
+      "fault.durationMs.min": 500,
+      "sqnumMode": "fast"
     }
-
-    A LLM usa "current_value", mas aqui tratamos como novo valor sugerido.
     """
 
+    patch = []
+
+    for candidate in _extract_json_candidates(llm_response):
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+
+        if not isinstance(parsed, dict):
+            continue
+
+        for field, value in parsed.items():
+            if not isinstance(field, str):
+                continue
+
+            if not _looks_like_field_path(field):
+                continue
+
+            patch.append(
+                {
+                    "operation": "replace",
+                    "field": field,
+                    "old_value": None,
+                    "new_value": value,
+                    "reason": "Alteração extraída automaticamente de JSON achatado da LLM.",
+                }
+            )
+
+        if patch:
+            return patch
+
+    return []
+
+
+def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
     patch = []
 
     object_blocks = re.findall(
@@ -182,21 +235,10 @@ def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
 
 
 def _try_extract_textual_patch(llm_response: str) -> list[dict[str, Any]]:
-    """
-    Extrai sugestões em texto comum.
-
-    Exemplos aceitos:
-    - `fault.prob`: 0,4
-    - `fault.durationMs.min`: 100
-    - `trapArea.multiplier.min`: 1,0
-    - `trapArea.spikeProb`: 0,7
-    - `sqnumMode`: `slow`
-    """
-
     patch = []
 
     pattern = re.compile(
-        r"[-*]?\s*`?([A-Za-z0-9_.]+)`?\s*:\s*`?([^`\n\r]+?)`?\s*(?:$|\n)",
+        r"[-*]?\s*[`\"]?([A-Za-z0-9_.]+)[`\"]?\s*:\s*[`\"]?([^`\"\n\r,}]+)[`\"]?\s*(?:,|$|\n)",
         flags=re.MULTILINE,
     )
 
@@ -234,9 +276,11 @@ def _looks_like_field_path(field: str) -> bool:
         "support",
         "current_value",
         "type",
+        "attackType",
+        "enabled",
     }
 
-    if field.lower() in ignored_fields:
+    if field in ignored_fields or field.lower() in ignored_fields:
         return False
 
     allowed_roots = [
@@ -256,24 +300,40 @@ def _parse_value(value: str) -> Any:
     value = value.strip()
     value = value.replace(",", ".")
 
-    if value.lower() in ["true", "verdadeiro"]:
-        return True
+    value = re.sub(
+        r"^(alterar|mudar|trocar|reduzir|aumentar)\s+para\s+",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
 
-    if value.lower() in ["false", "falso"]:
-        return False
+    value = re.sub(
+        r"^para\s+",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    )
 
-    if value.lower() in ["null", "none"]:
-        return None
+    quoted = re.search(r'["\']([^"\']+)["\']', value)
+    if quoted:
+        return quoted.group(1).strip()
 
-    quoted_match = re.match(r'^["\'](.+)["\']$', value)
+    bool_match = re.search(r"\b(true|false|verdadeiro|falso)\b", value, flags=re.IGNORECASE)
+    if bool_match:
+        bool_value = bool_match.group(1).lower()
+        return bool_value in ["true", "verdadeiro"]
 
-    if quoted_match:
-        return quoted_match.group(1)
+    number_match = re.search(r"-?\d+(?:\.\d+)?", value)
+    if number_match:
+        number_text = number_match.group(0)
 
-    try:
-        if "." in value:
-            return float(value)
+        if "." in number_text:
+            return float(number_text)
 
-        return int(value)
-    except ValueError:
-        return value
+        return int(number_text)
+
+    word_match = re.search(r"\b[a-zA-Z_][a-zA-Z0-9_]*\b", value)
+    if word_match:
+        return word_match.group(0)
+
+    return value

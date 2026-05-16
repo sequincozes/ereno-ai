@@ -1,1 +1,0 @@
-{"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kqcpzymsecbt64jpe2fk401e` service tier `on_demand` on tokens per minute (TPM): Limit 8000, Used 844, Requested 7341. Please try again in 1.3875s. Need more tokens? Upgrade to Dev Tier today at https://console.groq.com/settings/billing","type":"tokens","code":"rate_limit_exceeded"}}

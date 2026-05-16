@@ -1,0 +1,18 @@
+Olá! Vou ajudá-lo a dificultar a classificação do Sistema de Detecção de Intrusão em relação ao ataque cibernético de tipo Masquerade.
+
+Considerando as características do Random Forest e os campos editáveis disponíveis, aqui estão algumas sugestões de alterações graduais e plausíveis nos parâmetros do JSON:
+
+1. **Reduzir a probabilidade de falha (fault.prob)**: Reduzir a probabilidade de falha pode dificultar a detecção do ataque. Sugiro alterar `fault.prob` para 0,4.
+2. **Aumentar a duração da falha (fault.durationMs.max)**: Aumentar a duração da falha pode dificultar a detecção do ataque. Sugiro alterar `fault.durationMs.max` para 1000.
+3. **Reduzir o valor máximo de deltaAbs (analog.deltaAbs.max)**: Reduzir o valor máximo de deltaAbs pode dificultar a detecção do ataque. Sugiro alterar `analog.deltaAbs.max` para 0,5.
+4. **Reduzir o valor máximo de multiplicador de TrapArea (trapArea.multiplier.max)**: Reduzir o valor máximo de multiplicador de TrapArea pode dificultar a detecção do ataque. Sugiro alterar `trapArea.multiplier.max` para 1,5.
+5. **Reduzir a probabilidade de spike em TrapArea (trapArea.spikeProb)**: Reduzir a probabilidade de spike em TrapArea pode dificultar a detecção do ataque. Sugiro alterar `trapArea.spikeProb` para 0,3.
+
+Essas alterações devem dificultar a detecção do ataque de tipo Masquerade pelo Random Forest.
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0.4
+fault.durationMs.max: 1000
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

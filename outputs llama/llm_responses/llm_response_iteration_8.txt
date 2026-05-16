@@ -1,0 +1,25 @@
+Considerando as regras e orientações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis nos parâmetros do JSON:
+
+**Alterações para dificultar a classificação**
+
+1. **Aumentar a probabilidade de falha**: aumentar a probabilidade de falha (`fault.prob`) para 0.6, o que pode dificultar a detecção do ataque.
+2. **Aumentar a duração máxima da falha**: aumentar a duração máxima da falha (`fault.durationMs.max`) para 1200, o que pode tornar mais difícil a detecção do ataque.
+3. **Aumentar o valor máximo do delta absoluto analógico**: aumentar o valor máximo do delta absoluto analógico (`analog.deltaAbs.max`) para 0,7, o que pode dificultar a detecção do ataque.
+4. **Aumentar o valor máximo do multiplicador de área de armadilha**: aumentar o valor máximo do multiplicador de área de armadilha (`trapArea.multiplier.max`) para 2,0, o que pode dificultar a detecção do ataque.
+5. **Aumentar a probabilidade de pico de área de armadilha**: aumentar a probabilidade de pico de área de armadilha (`trapArea.spikeProb`) para 0,5, o que pode dificultar a detecção do ataque.
+
+**Alterações para manter a robustez do sistema**
+
+1. **Manter a probabilidade de falha**: manter a probabilidade de falha (`fault.prob`) em 0,4, o que é um valor razoável para a detecção do ataque.
+2. **Manter a duração mínima da falha**: manter a duração mínima da falha (`fault.durationMs.min`) em 80, o que é um valor razoável para a detecção do ataque.
+3. **Manter o valor mínimo do delta absoluto analógico**: manter o valor mínimo do delta absoluto analógico (`analog.deltaAbs.min`) em 0,2, o que é um valor razoável para a detecção do ataque.
+4. **Manter o valor mínimo do multiplicador de área de armadilha**: manter o valor mínimo do multiplicador de área de armadilha (`trapArea.multiplier.min`) em 1,0, o que é um valor razoável para a detecção do ataque.
+5. **Manter a probabilidade de pico de área de armadilha**: manter a probabilidade de pico de área de armadilha (`trapArea.spikeProb`) em 0,3, o que é um valor razoável para a detecção do ataque.
+
+**ALTERACOES_APLICAVEIS**
+
+fault.prob: 0.6
+fault.durationMs.max: 1200
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.max: 2.0
+trapArea.spikeProb: 0.5

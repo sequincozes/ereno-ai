@@ -19,6 +19,7 @@ from configs.settings import (
     TEMPERATURE,
     TOTAL_ITERATIONS,
 )
+from tools.attack_config_validator import validate_and_clamp_attack_config
 from tools.ereno_runner import ErenoRunner
 from tools.experiment_memory import ExperimentMemory
 from tools.ids_evaluator import IdsEvaluator
@@ -32,7 +33,10 @@ def main() -> None:
     load_dotenv()
 
     base_prompt = load_text(PROMPT_PATH)
+
+    baseline_attack_json = load_json(ATTACK_JSON_PATH)
     attack_json = load_json(ATTACK_JSON_PATH)
+
     performance_results = load_json(PERFORMANCE_RESULTS_PATH)
 
     strategist = StrategistAgent(
@@ -48,7 +52,10 @@ def main() -> None:
         suggested_config_path=str(SUGGESTED_CONFIG_PATH),
     )
 
-    evaluator = IdsEvaluator(drop_cb_status=False)
+    evaluator = IdsEvaluator(
+        drop_cb_status=False,
+    )
+
     memory = ExperimentMemory()
 
     print("\n==============================")
@@ -56,12 +63,16 @@ def main() -> None:
     print("==============================")
 
     baseline_dataset_path = ereno.generate_dataset(
-        attack_config=attack_json,
+        attack_config=baseline_attack_json,
         iteration=0,
     )
 
     baseline_metrics = evaluator.train_baseline(baseline_dataset_path)
     performance_results = baseline_metrics
+
+    baseline_metrics["config_changed"] = False
+    baseline_metrics["attack_count_ratio_vs_baseline"] = 1.0
+    baseline_metrics["degenerate_variant"] = False
 
     append_metrics_to_csv(
         csv_path=METRICS_CSV_PATH,
@@ -70,6 +81,11 @@ def main() -> None:
     )
 
     print(f"[BASELINE] Modelo treinado no baseline: {baseline_dataset_path}")
+
+    baseline_attack_count = (
+        baseline_metrics.get("attack_count")
+        or baseline_metrics.get("support_masquerade")
+    )
 
     for iteration in range(1, TOTAL_ITERATIONS + 1):
         print("\n==============================")
@@ -103,6 +119,14 @@ def main() -> None:
             print("[MAIN] Nenhum patch válido. Mantendo configuração anterior.")
             updated_attack_json = attack_json
 
+        updated_attack_json, validation_warnings = validate_and_clamp_attack_config(
+            candidate_config=updated_attack_json,
+            baseline_config=baseline_attack_json,
+        )
+
+        for warning in validation_warnings:
+            print(f"[VALIDATOR] {warning}")
+
         config_changed = updated_attack_json != attack_json
 
         if config_changed:
@@ -126,6 +150,27 @@ def main() -> None:
 
         metrics = evaluator.evaluate_variant(dataset_path)
         metrics["config_changed"] = config_changed
+
+        current_attack_count = (
+            metrics.get("attack_count")
+            or metrics.get("support_masquerade")
+        )
+
+        if baseline_attack_count and current_attack_count:
+            attack_ratio = current_attack_count / baseline_attack_count
+        else:
+            attack_ratio = None
+
+        metrics["attack_count_ratio_vs_baseline"] = attack_ratio
+
+        if attack_ratio is not None and attack_ratio < 0.5:
+            metrics["degenerate_variant"] = True
+            print(
+                f"[VALIDATOR] Variante marcada como degenerada: "
+                f"attack_count caiu para {attack_ratio:.2%} do baseline."
+            )
+        else:
+            metrics["degenerate_variant"] = False
 
         performance_results = metrics
 

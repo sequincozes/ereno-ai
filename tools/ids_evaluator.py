@@ -2,7 +2,11 @@ from typing import Any
 
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import accuracy_score, precision_recall_fscore_support
+from sklearn.metrics import (
+    accuracy_score,
+    confusion_matrix,
+    precision_recall_fscore_support,
+)
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
@@ -11,14 +15,12 @@ class IdsEvaluator:
     """
     Avaliador do IDS.
 
-    Treina o Random Forest apenas no baseline e testa cada variante gerada
-    sem retreinar o modelo. Também remove features constantes e features
-    temporais/sequenciais que podem causar vazamento ou facilitar demais
-    a classificação.
+    Treina o Random Forest apenas no baseline e testa cada variante
+    sem retreinar o modelo.
     """
 
     COLUMNS_TO_ALWAYS_DROP = [
-        # Temporais / sequência / derivados muito fortes
+        # Temporais / sequência / derivados fortes
         "Time",
         "t",
         "GooseTimestamp",
@@ -338,6 +340,23 @@ class IdsEvaluator:
             zero_division=0,
         )
 
+        labels = sorted(list(set(y_true) | set(y_pred)))
+        cm = confusion_matrix(y_true, y_pred, labels=labels)
+
+        tp = fp = fn = tn = None
+
+        if self.attack_label in labels and len(labels) == 2:
+            attack_index = labels.index(self.attack_label)
+            normal_index = 1 - attack_index
+
+            tp = int(cm[attack_index][attack_index])
+            fn = int(cm[attack_index][normal_index])
+            fp = int(cm[normal_index][attack_index])
+            tn = int(cm[normal_index][normal_index])
+
+        attack_count = int((y_true == self.attack_label).sum())
+        normal_count = int(len(y_true) - attack_count)
+
         return {
             "evaluation_type": evaluation_type,
             "dataset_path": dataset_path,
@@ -348,6 +367,12 @@ class IdsEvaluator:
             "recall_masquerade": float(recall[0]),
             "f1_score_masquerade": float(f1[0]),
             "support_masquerade": int(support[0]),
+            "attack_count": attack_count,
+            "normal_count": normal_count,
+            "tp": tp,
+            "fp": fp,
+            "fn": fn,
+            "tn": tn,
             "label_column": self.label_column,
             "class_mapping": self.class_mapping,
             "dataset_rows": int(dataset_rows),

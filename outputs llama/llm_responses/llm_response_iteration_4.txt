@@ -1,0 +1,17 @@
+Considerando as regras e orientações fornecidas, sugiro as seguintes alterações graduais e plausíveis nos parâmetros do JSON:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 150
+fault.durationMs.max: 900
+cbStatus: 3
+incrementStNumOnFault: False
+sqnumMode: 'fast'
+ttlMsValues: [30, 60, 120]
+analog.deltaAbs.min: 0.2
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 2.0
+trapArea.spikeProb: 0.4
+
+Essas alterações visam dificultar a classificação do Random Forest, aumentando a probabilidade de falha e reduzindo a precisão do modelo. Além disso, algumas alterações visam desviar do padrão normal, como mudar o modo de incremento do número de sequência (sqnumMode) e alterar a frequência de transmissão (ttlMsValues).

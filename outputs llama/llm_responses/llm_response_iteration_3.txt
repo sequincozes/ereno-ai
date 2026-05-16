@@ -1,0 +1,37 @@
+Considerando as orientações fornecidas, sugiro as seguintes alterações graduais e plausíveis nos parâmetros do JSON:
+
+1. **fault.prob**: 0,5
+   - Aumentar a probabilidade de falha pode dificultar a detecção do ataque.
+
+2. **fault.durationMs.max**: 1200
+   - Aumentar o tempo máximo de duração da falha pode tornar mais difícil para o classificador identificar o ataque.
+
+3. **analog.deltaAbs.min**: 0,3
+   - Reduzir o valor mínimo da variação analógica pode tornar mais difícil para o classificador identificar a anomalia.
+
+4. **trapArea.multiplier.max**: 1,8
+   - Aumentar o valor máximo do multiplicador de área de armazenamento pode tornar mais difícil para o classificador identificar a anomalia.
+
+5. **ttlMsValues**: [30, 60, 120]
+   - Mudar os valores de TTL pode afetar a forma como o classificador identifica a anomalia.
+
+6. **sqnumMode**: 'slow'
+   - Mudar o modo de sequência de números pode afetar a forma como o classificador identifica a anomalia.
+
+7. **cbStatus**: 2
+   - Mudar o status do CB pode afetar a forma como o classificador identifica a anomalia.
+
+8. **incrementStNumOnFault**: False
+   - Desativar a incrementação do número de estágio em caso de falha pode tornar mais difícil para o classificador identificar a anomalia.
+
+Essas alterações podem ajudar a dificultar a classificação do ataque pelo Random Forest, sem removê-los campos, inventar novos campos ou alterar o tipo de ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.max: 1200
+analog.deltaAbs.min: 0.3
+trapArea.multiplier.max: 1.8
+ttlMsValues: [30, 60, 120]
+sqnumMode: 'slow'
+cbStatus: 2
+incrementStNumOnFault: False

@@ -1,0 +1,16 @@
+iteration,evaluation_type,dataset_path,accuracy,precision_masquerade,recall_masquerade,f1_score_masquerade,support_masquerade,attack_count,normal_count,tp,fp,fn,tn,attack_label_original,label_column,dataset_rows,dataset_columns,config_changed,attack_count_ratio_vs_baseline,degenerate_variant
+0,baseline_internal_test,outputs/dataset_iteration_0.csv,1.0,1.0,1.0,1.0,9067,9067,15000,9067,0,0,15000,masquerade_fake_fault,class,80221,54,False,1.0,False
+1,variant_external_test,outputs/dataset_iteration_1.csv,1.0,1.0,1.0,1.0,30069,30069,49998,30069,0,0,49998,masquerade_fake_fault,class,80067,54,False,3.316311900297783,False
+2,variant_external_test,outputs/dataset_iteration_2.csv,1.0,1.0,1.0,1.0,29933,29933,49998,29933,0,0,49998,masquerade_fake_fault,class,79931,54,False,3.3013124517480974,False
+0,baseline_internal_test,outputs/dataset_iteration_0.csv,1.0,1.0,1.0,1.0,9009,9009,15000,9009,0,0,15000,masquerade_fake_fault,class,80029,54,False,1.0,False
+0,baseline_internal_test,outputs/dataset_iteration_0.csv,1.0,1.0,1.0,1.0,8972,8972,14999,8972,0,0,14999,masquerade_fake_fault,class,79903,54,False,1.0,False
+1,variant_external_test,outputs/dataset_iteration_1.csv,1.0,1.0,1.0,1.0,35027,35027,49998,35027,0,0,49998,masquerade_fake_fault,class,85025,54,True,3.9040347748551048,False
+2,variant_external_test,outputs/dataset_iteration_2.csv,1.0,1.0,1.0,1.0,20052,20052,49998,20052,0,0,49998,masquerade_fake_fault,class,70050,54,True,2.2349531876950515,False
+3,variant_external_test,outputs/dataset_iteration_3.csv,1.0,1.0,1.0,1.0,24991,24991,49998,24991,0,0,49998,masquerade_fake_fault,class,74989,54,True,2.7854436023183236,False
+4,variant_external_test,outputs/dataset_iteration_4.csv,1.0,1.0,1.0,1.0,29857,29857,49998,29857,0,0,49998,masquerade_fake_fault,class,79855,54,True,3.327797592510031,False
+5,variant_external_test,outputs/dataset_iteration_5.csv,0.9999572137600548,1.0,0.9998508798091261,0.9999254343449407,20118,20118,49998,20115,0,3,49998,masquerade_fake_fault,class,70116,54,True,2.242309407044137,False
+6,variant_external_test,outputs/dataset_iteration_6.csv,1.0,1.0,1.0,1.0,25118,25118,49998,25118,0,0,49998,masquerade_fake_fault,class,75116,54,True,2.799598751671868,False
+7,variant_external_test,outputs/dataset_iteration_7.csv,0.9999000014285511,1.0,0.9996500524921261,0.9998249956248906,20003,20003,49998,19996,0,7,49998,masquerade_fake_fault,class,70001,54,True,2.2294917521176996,False
+8,variant_external_test,outputs/dataset_iteration_8.csv,1.0,1.0,1.0,1.0,29822,29822,49998,29822,0,0,49998,masquerade_fake_fault,class,79820,54,True,3.3238965670976373,False
+9,variant_external_test,outputs/dataset_iteration_9.csv,0.9987733823980374,1.0,0.9963207358528294,0.9981569774430066,25005,25005,49998,24913,0,92,49998,masquerade_fake_fault,class,75003,54,True,2.787004012483281,False
+10,variant_external_test,outputs/dataset_iteration_10.csv,0.9999285785707144,1.0,0.9997501124493978,0.9998750406118012,20009,20009,49998,20004,0,5,49998,masquerade_fake_fault,class,70007,54,True,2.230160499331253,False

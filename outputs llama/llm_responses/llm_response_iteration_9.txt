@@ -1,0 +1,11 @@
+Considerando as orientações fornecidas, sugiro as seguintes alterações graduais e plausíveis nos parâmetros do JSON:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 100
+fault.durationMs.max: 1100
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.4
+
+Essas alterações visam dificultar a classificação do Random Forest, mantendo a plausibilidade do ataque e evitando alterações degeneradas.

@@ -1,0 +1,21 @@
+Considerando as regras e orientações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis nos parâmetros do JSON:
+
+1. **Alterar a probabilidade de falha (fault.prob)**: Reduzir a probabilidade de falha para 0,4 pode dificultar a detecção do ataque pelo Random Forest, pois há menos chances de o ataque ser detectado.
+
+2. **Alterar a duração mínima da falha (fault.durationMs.min)**: Aumentar a duração mínima da falha para 80 pode dificultar a detecção do ataque, pois há mais tempo para o ataque ser executado sem ser detectado.
+
+3. **Alterar a duração máxima da falha (fault.durationMs.max)**: Aumentar a duração máxima da falha para 1000 pode dificultar a detecção do ataque, pois há mais tempo para o ataque ser executado sem ser detectado.
+
+4. **Alterar o valor máximo do delta absoluto analógico (analog.deltaAbs.max)**: Reduzir o valor máximo do delta absoluto analógico para 0,5 pode dificultar a detecção do ataque, pois há menos variação nos valores analógicos.
+
+5. **Alterar o valor máximo do multiplicador da área de armazenamento (trapArea.multiplier.max)**: Aumentar o valor máximo do multiplicador da área de armazenamento para 1,5 pode dificultar a detecção do ataque, pois há mais variação nos valores de armazenamento.
+
+6. **Alterar a probabilidade de pico da área de armazenamento (trapArea.spikeProb)**: Reduzir a probabilidade de pico da área de armazenamento para 0,3 pode dificultar a detecção do ataque, pois há menos chances de o ataque ser detectado.
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0.4
+fault.durationMs.min: 80
+fault.durationMs.max: 1000
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

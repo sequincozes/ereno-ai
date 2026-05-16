@@ -8,17 +8,6 @@ def apply_patch_to_json(
 ) -> dict[str, Any]:
     """
     Aplica um patch simples no JSON do ataque.
-
-    Formato esperado do patch:
-    [
-        {
-            "operation": "replace",
-            "field": "campo.ou.caminho",
-            "old_value": "...",
-            "new_value": "...",
-            "reason": "..."
-        }
-    ]
     """
 
     updated_json = deepcopy(original_json)
@@ -54,14 +43,6 @@ def _set_value_by_path(
     path: str,
     value: Any,
 ) -> None:
-    """
-    Altera um valor dentro de um dicionário usando caminho com ponto.
-
-    Exemplo:
-    path = "attack.interval"
-    data["attack"]["interval"] = value
-    """
-
     parts = path.split(".")
     current: Any = data
 
