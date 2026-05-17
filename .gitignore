@@ -1,4 +1,11 @@
+# Ambiente Virtual (ignora a pasta inteira e seus milhares de arquivos)
+venv/
+.venv/
+env/
+
+# Variáveis de ambiente (ignora suas senhas e tokens)
 .env
-.env.local
-.venv   
+
+pycache/
+init__.pyc
 __pycache__/
