@@ -1,0 +1,24 @@
+Para reduzir a separabilidade entre o tráfego de ataque e o tráfego normal, podemos tornar as características do ataque mais próximas das observadas em situações benignas:
+
+* **Aumentar a probabilidade do fault** e estender sua duração, de modo que o padrão de falha se misture a variações normais de tempo.
+* **Ajustar o intervalo de TTL** para valores que também são comuns em mensagens regulares.
+* **Aproximar os valores analógicos** ao intervalo típico de medições, diminuindo a diferença absoluta.
+* **Diminuir levemente o multiplicador de trapArea** e a probabilidade de picos, tornando‑os menos pronunciados.
+* **Desativar o incremento de StNum** e mudar o modo de geração de SQNum para “slow”, o que reduz a regularidade distintiva do ataque.
+* **Alterar o cbStatus** para um valor que não seja tão marcante quanto o padrão atual.
+
+Essas alterações são graduais, ainda preservam a natureza do ataque e evitam variantes degeneradas, ao mesmo tempo que dificultam a detecção pelo Random Forest.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.7
+fault.durationMs.min: 200
+fault.durationMs.max: 1200
+cbStatus: 2
+incrementStNumOnFault: False
+sqnumMode: slow
+ttlMsValues: [30, 60, 120]
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

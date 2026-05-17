@@ -1,0 +1,19 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário ajustar os parâmetros do arquivo JSON de forma a reduzir a separabilidade do ataque em relação ao tráfego normal. Considerando as features mais importantes utilizadas pelo Random Forest, como TrapAreaSum, valores analógicos e cbStatus, podemos sugerir as seguintes mudanças graduais e plausíveis:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio, dificultando a detecção. No entanto, é importante não reduzir esse valor para muito baixo, para evitar variantes degeneradas.
+
+2. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Alterar os valores mínimos e máximos dos deltas absolutos dos valores analógicos pode ajudar a misturar o tráfego de ataque com o tráfego normal, tornando a detecção mais desafiadora.
+
+3. **Ajuste na área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Modificar os multiplicadores mínimos e máximos da área de armadilha pode influenciar a capacidade do IDS de distinguir entre tráfego normal e de ataque.
+
+4. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Ajustar a probabilidade de pico na área de armadilha pode afetar a detecção do ataque, tornando-a mais desafiadora se feita de maneira sutil.
+
+Com base nessas considerações, as sugestões de alterações são:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+analog.deltaAbs.min: 0.015
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.25

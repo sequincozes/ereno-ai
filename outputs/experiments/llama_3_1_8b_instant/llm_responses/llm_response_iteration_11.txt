@@ -1,0 +1,16 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob = 0.6`, tente `fault.prob = 0.5` ou `fault.prob = 0.4`. Isso pode dificultar a detecção do ataque pelo modelo.
+2. **Aumentar a duração da falha**: Em vez de `fault.durationMs.min = 10` e `fault.durationMs.max = 600`, tente `fault.durationMs.min = 20` e `fault.durationMs.max = 800`. Isso pode fazer com que o ataque seja mais difícil de detectar.
+3. **Mudar o modo de incremento do número de sequência**: Em vez de `sqnumMode = 'slow'`, tente `sqnumMode = 'fast'`. Isso pode fazer com que o ataque seja mais difícil de detectar.
+4. **Aumentar o valor máximo da multiplicação da área de armazenamento**: Em vez de `trapArea.multiplier.max = 2.0`, tente `trapArea.multiplier.max = 2.5` ou `trapArea.multiplier.max = 3.0`. Isso pode fazer com que o ataque seja mais difícil de detectar.
+5. **Reduzir a probabilidade de pico**: Em vez de `trapArea.spikeProb = 0.2`, tente `trapArea.spikeProb = 0.1` ou `trapArea.spikeProb = 0.05`. Isso pode fazer com que o ataque seja mais difícil de detectar.
+
+Aqui está a seção com as alterações sugeridas:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 20
+sqnumMode: fast
+trapArea.multiplier.max: 2.5
+trapArea.spikeProb: 0.1

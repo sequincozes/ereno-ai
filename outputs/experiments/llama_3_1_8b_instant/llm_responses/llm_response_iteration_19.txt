@@ -1,0 +1,14 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal. Além disso, vou evitar variantes degeneradas, como reduzir a probabilidade de falha (`fault.prob`) para valores muito baixos, zerar os valores analógicos (`analog.deltaAbs`) ou zerar a probabilidade de pico (`trapArea.spikeProb`).
+
+**Alterações sugeridas:**
+
+1. **Aumentar a probabilidade de falha (`fault.prob`)**: aumentar a probabilidade de falha pode tornar mais difícil para o modelo de classificação distinguir entre o tráfego normal e o ataque. Sugiro aumentar a probabilidade de falha para 0,45.
+2. **Aumentar o valor máximo de delta absoluto (`analog.deltaAbs.max`)**: aumentar o valor máximo de delta absoluto pode tornar mais difícil para o modelo de classificação distinguir entre o tráfego normal e o ataque. Sugiro aumentar o valor máximo de delta absoluto para 0,6.
+3. **Aumentar o valor máximo do multiplicador de área de armadilha (`trapArea.multiplier.max`)**: aumentar o valor máximo do multiplicador de área de armadilha pode tornar mais difícil para o modelo de classificação distinguir entre o tráfego normal e o ataque. Sugiro aumentar o valor máximo do multiplicador de área de armadilha para 1,7.
+4. **Reduzir a probabilidade de pico (`trapArea.spikeProb`)**: reduzir a probabilidade de pico pode tornar mais difícil para o modelo de classificação distinguir entre o tráfego normal e o ataque. Sugiro reduzir a probabilidade de pico para 0,25.
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0,45
+analog.deltaAbs.max: 0,6
+trapArea.multiplier.max: 1,7
+trapArea.spikeProb: 0,25

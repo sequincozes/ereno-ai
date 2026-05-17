@@ -1,0 +1,29 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, é útil tornar as características do ataque mais próximas das observadas nas amostras benignas. As features mais importantes para o Random Forest são os somatórios de *TrapArea* (vsbBTrapAreaSum, isbATrapAreaSum, …), os valores analógicos e o campo **cbStatus**. Pequenas alterações nos parâmetros que controlam a magnitude e a frequência das anomalias podem “misturar” o ataque no padrão normal sem descaracterizá‑lo.
+
+**Sugestões de ajustes graduais**
+
+* **fault.prob** – reduzir ligeiramente (ex.: de 0.65 para 0.55) para que nem todo pacote seja afetado, diminuindo a regularidade do padrão de ataque.  
+* **fault.durationMs** – estreitar o intervalo e deslocá‑lo para valores mais próximos dos tempos típicos de mensagens GOOSE (ex.: min = 2000 ms, max = 3500 ms).  
+* **cbStatus** – mudar de 0 para 1 (ou outro valor que apareça com frequência no tráfego normal) para que a etiqueta de status não seja um indicador exclusivo do ataque.  
+* **incrementStNumOnFault** – desativar (False) para que o número de sequência não aumente de forma sistemática durante o ataque.  
+* **sqnumMode** – usar “sequential” em vez de “random”, alinhando o comportamento do número de sequência ao esperado em operação regular.  
+* **ttlMsValues** – aumentar levemente (ex.: 700 ms) para que o tempo de vida das mensagens fique mais próximo do padrão da rede.  
+* **analog.deltaAbs** – reduzir a amplitude das variações analógicas (ex.: min = 0.05, max = 0.20) de modo que as alterações analógicas sejam menos perceptíveis.  
+* **trapArea.multiplier** – estreitar o intervalo em torno de 1 (ex.: min = 0.95, max = 1.10) para que as áreas de disparo não criem picos marcantes.  
+* **trapArea.spikeProb** – diminuir a probabilidade de picos (ex.: 0.15) sem anulá‑la, evitando que spikes se tornem um sinal distintivo.
+
+Essas mudanças mantêm o ataque plausível (não zeram parâmetros críticos) e, ao mesmo tempo, aproximam suas estatísticas das observadas em tráfego legítimo, o que costuma reduzir o F1‑score do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.55
+fault.durationMs.min: 2000
+fault.durationMs.max: 3500
+cbStatus: 1
+incrementStNumOnFault: False
+sqnumMode: sequential
+ttlMsValues: 700
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.20
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.10
+trapArea.spikeProb: 0.15

@@ -1,0 +1,27 @@
+Para tornar o padrão do ataque menos distintivo em relação ao tráfego normal, podemos:
+
+- **Aumentar a probabilidade do ataque** (`fault.prob`) de forma que ele ocorra com frequência suficiente para gerar mais variação, mas sem ser tão baixo a ponto de ser raro.
+- **Estender a duração do fault** (`fault.durationMs.min` e `fault.durationMs.max`) para que os eventos de falha se prolonguem, aproximando‑se dos intervalos de tempo típicos de mensagens GOOSE legítimas.
+- **Alterar o estado do bloqueio** (`cbStatus`) para um valor que ainda seja válido no protocolo, mas que não seja o padrão usado nas amostras de treinamento.
+- **Desativar o incremento do `stNum`** (`incrementStNumOnFault`) para que a sequência de números de estado não apresente o padrão de salto típico de um ataque.
+- **Mudar o modo de geração de sequência** (`sqnumMode`) para “slow”, reduzindo a velocidade de variação dos números de sequência.
+- **Ajustar os valores de TTL** (`ttlMsValues`) para que fiquem mais próximos dos TTLs observados no tráfego normal.
+- **Reduzir levemente a variação dos valores analógicos** (`analog.deltaAbs.min` e `analog.deltaAbs.max`) de modo que as diferenças estejam dentro de uma faixa mais comum.
+- **Aproximar o multiplicador de área de disparo** (`trapArea.multiplier.min` e `trapArea.multiplier.max`) ao intervalo típico de operação.
+- **Diminuir a probabilidade de picos de área** (`trapArea.spikeProb`) sem anulá‑la, para que os picos ocorram com menos frequência e se misturem ao comportamento normal.
+
+Essas alterações são graduais, mantêm a plausibilidade do ataque e evitam criar variantes degeneradas, ao mesmo tempo que reduzem a separabilidade das features mais relevantes para o Random Forest.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.7
+fault.durationMs.min: 200
+fault.durationMs.max: 1200
+cbStatus: 2
+incrementStNumOnFault: false
+sqnumMode: slow
+ttlMsValues: [30, 60, 120]
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.3

@@ -1,0 +1,18 @@
+Olá! Vou ajudá-lo a dificultar a classificação do ataque cibernético no IDS.
+
+Analisando as métricas atuais, vemos que o modelo está classificando corretamente o ataque com uma precisão de 1,0. Isso significa que o modelo está tendo dificuldade em distinguir o ataque do tráfego normal.
+
+Considerando a orientação fornecida, vamos sugerir mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob = 0.6`, vamos reduzir para `fault.prob = 0.4`. Isso significa que o modelo terá menos chances de detectar o ataque.
+2. **Aumentar a variabilidade dos valores analógicos**: Em vez de `analog.deltaAbs.max = 0.8`, vamos aumentar para `analog.deltaAbs.max = 0.9`. Isso significa que os valores analógicos terão mais variabilidade, tornando mais difícil para o modelo detectar o ataque.
+3. **Aumentar a multiplicação da área de armazenamento**: Em vez de `trapArea.multiplier.max = 2.5`, vamos aumentar para `trapArea.multiplier.max = 3.0`. Isso significa que a multiplicação da área de armazenamento terá mais impacto, tornando mais difícil para o modelo detectar o ataque.
+4. **Reduzir a probabilidade de pico**: Em vez de `trapArea.spikeProb = 0.5`, vamos reduzir para `trapArea.spikeProb = 0.3`. Isso significa que a probabilidade de pico será menor, tornando mais difícil para o modelo detectar o ataque.
+
+Com essas mudanças, o modelo terá mais dificuldade em distinguir o ataque do tráfego normal, tornando mais desafiador para o IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.max: 0.9
+trapArea.multiplier.max: 3.0
+trapArea.spikeProb: 0.3

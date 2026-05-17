@@ -1,0 +1,21 @@
+Para tornar o ataque de *masquerade* menos distinguível do tráfego normal e, assim, reduzir o F1‑score do IDS, focamos nas variáveis que mais influenciam o Random Forest: as somas de **TrapArea**, os valores analógicos e o **cbStatus**.  
+
+**Estratégia adotada**
+
+1. **Diminuir levemente a probabilidade do fault** – um ataque que ocorre com menor frequência se mistura melhor ao tráfego legítimo, sem chegar a valores tão baixos que o ataque se torne insignificante.  
+2. **Aumentar a variabilidade da duração do fault** – ao reduzir o limite inferior e ampliar o superior, criamos eventos mais curtos e outros mais longos, dificultando a captura de um padrão estável.  
+3. **Ajustar os deltas analógicos** – reduzir ambos os limites (mínimo e máximo) faz com que as variações analógicas do ataque se aproximem das variações normais, sem zerá‑las.  
+4. **Modificar o intervalo do multiplicador de trap‑area** – deslocar o limite inferior para baixo e o superior para cima gera valores de área de captura que se sobrepõem mais ao tráfego normal.  
+5. **Reduzir levemente a probabilidade de spikes no trap‑area** – diminui a ocorrência de picos muito evidentes, mantendo ainda a presença de algum comportamento anômalo.
+
+Essas alterações são graduais, plausíveis dentro do cenário de subestações elétricas e obedecem às restrições de não gerar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.27
+fault.durationMs.min: 80
+fault.durationMs.max: 2400
+analog.deltaAbs.min: 0.045
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 0.99
+trapArea.multiplier.max: 1.54
+trapArea.spikeProb: 0.16

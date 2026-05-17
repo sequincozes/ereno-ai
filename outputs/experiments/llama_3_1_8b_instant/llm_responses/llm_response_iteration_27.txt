@@ -1,0 +1,20 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. Reduzir a probabilidade de ocorrência do ataque (`fault.prob`): 0,4
+2. Aumentar o valor máximo da duração do ataque (`fault.durationMs.max`): 2500
+3. Manter o valor mínimo da duração do ataque (`fault.durationMs.min`): 200
+4. Manter o valor do `cbStatus`: 1
+5. Manter o valor do `incrementStNumOnFault`: True
+6. Manter o modo de sequência (`sqnumMode`): 'slow'
+7. Manter os valores de `ttlMsValues`: [20, 40, 80]
+8. Aumentar o valor máximo da variação analógica (`analog.deltaAbs.max`): 0,6
+9. Manter o valor mínimo da variação analógica (`analog.deltaAbs.min`): 0,3
+10. Manter o valor mínimo do multiplicador de área de armazenamento (`trapArea.multiplier.min`): 1,0
+11. Aumentar o valor máximo do multiplicador de área de armazenamento (`trapArea.multiplier.max`): 2,0
+12. Manter o valor da probabilidade de pico (`trapArea.spikeProb`): 0,3
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0,4
+fault.durationMs.max: 2500
+analog.deltaAbs.max: 0,6
+trapArea.multiplier.max: 2,0

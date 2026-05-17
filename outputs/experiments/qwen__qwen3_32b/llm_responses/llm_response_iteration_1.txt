@@ -1,0 +1,33 @@
+<think>
+Okay, let's see. The user wants to make the attack harder to detect by the IDS, specifically lowering the F1-score. The current metrics show perfect scores, so the attack is too distinguishable. The main features the model uses are TrapAreaSum, analog values, and cbStatus.
+
+First, I need to adjust parameters to make the attack more similar to normal traffic. Let's look at the editable fields. The fault probability is 0.6. Lowering it might reduce the attack's presence, but the user said not to go too low. Maybe decrease it slightly to 0.4. 
+
+Next, the duration of the fault is between 50-800ms. If I increase the min and lower the max, maybe the attack duration becomes more variable and closer to normal. Let's try min 100 and max 600. 
+
+The cbStatus is 1. If I set it to 0, maybe it mimics normal status more. But wait, the user didn't mention changing cbStatus, but it's a field. Hmm, maybe changing it to 0 could help. 
+
+Analog deltaAbs is between 0.2-0.8. Reducing the max to 0.5 makes the changes smaller, less noticeable. 
+
+TrapArea multiplier is 1.2-2.5. Lowering the max to 1.8 reduces the spike, making it blend in. SpikeProb is 0.5; lowering to 0.3 reduces the frequency of spikes without eliminating them entirely. 
+
+TTL values are [20,40,80]. Adding a longer TTL like 120 might make the attack packets look more like normal traffic. 
+
+IncrementStNumOnFault is True. Maybe turning it off could reduce the attack's footprint. 
+
+SqnumMode is 'fast'. Changing to 'normal' might make sequence numbers less suspicious. 
+
+Putting it all together, adjusting these parameters should make the attack less detectable by making it more similar to normal traffic without making it too degenerate.
+</think>
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 100
+fault.durationMs.max: 600
+cbStatus: 0
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.3
+ttlMsValues: [20, 40, 80, 120]
+incrementStNumOnFault: False
+sqnumMode: "normal"

@@ -1,0 +1,28 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, vale focar nas features que o Random Forest mais utiliza (as somas de *TrapArea* e os valores analógicos).  
+Algumas estratégias plausíveis:
+
+1. **Aproximar a probabilidade do fault ao comportamento típico** – diminua levemente `fault.prob` (mantendo‑o acima de 0.5) para que a ocorrência de falhas não seja tão marcante.  
+2. **Aumentar a variabilidade temporal** – amplie o intervalo de `fault.durationMs` para que a duração das falhas se misture com variações normais de mensagens GOOSE.  
+3. **Ajustar o status do controlador (`cbStatus`)** – use um valor mais frequente em tráfego legítimo (por exemplo 1) para que o classificador não tenha um forte indício de ataque.  
+4. **Desativar o incremento de *stNum* durante a falha** – mudar `incrementStNumOnFault` para `false` elimina um padrão de sequência que o modelo pode estar capturando.  
+5. **Alterar o modo de numeração (`sqnumMode`)** – mudar para `fast` gera sequências de número de sequência mais parecidas com o tráfego normal.  
+6. **Aumentar o TTL** – elevar `ttlMsValues` para 200 ms faz com que o tempo de vida das mensagens se aproxime do observado em condições normais.  
+7. **Restringir a variação analógica** – reduza o intervalo de `analog.deltaAbs` para valores que já são vistos em leituras normais, evitando picos que chamem atenção.  
+8. **Aproximar o multiplicador de *TrapArea*** – trazer `trapArea.multiplier` para um intervalo centrado em 1 (por exemplo 0.9‑1.1) diminui a diferença entre ataques e tráfego legítimo.  
+9. **Diminuir a probabilidade de picos de *TrapArea*** – reduzir `trapArea.spikeProb` para algo como 0.3 ainda gera picos, mas menos frequentes, dificultando a detecção.
+
+Essas alterações são graduais, permanecem dentro de limites plausíveis para um cenário real e evitam as restrições de variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.55
+fault.durationMs.min: 800
+fault.durationMs.max: 3000
+cbStatus: 1
+incrementStNumOnFault: false
+sqnumMode: fast
+ttlMsValues: 200
+analog.deltaAbs.min: 0.2
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 0.9
+trapArea.multiplier.max: 1.1
+trapArea.spikeProb: 0.3

@@ -1,0 +1,18 @@
+Olá! Vou ajudá-lo a dificultar a classificação do ataque cibernético do tipo Masquerade no IDS com classificador ML.
+
+Analisando as métricas atuais, vemos que o IDS está classificando o ataque com precisão perfeita (1.0), o que sugere que o ataque está muito caracterizado e fácil de detectar. Para dificultar a classificação, precisamos reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+Aqui estão algumas sugestões de mudanças graduais e plausíveis para os campos editáveis:
+
+- **fault.prob**: Reduzir a probabilidade de ocorrência do ataque para 0.4. Isso fará com que o ataque seja menos caracterizado e mais difícil de detectar.
+- **analog.deltaAbs.max**: Aumentar o valor máximo de variação analógica para 0.6. Isso fará com que o ataque seja menos caracterizado e mais difícil de detectar.
+- **trapArea.multiplier.max**: Aumentar o valor máximo do multiplicador de área de trapa para 1.5. Isso fará com que o ataque seja menos caracterizado e mais difícil de detectar.
+- **trapArea.spikeProb**: Reduzir a probabilidade de ocorrência de picos de área de trapa para 0.3. Isso fará com que o ataque seja menos caracterizado e mais difícil de detectar.
+
+Essas mudanças devem reduzir a separabilidade do ataque em relação ao tráfego normal e dificultar a classificação do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

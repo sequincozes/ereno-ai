@@ -1,0 +1,27 @@
+Para tornar o padrão do ataque menos distinguível dos fluxos normais, procurei “esfumar” as características que o Random Forest usa como mais relevantes (os diferentes *TrapAreaSum*, os valores analógicos e o `cbStatus`). As alterações abaixo mantêm o ataque plausível, mas reduzem a separabilidade entre ataque e tráfego legítimo:
+
+* **Probabilidade do fault** – diminui‑a um pouco (de 0.55 para 0.45). Ainda gera um número considerável de falhas, mas reduz a frequência de padrões muito marcados.
+* **Duração do fault** – aumenta o intervalo (de 2000‑8000 ms para 3000‑10000 ms). Falhas mais longas se misturam melhor com variações temporais normais.
+* **`cbStatus`** – muda para 1, que costuma aparecer em mensagens de status “OK” ou “ativo” nas capturas reais, dificultando a distinção baseada apenas nesse campo.
+* **`incrementStNumOnFault`** – desativa (False). Assim o número de sequência não aumenta de forma sistemática quando ocorre o fault, evitando um padrão fácil de detectar.
+* **`sqnumMode`** – passa para **random**. Sequências aleatórias impedem que o modelo aprenda um padrão sequencial associado ao ataque.
+* **`ttlMsValues`** – eleva para 2000 ms, aproximando‑se dos valores de TTL típicos do tráfego normal.
+* **`analog.deltaAbs`** – restringe o intervalo (de 0.01‑0.5 para 0.02‑0.3). Variações analógicas menores são mais difíceis de separar das flutuações naturais.
+* **`trapArea.multiplier`** – estreita o intervalo (de 0.9‑1.4 para 0.95‑1.2). Assim os picos de área de armadilha ficam mais próximos dos valores observados em operação regular.
+* **`trapArea.spikeProb`** – reduz para 0.1, ainda permitindo alguns picos, mas com frequência menor, evitando um padrão de “spike” excessivo que o modelo captura facilmente.
+
+Essas mudanças são graduais, permanecem dentro dos limites aceitáveis para um cenário realista e evitam as restrições de “variantes degeneradas” que você especificou.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.min: 3000
+fault.durationMs.max: 10000
+cbStatus: 1
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: 2000
+analog.deltaAbs.min: 0.02
+analog.deltaAbs.max: 0.3
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.1

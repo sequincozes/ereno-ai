@@ -1,0 +1,20 @@
+Para tornar o ataque de **masquerade_fault** menos distinguível pelo Random Forest, concentrei‑me nas variáveis que aparecem entre as principais features (TrapAreaSum, valores analógicos e `cbStatus`). A ideia é aproximar os valores do ataque dos observados no tráfego normal, de modo a reduzir a separabilidade sem violar as restrições de “não degenerar” (não zerar probabilidades ou amplitudes e não descaracterizar o ataque).
+
+### Estratégias adotadas
+1. **Amplitude de duração do fault** – ampliando o intervalo mínimo e reduzindo o máximo, o tempo de falha passa a ficar mais próximo dos intervalos típicos de mensagens GOOSE normais, dificultando a identificação baseada em duração.  
+2. **Amplitude dos valores analógicos (`analog.deltaAbs`)** – deslocar o limite inferior para cima (de 0.05 → 0.10) e ampliar o limite superior (de 0.4 → 0.5) gera variações que se sobrepõem ao ruído natural dos sensores, reduzindo a importância da feature analógica.  
+3. **Multiplicador e probabilidade de spikes em `trapArea`** – aproximar o multiplicador máximo de 1.5 para 1.2 e reduzir a probabilidade de spikes de 0.2 para 0.15 diminui a magnitude dos picos de área de captura, que são fortemente usadas pelo modelo.  
+4. **Probabilidade de ocorrência do fault (`fault.prob`)** – um leve aumento (de 0.3 → 0.35) mantém o ataque presente, mas evita que a baixa frequência seja um sinal distintivo.  
+5. **`cbStatus`** – mudar de 0 para 1 introduz variação que pode coincidir com estados normais de controle, tornando a feature menos discriminativa.
+
+Essas alterações são graduais, plausíveis dentro do cenário de geração de tráfego GOOSE e obedecem às restrições de não criar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 200
+fault.durationMs.max: 2000
+analog.deltaAbs.min: 0.10
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.15
+cbStatus: 1

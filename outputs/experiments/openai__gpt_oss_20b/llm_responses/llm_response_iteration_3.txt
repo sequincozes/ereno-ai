@@ -1,0 +1,30 @@
+Para tornar o ataque de masquerade mais “camuflado” em relação ao tráfego normal, as alterações propostas visam reduzir a disparidade nas características que o Random Forest usa com maior peso (TrapAreaSum, valores analógicos e cbStatus). As mudanças são graduais e mantêm a plausibilidade do cenário de ataque, evitando valores extremos ou a desativação de parâmetros críticos.
+
+**Principais ajustes sugeridos**
+
+1. **Aumentar a probabilidade de ocorrência do ataque**  
+   - Eleva a frequência de eventos de ataque, o que pode diluir a distinção entre ataque e normal quando o modelo tenta aprender padrões claros.
+
+2. **Ajustar a duração do fault**  
+   - Tornar o intervalo de duração mais estreito e deslocado para valores mais altos ajuda a sobrepor a distribuição de duração normal, reduzindo a separabilidade.
+
+3. **Reduzir a amplitude dos desvios analógicos**  
+   - Diminuir ligeiramente a faixa de `deltaAbs` faz com que os valores analógicos do ataque se aproximem mais dos valores típicos de operação, tornando-os menos evidentes.
+
+4. **Ajustar o multiplicador e a probabilidade de pico de TrapArea**  
+   - Reduzir o intervalo do multiplicador e aumentar a probabilidade de pico faz com que os valores de TrapAreaSum do ataque se misturem mais com os valores normais, diminuindo a importância dessas features no modelo.
+
+5. **Manter `cbStatus` e `incrementStNumOnFault` inalterados**  
+   - Esses parâmetros são essenciais para a identidade do ataque e não devem ser alterados para preservar a funcionalidade do cenário.
+
+**Alterações aplicáveis**
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.min: 300
+fault.durationMs.max: 1400
+analog.deltaAbs.min: 0.45
+analog.deltaAbs.max: 0.55
+trapArea.multiplier.min: 1.25
+trapArea.multiplier.max: 1.4
+trapArea.spikeProb: 0.4

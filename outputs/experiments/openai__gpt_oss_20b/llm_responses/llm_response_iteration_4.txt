@@ -1,0 +1,11 @@
+Para tornar o ataque menos distinto do tráfego normal, sugiro ajustes graduais nos parâmetros que influenciam as features mais relevantes para o Random Forest (TrapAreaSum, valores analógicos e cbStatus). As alterações mantêm o ataque plausível e evitam a criação de variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 200
+fault.durationMs.max: 1200
+analog.deltaAbs.min: 0.4
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.35
+trapArea.spikeProb: 0.35

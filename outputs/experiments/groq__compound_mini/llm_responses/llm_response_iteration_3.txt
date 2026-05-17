@@ -1,0 +1,27 @@
+Para reduzir a separabilidade entre tráfego de ataque e tráfego normal, é útil tornar as características do ataque menos extremas e mais próximas das observadas em condições normais. Algumas estratégias que podem ajudar:
+
+* **Aumentar a probabilidade do fault** (`fault.prob`) para que os ataques ocorram com mais frequência, diminuindo a distinção baseada na taxa de ocorrência.
+* **Ampliar o intervalo de duração** (`fault.durationMs.min` / `max`) para que alguns eventos de falha fiquem mais longos, aproximando‑se de padrões de manutenção ou de eventos benignos de maior duração.
+* **Variar o `cbStatus`** para valores diferentes de 1, já que o modelo usa fortemente esse campo; mudar para 2 introduz mais variabilidade.
+* **Desativar o incremento de `stNum`** (`incrementStNumOnFault`) reduz a marcação sequencial que o classificador pode explorar.
+* **Alterar o modo de sequência** (`sqnumMode`) para “slow”, introduzindo variações temporais nos números de sequência.
+* **Aumentar o TTL** (`ttlMsValues`) para que os pacotes permaneçam mais tempo na rede, aproximando‑se de valores típicos de tráfego normal.
+* **Ajustar a variação analógica** (`analog.deltaAbs.min` e `max`) para que o intervalo inclua valores menores e maiores, cobrindo mais o espectro de medições normais.
+* **Reduzir o multiplicador de `trapArea`** (`trapArea.multiplier.min` / `max`) para que os picos de área de armadilha sejam menos pronunciados.
+* **Elevar a probabilidade de spikes** (`trapArea.spikeProb`) para que ocorram com mais frequência, tornando‑os menos distintivos.
+
+Essas modificações são graduais, mantêm a plausibilidade do ataque e evitam os limites proibidos (não zeram valores críticos nem tornam o ataque inexistente).
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.7
+fault.durationMs.min: 600
+fault.durationMs.max: 2000
+cbStatus: 2
+incrementStNumOnFault: false
+sqnumMode: slow
+ttlMsValues: 100
+analog.deltaAbs.min: 0.15
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.6

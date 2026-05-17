@@ -1,0 +1,29 @@
+**Reasoning and suggested adjustments**
+
+The current performance ( f1 ≈ 0.99 ) shows that the Random Forest separates the masquerade‑fault traffic from normal traffic very well. The SHAP analysis tells us that the most important features are the various *TrapAreaSum* values, the analog delta and the `cbStatus` flag. To make the attack harder to detect we should:
+
+1. **Lower the fault occurrence probability** – a slightly smaller `fault.prob` reduces the overall frequency of the fault pattern, making it blend more with normal traffic while still keeping the attack realistic (the guideline forbids values that are “very low”).  
+2. **Reduce the magnitude of the analog deviation** – decreasing `analog.deltaAbs.max` makes the analog signal change less conspicuous, shrinking the gap between attack and normal analog values.  
+3. **Make the trap‑area spikes rarer** – lowering `trapArea.spikeProb` reduces the number of pronounced spikes that the model currently uses as a strong discriminator.  
+4. **Narrow the trap‑area multiplier range** – moving both the minimum and maximum of `trapArea.multiplier` closer to 1 (e.g., 0.99 – 1.05) makes the overall trap‑area scaling less extreme, further blurring the distinction.
+
+All these changes are gradual, stay within the allowed ranges, and respect the “no degenerate variant” constraints.
+
+**Proposed concrete values**
+
+- `fault.prob` from **0.35 → 0.28** (≈ 20 % reduction)  
+- `analog.deltaAbs.max` from **0.5 → 0.4** (‑20 %)  
+- `trapArea.spikeProb` from **0.2 → 0.1** (‑50 %)  
+- `trapArea.multiplier.min` from **0.995 → 0.99** (slightly lower)  
+- `trapArea.multiplier.max` from **1.25 → 1.05** (significant reduction)
+
+These adjustments keep the attack plausible, avoid zeroing any critical parameter, and should reduce the separability of the attack in the feature space, thereby lowering the IDS’s f1‑score for the attack class.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.28
+analog.deltaAbs.max: 0.4
+trapArea.spikeProb: 0.1
+trapArea.multiplier.min: 0.99
+trapArea.multiplier.max: 1.05

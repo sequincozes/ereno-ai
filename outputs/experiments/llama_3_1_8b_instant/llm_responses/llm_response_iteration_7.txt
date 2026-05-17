@@ -1,0 +1,18 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+**Observações**
+
+* A probabilidade de falha (`fault.prob`) está atualmente em 0,35. Para reduzir a separabilidade, podemos aumentá-la para 0,4, mas sem reduzi-la para valores muito baixos.
+* Os valores analógicos (`analog.deltaAbs`) estão atualmente entre 0,2 e 0,6. Para reduzir a separabilidade, podemos aumentar o valor máximo para 0,5.
+* A multiplicação da área de armazenamento (`trapArea.multiplier`) está atualmente entre 1,0 e 1,25. Para reduzir a separabilidade, podemos aumentar o valor máximo para 1,5.
+* A probabilidade de pico (`trapArea.spikeProb`) está atualmente em 0,25. Para reduzir a separabilidade, podemos aumentá-la para 0,3.
+
+**Alterações sugeridas**
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3
+
+Essas alterações devem ajudar a reduzir a separabilidade do ataque em relação ao tráfego normal, sem descaracterizar o ataque ou reduzir a probabilidade de falha para valores muito baixos.

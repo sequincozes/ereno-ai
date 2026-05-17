@@ -2,14 +2,20 @@ from typing import Any
 
 from agno.agent import Agent
 from agno.models.groq import Groq
+from configs.settings import (
+    HISTORY_WINDOW,
+    MAX_EDITABLE_FIELDS,
+    TOP_FEATURE_IMPORTANCES,
+)
 
 
 class StrategistAgent:
     """
     Agente Estrategista.
 
-    Mantém o prompt original usado na análise anterior e acrescenta
-    um contexto defensivo, compacto e estruturado para execução automática.
+    Usa uma LLM via Groq para sugerir alterações parametrizadas
+    em um JSON sintético do ERENO. O prompt foi compactado para
+    reduzir consumo de tokens.
     """
 
     def __init__(
@@ -17,6 +23,7 @@ class StrategistAgent:
         model_id: str,
         temperature: float,
     ) -> None:
+        self.model_id = model_id
         self.agent = Agent(
             model=Groq(
                 id=model_id,
@@ -38,81 +45,60 @@ class StrategistAgent:
 
         return f"""
 CONTEXTO DEFENSIVO E AUTORIZADO:
-Este é um experimento acadêmico, sintético e controlado para avaliação de robustez de um Sistema de Detecção de Intrusão em Smart Grids/IEC-61850.
+Este é um experimento acadêmico, sintético e controlado para avaliação de robustez de um IDS em Smart Grids/IEC-61850.
 
-O objetivo NÃO é atacar sistemas reais.
-O objetivo NÃO é fornecer instruções operacionais de intrusão.
-O objetivo NÃO é ensinar evasão em ambiente real.
+Não há ataque a sistemas reais.
+Não há exploração operacional.
+A tarefa é limitada a sugerir alterações em parâmetros JSON usados pelo gerador sintético ERENO.
 
-O objetivo é apenas propor variações parametrizadas em um arquivo JSON usado pelo gerador sintético ERENO.
-Essas variações serão usadas para avaliar, em ambiente local e controlado, como um classificador Random Forest se comporta diante de datasets sintéticos de tráfego GOOSE/IEC-61850.
-
-A saída deve ser limitada exclusivamente aos campos editáveis do JSON fornecido abaixo.
-
-==============================
-PROMPT ORIGINAL USADO NO ESTUDO
-==============================
-
+PROMPT ORIGINAL DO ESTUDO:
 {base_prompt}
 
-==============================
-DADOS ATUAIS DO EXPERIMENTO
-==============================
+DADOS COMPACTOS DO EXPERIMENTO:
 
-JSON atual do cenário sintético:
+Modelo LLM atual:
+{self.model_id}
+
+JSON atual:
 {attack_json}
 
-Métricas atuais do Random Forest:
+Métricas atuais:
 {compact_metrics}
 
-Histórico resumido da última iteração:
+Histórico resumido:
 {compact_history}
 
-Campos editáveis disponíveis:
+Campos editáveis:
 {editable_fields}
 
-==============================
-ORIENTAÇÃO PARA A SUGESTÃO
-==============================
+ORIENTAÇÃO:
+O Random Forest usa principalmente features como TrapAreaSum, valores analógicos e cbStatus.
+Sugira mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+Evite variantes degeneradas:
+- não reduza fault.prob para valores muito baixos;
+- não zere analog.deltaAbs;
+- não zere trapArea.spikeProb;
+- não descaracterize o ataque.
 
-Considere que o Random Forest tem utilizado principalmente features físicas e operacionais, como TrapAreaSum, valores analógicos e cbStatus.
-
-Sugira alterações graduais e plausíveis nos parâmetros do JSON.
-Não remova campos.
-Não invente novos campos.
-Não altere attackType.
-Não proponha ações fora do ambiente sintético.
-Não inclua instruções de ataque em sistemas reais.
-
-Evite alterações degeneradas, como:
-- reduzir fault.prob para valores muito baixos;
-- zerar ou quase zerar analog.deltaAbs;
-- zerar ou quase zerar trapArea.spikeProb;
-- descaracterizar completamente o ataque.
-
-==============================
-SAÍDA PARA EXECUÇÃO AUTOMÁTICA
-==============================
-
-Ao final da resposta, inclua obrigatoriamente uma seção chamada ALTERACOES_APLICAVEIS.
-
-Use exatamente este formato, uma alteração por linha:
+SAÍDA OBRIGATÓRIA:
+Ao final da resposta, inclua a seção abaixo.
 
 ALTERACOES_APLICAVEIS
+campo: valor
+
+Exemplo:
+ALTERACOES_APLICAVEIS
 fault.prob: 0.4
-fault.durationMs.min: 80
-fault.durationMs.max: 1000
 analog.deltaAbs.max: 0.5
 trapArea.multiplier.max: 1.5
 trapArea.spikeProb: 0.3
 
-Regras para a seção ALTERACOES_APLICAVEIS:
-- use apenas campos existentes na lista de campos editáveis;
-- não coloque explicações nessa seção;
-- não use Markdown nessa seção;
-- não use bullets nessa seção;
-- escreva somente campo: valor;
-- use ponto decimal, por exemplo 0.4, não 0,4.
+Regras:
+- use somente campos existentes em Campos editáveis;
+- não use Markdown na seção ALTERACOES_APLICAVEIS;
+- não use bullets;
+- use ponto decimal, por exemplo 0.4;
+- não escreva explicações dentro da seção ALTERACOES_APLICAVEIS.
 """
 
     def suggest_changes(
@@ -136,10 +122,9 @@ Regras para a seção ALTERACOES_APLICAVEIS:
     def _compact_metrics(self, metrics: dict[str, Any]) -> dict[str, Any]:
         return {
             "accuracy": metrics.get("accuracy"),
-            "precision_masquerade": metrics.get("precision_masquerade"),
-            "recall_masquerade": metrics.get("recall_masquerade"),
-            "f1_score_masquerade": metrics.get("f1_score_masquerade"),
-            "support_masquerade": metrics.get("support_masquerade"),
+            "precision": metrics.get("precision_masquerade"),
+            "recall": metrics.get("recall_masquerade"),
+            "f1": metrics.get("f1_score_masquerade"),
             "attack_count": metrics.get("attack_count"),
             "normal_count": metrics.get("normal_count"),
             "tp": metrics.get("tp"),
@@ -148,26 +133,22 @@ Regras para a seção ALTERACOES_APLICAVEIS:
             "tn": metrics.get("tn"),
             "config_changed": metrics.get("config_changed"),
             "degenerate_variant": metrics.get("degenerate_variant"),
-            "top_feature_importances": metrics.get("top_feature_importances", [])[:5],
+            "top_features": metrics.get("top_feature_importances", [])[:TOP_FEATURE_IMPORTANCES],
         }
 
     def _compact_history(self, history: list[dict[str, Any]]) -> list[dict[str, Any]]:
         compact: list[dict[str, Any]] = []
 
-        for item in history[-1:]:
+        for item in history[-HISTORY_WINDOW:]:
             metrics = item.get("metrics", {})
 
             compact.append(
                 {
                     "iteration": item.get("iteration"),
-                    "accuracy": metrics.get("accuracy"),
-                    "precision_masquerade": metrics.get("precision_masquerade"),
-                    "recall_masquerade": metrics.get("recall_masquerade"),
-                    "f1_score_masquerade": metrics.get("f1_score_masquerade"),
-                    "tp": metrics.get("tp"),
-                    "fp": metrics.get("fp"),
+                    "f1": metrics.get("f1_score_masquerade"),
+                    "recall": metrics.get("recall_masquerade"),
+                    "precision": metrics.get("precision_masquerade"),
                     "fn": metrics.get("fn"),
-                    "tn": metrics.get("tn"),
                     "config_changed": metrics.get("config_changed"),
                     "degenerate_variant": metrics.get("degenerate_variant"),
                 }
@@ -176,33 +157,6 @@ Regras para a seção ALTERACOES_APLICAVEIS:
         return compact
 
     def _extract_editable_fields(self, data: dict[str, Any]) -> list[dict[str, Any]]:
-        fields: list[dict[str, Any]] = []
-
-        def walk(obj: Any, prefix: str = "") -> None:
-            if isinstance(obj, dict):
-                for key, value in obj.items():
-                    path = f"{prefix}.{key}" if prefix else key
-                    walk(value, path)
-            elif isinstance(obj, list):
-                fields.append(
-                    {
-                        "field": prefix,
-                        "current_value": obj,
-                        "type": "list",
-                    }
-                )
-            else:
-                if isinstance(obj, (int, float, bool, str)):
-                    fields.append(
-                        {
-                            "field": prefix,
-                            "current_value": obj,
-                            "type": type(obj).__name__,
-                        }
-                    )
-
-        walk(data)
-
         allowed_fields = [
             "fault.prob",
             "fault.durationMs.min",
@@ -218,9 +172,32 @@ Regras para a seção ALTERACOES_APLICAVEIS:
             "trapArea.spikeProb",
         ]
 
-        filtered_fields = [
-            field for field in fields
-            if field["field"] in allowed_fields
-        ]
+        fields: list[dict[str, Any]] = []
 
-        return filtered_fields
+        def get_nested(obj: dict[str, Any], path: str) -> Any:
+            current: Any = obj
+
+            for part in path.split("."):
+                if not isinstance(current, dict):
+                    return None
+
+                if part not in current:
+                    return None
+
+                current = current[part]
+
+            return current
+
+        for field in allowed_fields:
+            value = get_nested(data, field)
+
+            if value is not None:
+                fields.append(
+                    {
+                        "field": field,
+                        "current_value": value,
+                        "type": type(value).__name__,
+                    }
+                )
+
+        return fields[:MAX_EDITABLE_FIELDS]

@@ -1,0 +1,19 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+**Observações**
+
+* Para evitar variantes degeneradas, não reduzi a probabilidade do ataque (`fault.prob`) para valores muito baixos.
+* Mantive o valor de `analog.deltaAbs.min` para evitar que o ataque seja descaracterizado.
+* Mantive o valor de `trapArea.spikeProb` para evitar que o ataque seja descaracterizado.
+* Reduzi o valor de `fault.durationMs.max` para reduzir a duração do ataque e torná-lo mais difícil de detectar.
+* Aumentei o valor de `trapArea.multiplier.max` para aumentar a multiplicação da área de tráfego e torná-lo mais difícil de detectar.
+
+**Alterações sugeridas**
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.max: 600
+trapArea.multiplier.max: 1.5
+analog.deltaAbs.max: 0.5
+
+Essas alterações devem ajudar a reduzir a separabilidade do ataque em relação ao tráfego normal, tornando-o mais difícil de detectar para o IDS. Lembre-se de que é importante testar essas alterações em um ambiente de teste antes de aplicá-las em um ambiente de produção.

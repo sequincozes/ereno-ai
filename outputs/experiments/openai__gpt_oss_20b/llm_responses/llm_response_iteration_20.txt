@@ -1,0 +1,15 @@
+Para tornar o ataque de masquerade mais difícil de ser distinguido pelo Random Forest, sugiro ajustes que aumentem a similaridade do tráfego gerado com o normal, mantendo a viabilidade do ataque. As alterações são graduais e evitam as variantes degeneradas indicadas.
+
+**ALTERACOES_APLICAVEIS**  
+fault.prob: 0.45  
+fault.durationMs.min: 3500  
+fault.durationMs.max: 7500  
+cbStatus: 1  
+incrementStNumOnFault: True  
+sqnumMode: sequential  
+ttlMsValues: 2500  
+analog.deltaAbs.min: 0.45  
+analog.deltaAbs.max: 0.55  
+trapArea.multiplier.min: 1.1  
+trapArea.multiplier.max: 1.4  
+trapArea.spikeProb: 0.3

@@ -1,0 +1,20 @@
+Para tornar o ataque de **Masquerade** menos distinguível pelo Random Forest, concentrei‑me nas variáveis que mais influenciam as features de maior importância (TrapAreaSum, valores analógicos e **cbStatus**).  
+
+**Estratégia adotada**
+
+1. **Diminuir levemente a probabilidade do fault** – reduzir de 0.30 para 0.25 mantém o ataque presente, mas diminui a frequência de ocorrências marcantes que o modelo pode aprender.  
+2. **Ajustar a amplitude dos valores analógicos** – aumentar o limite inferior de `analog.deltaAbs.min` para 0.10 e o superior para 0.40 cria sobreposição maior entre valores de ataque e de tráfego normal, enfraquecendo a separabilidade baseada em variações analógicas.  
+3. **Alterar o multiplicador de TrapArea** – deslocar o intervalo para valores um pouco menores (`multiplier.min` = 1.15) e ligeiramente maiores (`multiplier.max` = 1.30) gera variações de área de disparo que se aproximam mais dos padrões normais, reduzindo a distinção nas features de soma de área.  
+4. **Reduzir a probabilidade de spikes em TrapArea** – mudar `trapArea.spikeProb` de 0.24 para 0.20 diminui a ocorrência de picos abruptos que são facilmente capturados pelo modelo.  
+
+Essas mudanças são graduais, permanecem dentro dos limites plausíveis para um cenário realista e evitam as restrições de “variantes degeneradas” (não zeram nem reduzem excessivamente as probabilidades).  
+
+Ao aplicar essas alterações, espera‑se que o Random Forest perca parte da clareza entre as amostras de ataque e as de tráfego normal, resultando em um **f1‑score** mais baixo para a classe de ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.25
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 1.15
+trapArea.multiplier.max: 1.3
+trapArea.spikeProb: 0.2

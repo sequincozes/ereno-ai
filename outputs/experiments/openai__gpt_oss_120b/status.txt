@@ -1,0 +1,3 @@
+model_id=openai/gpt-oss-120b
+status=completed
+timestamp=2026-05-16T21:29:46.755873

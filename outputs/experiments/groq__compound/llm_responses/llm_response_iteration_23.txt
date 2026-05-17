@@ -1,0 +1,26 @@
+**Reasoning and suggested adjustments**
+
+The Random Forest model relies heavily on the features that describe the total “TrapArea” (vsbCTrapAreaSum, isbATrapAreaSum, etc.), the analog delta values and the `cbStatus`. To make the masquerade‑fault traffic blend more with normal traffic we should:
+
+1. **Increase the overall fault probability** – a higher `fault.prob` makes the attack appear more often, reducing the contrast between attack and normal samples while still staying well above the “very low” values that would create a degenerate variant.
+
+2. **Broaden the fault duration window** – by lowering the minimum and raising the maximum duration (`fault.durationMs.min` / `fault.durationMs.max`) we introduce more variability in the temporal pattern, which weakens the temporal signature that the classifier may be exploiting.
+
+3. **Reduce the magnitude of the analog deviation** – decreasing `analog.deltaAbs.max` brings the analog values of the attack closer to the range observed in normal traffic, directly attacking one of the top‑ranked SHAP features.
+
+4. **Make the trap‑area characteristics less extreme** – a slightly higher `trapArea.multiplier.max` together with a modestly lower `trapArea.spikeProb` reduces the sharp spikes that the model currently uses to separate attacks.
+
+5. **Randomise the sequence‑number generation** – switching `sqnumMode` from *sequential* to *random* removes a deterministic pattern that could be leveraged by the classifier, without altering the logical correctness of the GOOSE messages.
+
+All these changes are small, plausible, and stay within the allowed ranges, respecting the constraints (no near‑zero probabilities, no removal of analog delta, no zero spike probability, and the attack remains recognizable as a masquerade fault).
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 400
+fault.durationMs.max: 3500
+analog.deltaAbs.max: 0.3
+trapArea.multiplier.max: 1.3
+trapArea.spikeProb: 0.2
+sqnumMode: random

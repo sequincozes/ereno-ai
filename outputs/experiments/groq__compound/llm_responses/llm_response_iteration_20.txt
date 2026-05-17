@@ -1,0 +1,18 @@
+Para tornar o ataque de “masquerade_fault” menos distinguível pelo Random Forest, a estratégia é suavizar as diferenças nas variáveis que mais influenciam o modelo (TrapAreaSum, valores analógicos e cbStatus) sem descaracterizar o ataque.  
+
+**1. Reduzir a amplitude do multiplicador de trapArea**  
+Os valores de trapArea.multiplier controlam o quanto a área de captura (TrapAreaSum) varia durante o ataque. Diminuindo o intervalo para algo mais próximo do comportamento normal (por exemplo, 0.95 – 1.15) a variação passa a ser menos pronunciada, diminuindo a importância dessa feature.
+
+**2. Ampliar levemente o limite superior de analog.deltaAbs**  
+A diferença absoluta dos valores analógicos (analog.deltaAbs) também é um dos principais indicadores. Aumentar o máximo para 0.4 (mantendo o mínimo em 0.1) cria uma distribuição mais ampla e sobrepõe‑se mais ao tráfego legítimo, reduzindo a separabilidade.
+
+**3. Alongar o tempo máximo de duração da falha**  
+Um tempo de falha mais longo (até 2800 ms) faz com que o ataque se espalhe por mais amostras, diluindo seu padrão temporal e dificultando a detecção baseada em duração.
+
+Essas alterações são graduais, permanecem dentro dos limites plausíveis do protocolo GOOSE e não violam as restrições de não gerar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.durationMs.max: 2800
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.15

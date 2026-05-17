@@ -1,0 +1,21 @@
+Para tornar o ataque Masquerade menos distinguível pelo Random Forest, focamos nos parâmetros que mais influenciam as features usadas pelo modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**Estratégia adotada**
+
+1. **Aumentar a frequência do ataque** – elevar `fault.prob` de 0.35 para 0.4 faz o ataque aparecer mais vezes, diluindo a diferença entre padrões de ataque e tráfego normal sem reduzir a probabilidade a níveis muito baixos (evita a restrição de “não reduzir demais”).  
+
+2. **Variar a duração mínima da falha** – diminuir `fault.durationMs.min` de 200 ms para 150 ms gera ataques mais curtos, o que pode fazer com que a assinatura temporal se misture mais ao tráfego legítimo, mantendo o máximo em 1500 ms para não descaracterizar o ataque.  
+
+3. **Ajustar a amplitude dos valores analógicos** – mover o intervalo de `analog.deltaAbs` para 0.10 – 0.40 (em vez de 0.08 – 0.45) reduz a extremidade dos desvios analógicos, aproximando‑os dos valores observados em condições normais, mas sem zerar o intervalo (evita a restrição de “não zerar”).  
+
+4. **Atenuar levemente o fator de multiplicação da área de armadilha** – reduzir `trapArea.multiplier.min` de 1.1 para 1.05 e `trapArea.multiplier.max` de 1.4 para 1.35 diminui a diferença de magnitude entre ataques e tráfego normal, sem eliminar a presença de picos (`trapArea.spikeProb` permanece 0.2).  
+
+Essas modificações são graduais, plausíveis dentro do cenário de geração de tráfego GOOSE e respeitam todas as restrições impostas (não criam variantes degeneradas, não zeram parâmetros críticos e mantêm a natureza do ataque). Elas devem reduzir a separabilidade das amostras de ataque em relação às normais, levando a uma diminuição do F1‑score do modelo.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 150
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.35

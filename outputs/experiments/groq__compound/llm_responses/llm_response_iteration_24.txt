@@ -1,0 +1,23 @@
+**Rationale for the suggested changes**
+
+The Random Forest model is currently relying heavily on the *TrapAreaSum* features, the analog delta values and the `cbStatus` flag. To make the masquerade‑fault attack blend more with normal traffic we can:
+
+1. **Lower the fault occurrence probability** – a modest reduction from 0.5 to 0.4 keeps the attack frequent enough to stay realistic while decreasing the proportion of clearly anomalous samples.
+2. **Narrow and shift the fault duration window** – moving the minimum from 400 ms to 800 ms and the maximum from 3500 ms to 2500 ms reduces the variability of the fault timing, making it harder for the classifier to learn a distinctive duration pattern.
+3. **Tighten the analog delta range** – raising the minimum slightly (0.05 → 0.07) and lowering the maximum (0.32 → 0.25) brings the analog perturbations closer to the range observed in normal traffic, reducing their discriminative power.
+4. **Adjust the trap‑area multiplier** – increasing the lower bound to 1.0 and lowering the upper bound to 1.2 compresses the magnitude of the trap‑area spikes, which directly affects the most important features (`vsbCTrapAreaSum`, `isbATrapAreaSum`, …).
+5. **Reduce the spike probability** – moving from 0.20 to 0.15 makes spikes less frequent, further blurring the distinction between attack and benign samples.
+
+All these modifications stay within the allowed ranges, avoid degenerate configurations, and are incremental enough to remain plausible for a realistic attack scenario.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 800
+fault.durationMs.max: 2500
+analog.deltaAbs.min: 0.07
+analog.deltaAbs.max: 0.25
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.15

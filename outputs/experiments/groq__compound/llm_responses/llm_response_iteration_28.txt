@@ -1,0 +1,30 @@
+**Rationale for the suggested adjustments**
+
+The current Random‑Forest model relies heavily on the *TrapAreaSum* features, the analog variation (`analog.deltaAbs`) and the `cbStatus` flag. To make the masquerade‑fault traffic blend more with normal GOOSE traffic we should:
+
+1. **Lower the fault occurrence probability** – a slightly smaller `fault.prob` reduces the overall proportion of obvious fault‑related samples without making the attack unrealistically rare (the guideline forbids values that are “very low”).
+
+2. **Broaden the fault duration window** – moving the minimum upward and the maximum outward (`fault.durationMs.min` / `max`) spreads the fault over a longer time span, making the temporal pattern less distinctive.
+
+3. **Shrink the analog delta range** – decreasing both `analog.deltaAbs.min` and `analog.deltaAbs.max` brings the analog deviation closer to the range observed in normal traffic, reducing the SHAP importance of the analog feature.
+
+4. **Narrow the trap‑area multiplier range** – tightening `trapArea.multiplier.min` and `max` reduces the amplitude of the trap‑area spikes, which directly attacks the most important features (`vsbCTrapAreaSum`, `isbATrapAreaSum`, …).
+
+5. **Lower the spike probability** – a modest reduction of `trapArea.spikeProb` makes spikes less frequent, again blurring the distinction between attack and normal samples.
+
+6. **Increase the TTL value** – raising `ttlMsValues` from 30 ms to 40 ms adds a small amount of latency that is typical for benign traffic, helping to mask the attack timing.
+
+All these changes are incremental, stay within the allowed ranges, and respect the “no degenerate variant” constraints (nothing is set to zero or to an implausibly low probability). They should collectively lower the separability of the attack, which is expected to reduce the F1‑score of the IDS.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 1500
+fault.durationMs.max: 3500
+analog.deltaAbs.min: 0.07
+analog.deltaAbs.max: 0.30
+trapArea.multiplier.min: 1.08
+trapArea.multiplier.max: 1.18
+trapArea.spikeProb: 0.25
+ttlMsValues: 40

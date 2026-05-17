@@ -1,0 +1,20 @@
+Para tornar o ataque de Masquerade menos distinguível pelo Random Forest, concentrei‑me nos parâmetros que mais influenciam as features usadas pelo modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**1. Reduzir ligeiramente a probabilidade do fault** – diminuir `fault.prob` de 0.35 para 0.28 mantém o ataque presente, mas reduz a frequência de ocorrências, dificultando a aprendizagem de um padrão forte.  
+
+**2. Aumentar a duração mínima do fault** – mudar `fault.durationMs.min` de 200 ms para 240 ms cria variações de tempo mais amplas, aproximando‑se do comportamento normal de mensagens GOOSE que podem ter latências variáveis.  
+
+**3. Ampliar a variação dos valores analógicos** – elevar `analog.deltaAbs.max` de 0.35 para 0.385 amplia a faixa de mudança dos valores analógicos, tornando‑os menos consistentes entre ataques e, portanto, menos discriminativos.  
+
+**4. Ajustar o multiplicador máximo da área de disparo** – reduzir `trapArea.multiplier.max` de 1.5 para 1.2 diminui a diferença entre as áreas de disparo de ataque e de tráfego legítimo, enfraquecendo a separabilidade baseada em TrapAreaSum.  
+
+**5. Incrementar levemente a probabilidade de spike** – aumentar `trapArea.spikeProb` de 0.2 para 0.24 introduz mais “picos” aleatórios nas áreas de disparo, confundindo ainda mais o classificador sem eliminar a característica do ataque.
+
+Essas alterações são graduais, plausíveis dentro do cenário de subestações elétricas e evitam criar variantes degeneradas (não reduzimos excessivamente `fault.prob`, não zeramos `analog.deltaAbs` nem `trapArea.spikeProb`). Elas devem gerar um conjunto de dados onde as amostras de ataque se misturam mais com o tráfego normal, reduzindo o F1‑score do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.28
+fault.durationMs.min: 240
+analog.deltaAbs.max: 0.385
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.24

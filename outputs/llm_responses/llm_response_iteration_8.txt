@@ -1,0 +1,24 @@
+Para tornar o tráfego de ataque mais parecido com o tráfego normal e, assim, reduzir a capacidade do Random Forest de separar os exemplos, podemos:
+
+* **Aproximar os valores de “trapArea” ao 1.0** – isso diminui a variação do “TrapAreaSum”, que é a feature mais importante.
+* **Diminuir o intervalo de variação analógica** – valores de corrente/tensão menos abruptos são mais difíceis de distinguir.
+* **Alterar o “cbStatus”** para um código que também ocorre em mensagens normais, de modo que a feature “cbStatus” perca poder discriminativo.
+* **Variar o modo de numeração de sequência e o TTL** – introduz ruído na ordem e no tempo de vida das mensagens.
+* **Ajustar a probabilidade e a duração da falha** – aumentá‑la ligeiramente e estender o intervalo de duração faz o ataque aparecer de forma mais contínua, confundindo o classificador.
+* **Reduzir a probabilidade de “spike”** sem zerá‑la, para que os picos de área sejam menos evidentes.
+
+Essas mudanças são graduais, plausíveis dentro do cenário de subestações e obedecem às restrições de não criar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 2500
+fault.durationMs.max: 4000
+cbStatus: 0
+incrementStNumOnFault: false
+sqnumMode: random
+ttlMsValues: 800
+analog.deltaAbs.min: 0.02
+analog.deltaAbs.max: 0.12
+trapArea.multiplier.min: 0.98
+trapArea.multiplier.max: 1.02
+trapArea.spikeProb: 0.05

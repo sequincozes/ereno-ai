@@ -1,0 +1,23 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que definem o comportamento do ataque. Considerando as características do ataque e as features mais importantes utilizadas pelo Random Forest, como TrapAreaSum, valores analógicos e cbStatus, podemos sugerir as seguintes alterações:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio, dificultando a detecção. No entanto, é importante não reduzir esse valor para muito baixo, para evitar variantes degeneradas.
+
+2. **Ajuste no tempo de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Alterar os tempos de duração da falha pode afetar a capacidade do IDS de detectar o ataque. Reduzir o tempo mínimo de duração pode tornar o ataque mais difícil de detectar, enquanto aumentar o tempo máximo pode torná-lo mais óbvio.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Alterar os valores mínimos e máximos dos deltas absolutos dos valores analógicos pode afetar a capacidade do IDS de distinguir entre tráfego normal e ataque. Reduzir esses valores pode tornar o ataque menos óbvio.
+
+4. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Alterar a probabilidade de pico na área de armadilha pode afetar a capacidade do IDS de detectar o ataque. Reduzir essa probabilidade pode tornar o ataque menos óbvio.
+
+5. **Ajuste nos multiplicadores da área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Alterar os multiplicadores mínimos e máximos da área de armadilha pode afetar a capacidade do IDS de detectar o ataque. Reduzir esses valores pode tornar o ataque menos óbvio.
+
+Com base nessas considerações, podemos sugerir as seguintes alterações:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 20
+fault.durationMs.max: 600
+analog.deltaAbs.min: 0.03
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 1.02
+trapArea.multiplier.max: 1.4
+trapArea.spikeProb: 0.3

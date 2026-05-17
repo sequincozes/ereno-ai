@@ -1,0 +1,22 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que define o ataque. Considerando as métricas atuais e as características do modelo, as sugestões de mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal são:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio, dificultando a detecção. No entanto, é importante evitar reduzir esse valor para muito baixo, pois isso poderia tornar o ataque degenerado.
+
+2. **Ajuste no tempo de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Alterar os tempos de duração da falha pode ajudar a confundir o modelo, tornando mais difícil a detecção do ataque. Um aumento no tempo mínimo e uma redução no tempo máximo podem criar variações mais sutis.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Modificar os valores analógicos pode afetar a capacidade do modelo de distinguir entre tráfego normal e ataque. Reduzir o valor máximo de deltaAbs pode tornar o ataque menos notável.
+
+4. **Ajuste na área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Alterar os multiplicadores da área de armadilha pode influenciar a detecção do ataque. Reduzir esses valores pode tornar o ataque menos evidente.
+
+5. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Ajustar a probabilidade de pico pode afetar a capacidade do modelo de detectar o ataque. No entanto, é importante manter esse valor acima de zero para evitar variantes degeneradas.
+
+Com base nessas considerações, as sugestões de alterações nos parâmetros são:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 20
+fault.durationMs.max: 1000
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 1.02
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.25

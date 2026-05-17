@@ -1,0 +1,21 @@
+Para tornar o padrão do ataque mais parecido com o tráfego normal e, assim, reduzir a capacidade do Random Forest de separá‑lo, é útil:
+
+* **Aproximar os valores de “trapArea” a 1.0** – isso diminui a diferença de “TrapAreaSum” entre ataque e tráfego legítimo, que é a feature mais importante.
+* **Diminuir levemente a amplitude de “analog.deltaAbs”** – valores analógicos menores tendem a ficar dentro da faixa observada em mensagens normais.
+* **Aumentar o intervalo de duração do fault** – falhas mais longas podem ser confundidas com variações de operação prolongada.
+* **Reduzir a probabilidade de ocorrência do fault** (mas ainda mantendo‑a suficientemente alta para gerar amostras) – menos ocorrências tornam o padrão menos evidente.
+* **Ajustar “ttlMsValues” e “trapArea.spikeProb”** para que o timing e a frequência de picos se aproximem do comportamento típico da rede.
+* **Manter “cbStatus” como 1** (ou, se a distribuição de status no tráfego normal for variada, usar 0) para que essa feature não se destaque.
+
+Essas alterações são graduais, plausíveis e obedecem às restrições de não gerar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 5000
+fault.durationMs.max: 15000
+analog.deltaAbs.min: 0.01
+analog.deltaAbs.max: 0.25
+trapArea.multiplier.min: 0.98
+trapArea.multiplier.max: 1.05
+trapArea.spikeProb: 0.25
+ttlMsValues: 3000

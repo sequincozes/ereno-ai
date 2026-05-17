@@ -1,0 +1,23 @@
+Para tornar o padrão do ataque mais próximo do tráfego normal e, assim, reduzir a separabilidade das amostras de ataque para o Random Forest, considere as seguintes alterações graduais:
+
+* **Aumentar a probabilidade do fault** – um valor ligeiramente maior (por exemplo, 0.6) gera mais ocorrências de falha, diluindo a distinção entre ataque e normal sem tornar o ataque inexistente.  
+* **Ampliar o intervalo de duração da falha** – usar limites mais amplos (8000 ms a 50000 ms) faz com que a duração do ataque se sobreponha ao comportamento típico de mensagens GOOSE, dificultando a detecção baseada em tempo.  
+* **Ajustar o `cbStatus`** – definir para 0 (valor comum em mensagens normais) reduz a importância dessa feature, que atualmente está entre as top‑features.  
+* **Reduzir a variação dos valores analógicos** – diminuir o intervalo de `analog.deltaAbs` (0.02 a 0.2) mantém o ataque plausível, mas o aproxima dos valores esperados em operação normal.  
+* **Aproximar o multiplicador de `trapArea` a 1** – usar um intervalo estreito (0.98 a 1.02) reduz a diferença de “área de armadilha” entre ataque e tráfego regular.  
+* **Diminuir a probabilidade de spikes** – baixar `trapArea.spikeProb` para 0.3 reduz a ocorrência de picos que são facilmente identificáveis.  
+* **Aumentar o TTL** – elevar `ttlMsValues` para 12000 ms faz com que o tempo de vida das mensagens se assemelhe mais ao padrão normal.
+
+Essas mudanças são plausíveis dentro do modelo de geração do ERENO e evitam variantes degeneradas, ao mesmo tempo que tornam o ataque menos distintivo para o classificador.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 8000
+fault.durationMs.max: 50000
+cbStatus: 0
+analog.deltaAbs.min: 0.02
+analog.deltaAbs.max: 0.2
+trapArea.multiplier.min: 0.98
+trapArea.multiplier.max: 1.02
+trapArea.spikeProb: 0.3
+ttlMsValues: 12000

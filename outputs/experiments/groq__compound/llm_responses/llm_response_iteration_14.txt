@@ -1,0 +1,28 @@
+Para tornar o ataque Masquerade menos distinguível pelo Random Forest, a estratégia consiste em “misturar” as características do ataque com as do tráfego normal, alterando os parâmetros que mais influenciam as features usadas pelo modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**1. Reduzir levemente a probabilidade do fault**  
+Manter `fault.prob` alto demais gera muitos exemplos de ataque claros; diminuí‑lo um pouco (por exemplo, de 0.4 para 0.3) ainda gera um número suficiente de eventos, mas reduz a frequência de padrões muito evidentes.
+
+**2. Ampliar a variação da duração do fault**  
+Aumentar o intervalo de `fault.durationMs` (min = 100 ms, max = 2000 ms) cria ataques curtos e longos, aproximando‑se da variabilidade natural do tráfego GOOSE e dificultando a detecção baseada em tempo de ocorrência.
+
+**3. Ajustar os limites de variação analógica**  
+Diminuir levemente o limite inferior (`analog.deltaAbs.min` = 0.05) e aumentar o superior (`analog.deltaAbs.max` = 0.5) faz com que as mudanças nos valores analógicos se sobreponham mais ao ruído normal, reduzindo a importância da feature analógica para o classificador.
+
+**4. Modificar o multiplicador da área de trap**  
+Elevar levemente os limites (`trapArea.multiplier.min` = 1.1, `trapArea.multiplier.max` = 1.4) faz com que os valores de TrapAreaSum dos ataques se aproximem dos valores observados em condições normais, diminuindo a separabilidade.
+
+**5. Reduzir a probabilidade de spikes**  
+Diminuir `trapArea.spikeProb` de 0.2 para 0.1 reduz a ocorrência de picos bruscos que são facilmente capturados pelo modelo, tornando o padrão de ataque mais “suave”.
+
+Essas mudanças são graduais, plausíveis dentro do cenário de subestações elétricas e obedecem às restrições de não gerar variantes degeneradas (não zeramos parâmetros críticos nem descaracterizamos o ataque). Elas devem levar a um aumento dos falsos negativos (FN) e, consequentemente, a uma queda no F1‑score do ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.3
+fault.durationMs.min: 100
+fault.durationMs.max: 2000
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 1.4
+trapArea.spikeProb: 0.1

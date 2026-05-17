@@ -1,0 +1,23 @@
+Para tornar o ataque de Masquerade menos distinguível pelo Random Forest, é preciso suavizar as diferenças entre as amostras de ataque e o tráfego normal nas variáveis que mais influenciam o modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**Estratégia geral**  
+1. **Aumentar levemente a frequência do ataque** (fault.prob) para que ele apareça com mais regularidade, mas sem chegar a valores muito baixos.  
+2. **Ampliar a janela de duração** (fault.durationMs.min / max) de modo que a duração dos eventos de falha varie mais e se sobreponha ao padrão de duração do tráfego legítimo.  
+3. **Expandir a faixa de variação dos valores analógicos** (analog.deltaAbs.min / max) para que as alterações nos sinais analógicos se misturem melhor ao ruído natural.  
+4. **Ajustar os parâmetros de trapArea** – tanto o multiplicador quanto a probabilidade de spike – para que os picos de energia não sejam tão pronunciados.  
+5. **Modificar cbStatus** para um valor que ainda seja plausível no contexto da sub‑estação, mas que reduza a separabilidade da classe de ataque.
+
+Essas alterações são graduais, permanecem dentro dos limites aceitáveis e evitam as restrições de “variantes degeneradas” (não zeram nem reduzem excessivamente as probabilidades ou amplitudes).  
+
+Ao aplicar essas mudanças ao arquivo `uc03_masquerade_fault.json`, o gerador ERENO produzirá um conjunto de dados em que as amostras de ataque terão características mais próximas das amostras normais, o que deve reduzir o F1‑score do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 200
+fault.durationMs.max: 1500
+analog.deltaAbs.min: 0.08
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 1.10
+trapArea.multiplier.max: 1.40
+trapArea.spikeProb: 0.15
+cbStatus: 0

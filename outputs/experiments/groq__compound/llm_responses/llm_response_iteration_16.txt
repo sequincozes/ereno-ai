@@ -1,0 +1,30 @@
+Para tornar o ataque de “masquerade_fault” menos distinguível pelo Random Forest, concentrei‑me nas variáveis que mais influenciam o modelo (TrapAreaSum, valores analógicos e cbStatus) e propus alterações graduais que mantêm o ataque plausível, evitando degeneração.
+
+**1. Reduzir a amplitude dos fatores de TrapArea**  
+Ao diminuir ligeiramente o intervalo do multiplicador de TrapArea, os valores gerados ficam mais próximos dos observados no tráfego normal, diminuindo a importância da feature TrapAreaSum.
+
+- trapArea.multiplier.min: de 0.99 para 0.995  
+- trapArea.multiplier.max: de 1.54 para 1.5  
+
+**2. Aproximar os valores analógicos ao comportamento típico**  
+Diminuir o intervalo de analog.deltaAbs faz com que as variações analógicas do ataque se assemelhem mais às variações naturais, reduzindo a separabilidade baseada em “analog” features.
+
+- analog.deltaAbs.min: de 0.045 para 0.05  
+- analog.deltaAbs.max: de 0.45 para 0.4  
+
+**3. Ajustar a probabilidade do fault**  
+Reduzir moderadamente fault.prob mantém o ataque presente, mas menos frequente, o que pode gerar mais falsos negativos sem tornar o cenário irrealista.
+
+- fault.prob: de 0.30 para 0.25  
+
+**4. Manter demais parâmetros**  
+Os campos cbStatus, incrementStNumOnFault, sqnumMode e ttlMsValues já estão configurados de forma que não criam um padrão facilmente detectável; portanto, permanecem inalterados.
+
+Essas mudanças são pequenas o suficiente para que o tráfego ainda pareça realista, mas suficientemente impactantes para que o classificador perca parte da capacidade de separar ataque de tráfego normal, o que deve refletir em um F1‑score mais baixo.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.25
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 0.995
+trapArea.multiplier.max: 1.5

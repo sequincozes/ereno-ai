@@ -1,0 +1,22 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que define o ataque. Considerando as características do ataque e as features mais importantes utilizadas pelo Random Forest (TrapAreaSum, valores analógicos e cbStatus), podemos sugerir as seguintes mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio, dificultando a detecção. No entanto, é importante evitar reduzir esse valor para muito baixo, pois isso poderia tornar o ataque degenerado.
+
+2. **Ajuste nos valores de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Alterar esses valores pode afetar a forma como o ataque é percebido pelo IDS. Reduzir o valor mínimo e aumentar o valor máximo pode criar variações no padrão de ataque, dificultando a detecção.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Modificar esses valores pode influenciar a magnitude do ataque, tornando-o mais ou menos perceptível. Reduzir o valor máximo pode fazer com que o ataque seja menos notável.
+
+4. **Ajuste na área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Esses valores afetam a magnitude do ataque na área de armadilha. Reduzir esses valores pode tornar o ataque menos óbvio.
+
+5. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Alterar essa probabilidade pode afetar a frequência com que o ataque é detectado. Reduzir essa probabilidade pode tornar o ataque menos previsível.
+
+Com base nessas considerações, as seguintes alterações podem ser aplicadas:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 20
+fault.durationMs.max: 900
+analog.deltaAbs.max: 0.55
+trapArea.multiplier.min: 1.03
+trapArea.multiplier.max: 1.55
+trapArea.spikeProb: 0.25

@@ -1,0 +1,32 @@
+{
+  "attackType": "masquerade_fault",
+  "enabled": true,
+  "fault": {
+    "prob": 0.4,
+    "durationMs": {
+      "min": 200,
+      "max": 2500
+    }
+  },
+  "cbStatus": 1,
+  "incrementStNumOnFault": true,
+  "sqnumMode": "slow",
+  "ttlMsValues": [
+    20,
+    40,
+    80
+  ],
+  "analog": {
+    "deltaAbs": {
+      "min": 0.3,
+      "max": 0.6
+    }
+  },
+  "trapArea": {
+    "multiplier": {
+      "min": 1.0,
+      "max": 2.0
+    },
+    "spikeProb": 0.3
+  }
+}

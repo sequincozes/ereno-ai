@@ -1,0 +1,19 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações nos parâmetros JSON para dificultar a classificação do ataque pelo IDS.
+
+Primeiramente, é importante notar que o Random Forest está usando principalmente as features TrapAreaSum, valores analógicos e cbStatus. Portanto, vamos sugerir alterações que afetem essas features.
+
+1. **fault.prob**: Reduzir o valor de probabilidade do ataque para 0,3. Isso fará com que o ataque seja menos provável, dificultando a detecção pelo IDS.
+2. **fault.durationMs.min**: Aumentar o valor mínimo da duração do ataque para 60. Isso fará com que o ataque seja mais longo, dificultando a detecção pelo IDS.
+3. **analog.deltaAbs.max**: Aumentar o valor máximo da variação analógica para 0,7. Isso fará com que a variação analógica seja mais alta, dificultando a detecção pelo IDS.
+4. **trapArea.multiplier.max**: Aumentar o valor máximo do multiplicador da área de trapa para 2,0. Isso fará com que a área de trapa seja mais alta, dificultando a detecção pelo IDS.
+5. **trapArea.spikeProb**: Reduzir o valor de probabilidade da ocorrência de picos na área de trapa para 0,2. Isso fará com que a ocorrência de picos seja menos provável, dificultando a detecção pelo IDS.
+
+Além disso, vamos sugerir uma alteração no campo **sqnumMode** para "slow". Isso fará com que o ataque seja mais lento, dificultando a detecção pelo IDS.
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0.3
+fault.durationMs.min: 60
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.max: 2.0
+trapArea.spikeProb: 0.2
+sqnumMode: slow

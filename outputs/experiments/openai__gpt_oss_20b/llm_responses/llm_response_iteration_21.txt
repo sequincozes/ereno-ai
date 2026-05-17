@@ -1,0 +1,27 @@
+Para tornar o ataque de *masquerade_fault* menos perceptível pelo Random Forest, a estratégia é aumentar a sobreposição entre os padrões de tráfego anômalo e os padrões normais em várias dimensões que o modelo considera importantes. Isso pode ser conseguido ajustando gradualmente os parâmetros de geração do ataque, mantendo-os dentro de faixas plausíveis e evitando que o ataque se torne inválido ou “degenerado”.  
+
+**Principais pontos de ajuste**
+
+1. **Probabilidade do ataque (`fault.prob`)** – Aumentar a frequência do ataque ajuda a diluir a distinção entre ataques e tráfego normal, pois o modelo terá mais exemplos de variações dentro da mesma classe.  
+2. **Duração do evento (`fault.durationMs`)** – Expandir o intervalo de duração faz com que os eventos de ataque se sobreponham mais com os intervalos típicos de tráfego normal.  
+3. **Status do bloco de controle (`cbStatus`)** – Alterar para um valor que também aparece em cenários normais (por exemplo, 0) reduz a separabilidade baseada nesta feature.  
+4. **Modo de numeração de sequência (`sqnumMode`)** – Mudar de sequencial para aleatório introduz variação que pode confundir o modelo que aprende padrões de sequência.  
+5. **Tempo de vida (`ttlMsValues`)** – Aumentar o TTL faz com que os pacotes de ataque permaneçam na rede por mais tempo, aproximando-se de comportamentos normais de longa duração.  
+6. **Variação analógica (`analog.deltaAbs`)** – Ajustar ligeiramente os limites mantém a diferença em relação ao normal, mas evita valores extremos que o modelo possa usar como “flag”.  
+7. **Multiplicador de área de detecção (`trapArea.multiplier`)** – Ampliar o intervalo de multiplicadores aumenta a dispersão dos valores de *TrapAreaSum*, tornando mais difícil a separação.  
+8. **Probabilidade de pico (`trapArea.spikeProb`)** – Manter o mesmo valor evita criar um padrão de pico que o modelo possa identificar facilmente.  
+
+Essas mudanças são graduais e mantêm a viabilidade do ataque, ao mesmo tempo que introduzem mais sobreposição com o tráfego normal, o que deve reduzir a separabilidade e, consequentemente, o f1‑score do classificador.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.55
+fault.durationMs.min: 2500
+fault.durationMs.max: 8000
+cbStatus: 0
+sqnumMode: random
+ttlMsValues: 3500
+analog.deltaAbs.min: 0.44
+analog.deltaAbs.max: 0.56
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.3

@@ -1,0 +1,13 @@
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 800
+fault.durationMs.max: 5000
+cbStatus: 1
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: 1500
+analog.deltaAbs.min: 0.7
+analog.deltaAbs.max: 0.9
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 1.4
+trapArea.spikeProb: 0.25

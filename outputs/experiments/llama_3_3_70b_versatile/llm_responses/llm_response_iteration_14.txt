@@ -1,0 +1,23 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que define o ataque. Considerando as características do ataque e as features mais importantes utilizadas pelo Random Forest (TrapAreaSum, valores analógicos e cbStatus), podemos sugerir as seguintes alterações:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Um aumento na probabilidade de falha pode tornar o ataque mais difícil de detectar, pois aumenta a frequência de ocorrência do ataque, mas é importante não reduzir essa probabilidade para valores muito baixos para evitar variantes degeneradas.
+
+2. **Ajuste no tempo de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Alterar esses valores pode afetar a capacidade do IDS de detectar o ataque, especialmente se o tempo de duração se tornar mais variável ou se aproximar do tempo de duração de eventos normais.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Esses valores controlam a magnitude das alterações nos sinais analógicos durante o ataque. Aumentar esses valores pode tornar o ataque mais óbvio, enquanto reduzi-los pode torná-lo mais sutil.
+
+4. **Ajuste na área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Esses parâmetros afetam a magnitude dos picos na área de armadilha durante o ataque. Ajustá-los pode alterar a facilidade com que o IDS detecta o ataque com base nas features de TrapAreaSum.
+
+5. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Alterar essa probabilidade pode afetar a frequência com que os picos ocorrem na área de armadilha, tornando o ataque mais ou menos detectável.
+
+Com base nessas considerações, aqui estão algumas sugestões de alterações:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 30
+fault.durationMs.max: 900
+analog.deltaAbs.min: 0.02
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.55
+trapArea.spikeProb: 0.28

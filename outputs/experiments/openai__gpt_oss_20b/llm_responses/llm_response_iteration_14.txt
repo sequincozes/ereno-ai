@@ -1,0 +1,27 @@
+Para tornar o ataque de masquerade mais “camuflado” em relação ao tráfego normal, as alterações propostas visam aumentar a variabilidade interna do ataque e reduzir a diferença em relação às características que o Random Forest costuma usar para separação (TrapAreaSum, valores analógicos e cbStatus). As mudanças são graduais e mantêm a plausibilidade do cenário de subestação elétrica.
+
+**Principais ajustes sugeridos**
+
+1. **Duração do ataque** – Aumentar o intervalo mínimo e máximo de `fault.durationMs` introduz maior dispersão temporal, dificultando a identificação de padrões de duração típicos de ataques.
+2. **Status de CB** – Alterar `cbStatus` de 0 para 1 faz com que o ataque compartilhe o mesmo valor de CB que pode ser mais comum em tráfego normal, reduzindo a separabilidade.
+3. **Sequência de números de sequência** – Mudar `sqnumMode` de `sequential` para `random` aumenta a imprevisibilidade dos números de sequência, tornando mais difícil que o modelo reconheça a regularidade típica de ataques.
+4. **Incremento de número de sequência** – Desativar `incrementStNumOnFault` (False) evita a contagem sistemática de sequência que pode ser um forte indicativo de ataque.
+5. **TTL** – Leve aumento em `ttlMsValues` (de 1800 para 2000 ms) ajuda a suavizar a diferença de tempo de vida entre pacotes de ataque e pacotes normais.
+6. **Valores analógicos** – Elevar os limites mínimo e máximo de `analog.deltaAbs` (de 0.55–0.75 para 0.60–0.80) aumenta a amplitude de variação dos valores analógicos, aproximando-os de possíveis variações normais.
+7. **TrapArea** – Reduzir o intervalo de `trapArea.multiplier` (de 1.10–1.25 para 1.05–1.20) e diminuir `trapArea.spikeProb` (de 0.25 para 0.20) diminui a intensidade e frequência de picos, tornando o ataque menos distinto em termos de soma de área de trap.
+
+Essas alterações mantêm o ataque funcional e plausível, mas introduzem variações que podem confundir o classificador Random Forest, reduzindo a separabilidade e, consequentemente, o f1‑score do ataque.
+
+**ALTERACOES_APLICAVEIS**  
+fault.prob: 0.4  
+fault.durationMs.min: 1500  
+fault.durationMs.max: 5000  
+cbStatus: 1  
+incrementStNumOnFault: False  
+sqnumMode: random  
+ttlMsValues: 2000  
+analog.deltaAbs.min: 0.6  
+analog.deltaAbs.max: 0.8  
+trapArea.multiplier.min: 1.05  
+trapArea.multiplier.max: 1.2  
+trapArea.spikeProb: 0.2

@@ -1,0 +1,27 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, concentre‑se nas variáveis que mais influenciam o Random Forest (as somas de *TrapArea* e o campo *cbStatus*).  
+Algumas estratégias que costumam funcionar:
+
+1. **Aproximar os valores de *TrapArea* ao padrão** – diminua a amplitude do multiplicador e aumente levemente a probabilidade de picos, de modo que os valores de *TrapArea* do ataque fiquem mais próximos dos observados em tráfego legítimo.  
+2. **Tornar as variações analógicas menos extremas** – reduza o intervalo de `analog.deltaAbs` para que as diferenças de magnitude estejam dentro da faixa típica dos sinais analógicos normais.  
+3. **Alterar o status do bloco de controle (cbStatus)** – escolha um valor que também apareça em mensagens normais (por exemplo, 1) para que o classificador não consiga usar esse campo como discriminador forte.  
+4. **Variar a sequência de números (sqnumMode) e o incremento de StNum** – mudar para modo aleatório e desativar o incremento durante a falha impede que o modelo capture padrões de contagem sequencial.  
+5. **Ajustar a duração e a probabilidade da falha** – aumente levemente a duração mínima/máxima e a probabilidade da falha, de modo que mais mensagens de ataque se misturem ao tráfego regular sem tornar a ocorrência de falhas irrealisticamente baixa.  
+6. **Aumentar o TTL** – valores de TTL mais altos podem aproximar o comportamento temporal do ataque ao do tráfego normal.
+
+Essas alterações são graduais, mantêm a plausibilidade do cenário e evitam as restrições de variantes degeneradas (não zeram probabilidades, nem anulam variações analógicas).
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 12000
+fault.durationMs.max: 25000
+cbStatus: 1
+incrementStNumOnFault: false
+sqnumMode: random
+ttlMsValues: 8000
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.1
+trapArea.spikeProb: 0.45

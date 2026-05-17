@@ -1,0 +1,16 @@
+Considerando o contexto e as informações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob = 0.6`, tente `fault.prob = 0.5`. Isso reduz a probabilidade de falha, tornando mais difícil para o modelo de aprendizado de máquina (ML) detectar o ataque.
+2. **Aumentar a duração mínima da falha**: Em vez de `fault.durationMs.min = 100`, tente `fault.durationMs.min = 200`. Isso aumenta a duração mínima da falha, tornando mais difícil para o modelo ML detectar o ataque.
+3. **Reduzir a amplitude dos valores analógicos**: Em vez de `analog.deltaAbs.max = 0.7`, tente `analog.deltaAbs.max = 0.5`. Isso reduz a amplitude dos valores analógicos, tornando mais difícil para o modelo ML detectar o ataque.
+4. **Aumentar o multiplicador do TrapArea**: Em vez de `trapArea.multiplier.max = 1.3`, tente `trapArea.multiplier.max = 1.5`. Isso aumenta o multiplicador do TrapArea, tornando mais difícil para o modelo ML detectar o ataque.
+5. **Reduzir a probabilidade de spike**: Em vez de `trapArea.spikeProb = 0.4`, tente `trapArea.spikeProb = 0.3`. Isso reduz a probabilidade de spike, tornando mais difícil para o modelo ML detectar o ataque.
+
+Com base nessas sugestões, aqui está a seção ALTERACOES_APLICAVEIS:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 200
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

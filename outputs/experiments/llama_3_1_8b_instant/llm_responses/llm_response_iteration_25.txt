@@ -1,0 +1,16 @@
+Considerando as informações fornecidas e o objetivo de dificultar a classificação do ataque pelo IDS, sugiro as seguintes alterações graduais e plausíveis nos parâmetros JSON:
+
+- **fault.prob**: 0.6 (aumentar a probabilidade de falha para tornar o ataque mais difícil de detectar)
+- **fault.durationMs.min**: 100 (aumentar o tempo mínimo de duração da falha para tornar o ataque mais difícil de detectar)
+- **analog.deltaAbs.max**: 0.7 (aumentar o valor máximo de variação analógica para tornar o ataque mais difícil de detectar)
+- **trapArea.multiplier.max**: 1.3 (aumentar o valor máximo de multiplicador de área de trapa para tornar o ataque mais difícil de detectar)
+- **trapArea.spikeProb**: 0.4 (aumentar a probabilidade de pico de área de trapa para tornar o ataque mais difícil de detectar)
+
+Essas alterações devem ser aplicadas gradualmente, testando o resultado após cada mudança, para evitar criar variantes degeneradas do ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 100
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.max: 1.3
+trapArea.spikeProb: 0.4

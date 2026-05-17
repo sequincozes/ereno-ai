@@ -1,0 +1,26 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, as alterações propostas visam suavizar as variações que o Random Forest utiliza como discriminantes principais (TrapAreaSum, valores analógicos e cbStatus). As mudanças são graduais e mantêm a plausibilidade do cenário de ataque, evitando valores extremos ou a descaracterização do ataque.
+
+**Alterações sugeridas:**
+
+- **fault.durationMs.min**: aumente para 400 ms (reduz a variação de início de falha).
+- **fault.durationMs.max**: reduza para 4000 ms (limita a duração máxima, tornando o padrão mais próximo do normal).
+- **cbStatus**: altere para 0 (mantém a característica, mas muda a classe de status que pode ser menos discriminativa).
+- **incrementStNumOnFault**: defina como False (evita incremento de número de sequência que pode ser usado como pista).
+- **sqnumMode**: altere para “sequential” (reduz a aleatoriedade que pode ser detectada).
+- **ttlMsValues**: aumente para 1000 ms (extende o tempo de vida, tornando o tráfego mais semelhante ao normal).
+- **analog.deltaAbs.max**: reduza para 0.8 (limita a amplitude máxima de variação analógica).
+- **trapArea.multiplier.max**: reduza para 1.3 (limita a multiplicação de área de trap).
+- **trapArea.spikeProb**: reduza para 0.3 (diminui a probabilidade de picos, tornando o padrão mais suave).
+
+Essas alterações mantêm a probabilidade de ocorrência do ataque (0.45) e a faixa mínima de delta analógico (0.6), respeitando as restrições de não descaracterizar o ataque.
+
+ALTERACOES_APLICAVEIS
+fault.durationMs.min: 400
+fault.durationMs.max: 4000
+cbStatus: 0
+incrementStNumOnFault: False
+sqnumMode: sequential
+ttlMsValues: 1000
+analog.deltaAbs.max: 0.8
+trapArea.multiplier.max: 1.3
+trapArea.spikeProb: 0.3

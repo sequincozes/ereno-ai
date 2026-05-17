@@ -1,0 +1,25 @@
+Para tornar o ataque **masquerade_fault** menos distinguível do tráfego normal e, assim, reduzir o F1‑score do IDS, é útil “misturar” as características do ataque com as dos pacotes benignos.  
+O Random Forest está fortemente influenciado pelas features **TrapAreaSum**, pelos valores analógicos (**analog.deltaAbs**) e pelo campo **cbStatus**. Portanto, as alterações devem:
+
+* **Aumentar a variabilidade temporal** – ampliando o intervalo de duração do fault, de modo que alguns ataques fiquem mais longos e outros mais curtos, aproximando‑se da distribuição de tempos observada no tráfego normal.  
+* **Expandir a faixa dos valores analógicos** – tanto diminuindo levemente o limite inferior quanto aumentando o superior, para que os valores de delta absoluto se sobreponham mais ao comportamento típico dos sensores.  
+* **Alargar o intervalo de multiplicador da área de trap** – permitindo que os valores de “trapArea” variem dentro de um intervalo maior, reduzindo a consistência que o modelo usa como pista.  
+* **Elevar a probabilidade de spikes** – aumentando `trapArea.spikeProb`, os spikes tornam‑se mais frequentes e, portanto, menos indicativos de ataque.  
+* **Ajustar `cbStatus`** – mudar o status de controle para um valor ainda plausível (por exemplo, 2) ajuda a desfocar a separação baseada nessa feature.  
+* **Desativar o incremento automático de `stNum`** e usar um modo de sequência (`sqnumMode = "sequential"`), de forma que a numeração dos pacotes não siga um padrão aleatório que o modelo possa explorar.
+
+Essas mudanças são graduais, permanecem dentro de limites realistas e evitam criar variantes degeneradas (não zeram `fault.prob`, `analog.deltaAbs` ou `trapArea.spikeProb`).
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.min: 500
+fault.durationMs.max: 3000
+cbStatus: 2
+incrementStNumOnFault: false
+sqnumMode: sequential
+ttlMsValues: 20
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 0.90
+trapArea.multiplier.max: 1.40
+trapArea.spikeProb: 0.30

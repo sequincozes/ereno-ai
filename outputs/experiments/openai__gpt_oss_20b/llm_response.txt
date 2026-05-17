@@ -1,0 +1,41 @@
+Para tornar o ataque de masquerade mais difícil de ser distinguido pelo Random Forest, podemos introduzir variações que aumentem a sobreposição entre os padrões de tráfego normal e os de ataque, sem comprometer a viabilidade do ataque. As alterações propostas são graduais e mantêm os valores dentro de faixas plausíveis para o protocolo GOOSE.
+
+1. **Probabilidade de ocorrência do fault**  
+   Manter a probabilidade em torno de 0,5 evita que o ataque se torne raro demais, mas aumenta a frequência de eventos que podem confundir o modelo.
+
+2. **Duração do fault**  
+   Reduzir a duração média do fault (min 2000 ms, max 3000 ms) faz com que o ataque seja mais curto e, portanto, menos distinto em termos de temporização.
+
+3. **Variação analógica**  
+   Ampliar ligeiramente o intervalo de `analog.deltaAbs` (0,48 – 0,52) introduz mais ruído nos valores analógicos, tornando-os menos discrimináveis.
+
+4. **Área de trap**  
+   Aumentar a faixa de `trapArea.multiplier` (1,1 – 1,3) e a probabilidade de pico (`trapArea.spikeProb`) para 0,3 gera maior dispersão nos valores de TrapAreaSum, reduzindo a separabilidade.
+
+5. **Status do CB**  
+   Alterar `cbStatus` de 0 para 1 faz com que o ataque compartilhe o mesmo valor de CB que alguns pacotes normais, diminuindo a diferença em uma feature chave.
+
+6. **Incremento de número de sequência**  
+   Desativar `incrementStNumOnFault` (False) evita a sequência previsível de números de sequência, tornando o padrão menos reconhecível.
+
+7. **Modo de numeração de sequência**  
+   Mudar `sqnumMode` de “sequential” para “random” introduz imprevisibilidade nos números de sequência, o que pode confundir o modelo.
+
+8. **TTL**  
+   Ajustar `ttlMsValues` para 6000 ms mantém o tempo de vida razoável, mas reduz ligeiramente a duração total do pacote, contribuindo para a sobreposição com tráfego normal.
+
+Essas mudanças devem reduzir a separabilidade do ataque em relação ao tráfego normal, levando a uma diminuição do f1‑score do classificador sem tornar o ataque inviável.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 2000
+fault.durationMs.max: 3000
+cbStatus: 1
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: 6000
+analog.deltaAbs.min: 0.48
+analog.deltaAbs.max: 0.52
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 1.3
+trapArea.spikeProb: 0.3

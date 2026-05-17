@@ -1,0 +1,16 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que definem o comportamento do ataque. Considerando as métricas atuais e as características do ataque, podemos sugerir as seguintes alterações:
+
+O Random Forest está utilizando principalmente features como TrapAreaSum, valores analógicos e cbStatus para classificar o tráfego. Para reduzir a separabilidade do ataque em relação ao tráfego normal, podemos ajustar os parâmetros relacionados a essas features.
+
+Uma abordagem é aumentar a variabilidade dos valores analógicos e da TrapArea, tornando mais difícil para o modelo distinguir entre tráfego normal e ataque. Além disso, podemos ajustar a probabilidade e duração do ataque para torná-lo mais sutil.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.35
+trapArea.spikeProb: 0.3
+fault.durationMs.min: 70
+fault.durationMs.max: 600
+ttlMsValues: 100

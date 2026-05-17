@@ -1,0 +1,10 @@
+Com base nas informações fornecidas e no objetivo de dificultar a classificação do ataque cibernético pelo IDS, sugiro as seguintes alterações nos parâmetros do arquivo JSON:
+
+Para reduzir a separabilidade do ataque em relação ao tráfego normal, podemos ajustar os parâmetros de forma a tornar o ataque mais semelhante ao tráfego normal, sem descaracterizá-lo. Considerando que o Random Forest usa principalmente features como TrapAreaSum, valores analógicos e cbStatus, vamos focar em ajustes que afetem essas características.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+analog.deltaAbs.max: 0.55
+trapArea.multiplier.min: 1.2
+trapArea.spikeProb: 0.4
+ttlMsValues: [25, 50, 100]

@@ -1,0 +1,23 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que definem o comportamento do ataque. Considerando as características do ataque e as features mais importantes utilizadas pelo Random Forest (TrapAreaSum, valores analógicos e cbStatus), podemos sugerir as seguintes mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio, dificultando a detecção. Um valor como 0.5 pode ser um bom ponto de partida.
+
+2. **Ajuste no intervalo de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Manter um intervalo de duração da falha que seja razoável, mas não tão longo que se torne fácil de detectar. Podemos considerar um mínimo de 30 e um máximo de 600, para manter a variabilidade.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Reduzir o intervalo de variação dos valores analógicos pode tornar o ataque menos notável. Um mínimo de 0.1 e um máximo de 0.6 podem ser razoáveis.
+
+4. **Ajuste na probabilidade de pico na área de armadilha (trapArea.spikeProb)**: Manter uma probabilidade de pico que não seja muito alta, para evitar que o ataque se torne óbvio. Um valor como 0.4 pode ser adequado.
+
+5. **Ajuste no multiplicador da área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Reduzir o intervalo de multiplicação da área de armadilha pode ajudar a misturar o tráfego de ataque com o tráfego normal. Um mínimo de 1.1 e um máximo de 2.0 podem ser considerados.
+
+Com base nessas considerações, as alterações aplicáveis seriam:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 30
+fault.durationMs.max: 600
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.6
+trapArea.spikeProb: 0.4
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 2.0

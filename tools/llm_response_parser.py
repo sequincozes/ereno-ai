@@ -4,48 +4,37 @@ from typing import Any
 
 
 def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
-    """
-    Extrai alterações da resposta da LLM.
-
-    Aceita:
-    1. JSON com chave "patch";
-    2. JSON achatado com campos do ataque como chaves:
-       {
-         "fault.prob": 0.5,
-         "analog.deltaAbs.max": 1.5
-       }
-    3. Texto do tipo:
-       - `fault.prob`: 0,4
-    4. Blocos do tipo:
-       {
-         "field": "fault.prob",
-         "current_value": 0.4,
-         "type": "float"
-       }
-    """
-
     if not llm_response or not llm_response.strip():
         print("[PARSER] Resposta vazia.")
         return []
 
     lower_response = llm_response.lower()
 
-    error_signals = [
-        "rate limit",
-        "rate_limit_exceeded",
+    error_or_refusal_signals = [
+        "i’m sorry",
+        "i'm sorry",
+        "i cannot help",
+        "i can’t help",
+        "não posso ajudar",
+        "nao posso ajudar",
         "request entity too large",
         "request_too_large",
-        "error calling groq",
-        "error in agent run",
-        '"error"',
-        "tokens per day",
+        "rate limit",
+        "rate_limit_exceeded",
         "tokens per minute",
+        "tokens per day",
         "invalid_request_error",
+        "error calling groq",
     ]
 
-    if any(signal in lower_response for signal in error_signals):
-        print("[PARSER] Resposta parece erro da API. Patch ignorado.")
+    if any(signal in lower_response for signal in error_or_refusal_signals):
+        print("[PARSER] Resposta parece recusa ou erro da API. Patch ignorado.")
         return []
+
+    section_patch = _try_extract_alteracoes_aplicaveis(llm_response)
+    if section_patch:
+        print(f"[PARSER] Patch extraído de ALTERACOES_APLICAVEIS com {len(section_patch)} alteração(ões).")
+        return section_patch
 
     json_patch = _try_extract_json_patch(llm_response)
     if json_patch:
@@ -58,10 +47,7 @@ def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
 
     field_objects_patch = _try_extract_field_objects_patch(llm_response)
     if field_objects_patch:
-        print(
-            f"[PARSER] Patch extraído de objetos field/current_value com "
-            f"{len(field_objects_patch)} alteração(ões)."
-        )
+        print(f"[PARSER] Patch extraído de field/current_value com {len(field_objects_patch)} alteração(ões).")
         return field_objects_patch
 
     textual_patch = _try_extract_textual_patch(llm_response)
@@ -71,6 +57,53 @@ def extract_patch_from_llm_response(llm_response: str) -> list[dict[str, Any]]:
 
     print("[PARSER] Nenhum patch válido encontrado.")
     return []
+
+
+def _try_extract_alteracoes_aplicaveis(llm_response: str) -> list[dict[str, Any]]:
+    match = re.search(
+        r"ALTERACOES_APLICAVEIS\s*(.*)",
+        llm_response,
+        flags=re.DOTALL | re.IGNORECASE,
+    )
+
+    if not match:
+        return []
+
+    section = match.group(1).strip()
+    lines = section.splitlines()
+
+    patch: list[dict[str, Any]] = []
+
+    for line in lines:
+        line = line.strip()
+
+        if not line:
+            continue
+
+        if line.startswith("```"):
+            continue
+
+        if ":" not in line:
+            continue
+
+        field, raw_value = line.split(":", 1)
+        field = field.strip().strip("`").strip()
+        raw_value = raw_value.strip().strip("`").strip()
+
+        if not _looks_like_field_path(field):
+            continue
+
+        patch.append(
+            {
+                "operation": "replace",
+                "field": field,
+                "old_value": None,
+                "new_value": _parse_value(raw_value),
+                "reason": "Alteração extraída da seção ALTERACOES_APLICAVEIS.",
+            }
+        )
+
+    return patch
 
 
 def _extract_json_candidates(llm_response: str) -> list[str]:
@@ -109,10 +142,6 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
         if not isinstance(parsed, dict):
             continue
 
-        if "error" in parsed:
-            print("[PARSER] JSON contém erro. Patch ignorado.")
-            return []
-
         patch = parsed.get("patch")
 
         if not isinstance(patch, list):
@@ -124,11 +153,10 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
             if not isinstance(item, dict):
                 continue
 
-            operation = item.get("operation")
-            field = item.get("field")
-
-            if operation != "replace":
+            if item.get("operation") != "replace":
                 continue
+
+            field = item.get("field")
 
             if not field or not _looks_like_field_path(field):
                 continue
@@ -142,18 +170,6 @@ def _try_extract_json_patch(llm_response: str) -> list[dict[str, Any]]:
 
 
 def _try_extract_flat_json_patch(llm_response: str) -> list[dict[str, Any]]:
-    """
-    Extrai JSON achatado como:
-
-    {
-      "fault.prob": 0.5,
-      "fault.durationMs.min": 500,
-      "sqnumMode": "fast"
-    }
-    """
-
-    patch = []
-
     for candidate in _extract_json_candidates(llm_response):
         try:
             parsed = json.loads(candidate)
@@ -162,6 +178,8 @@ def _try_extract_flat_json_patch(llm_response: str) -> list[dict[str, Any]]:
 
         if not isinstance(parsed, dict):
             continue
+
+        patch = []
 
         for field, value in parsed.items():
             if not isinstance(field, str):
@@ -176,7 +194,7 @@ def _try_extract_flat_json_patch(llm_response: str) -> list[dict[str, Any]]:
                     "field": field,
                     "old_value": None,
                     "new_value": value,
-                    "reason": "Alteração extraída automaticamente de JSON achatado da LLM.",
+                    "reason": "Alteração extraída de JSON achatado.",
                 }
             )
 
@@ -199,9 +217,6 @@ def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
         try:
             parsed = json.loads(block)
         except json.JSONDecodeError:
-            continue
-
-        if not isinstance(parsed, dict):
             continue
 
         field = parsed.get("field")
@@ -227,7 +242,7 @@ def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
                 "field": field,
                 "old_value": None,
                 "new_value": value,
-                "reason": "Alteração extraída automaticamente de bloco field/current_value da LLM.",
+                "reason": "Alteração extraída de objeto field/current_value.",
             }
         )
 
@@ -235,31 +250,27 @@ def _try_extract_field_objects_patch(llm_response: str) -> list[dict[str, Any]]:
 
 
 def _try_extract_textual_patch(llm_response: str) -> list[dict[str, Any]]:
-    patch = []
-
     pattern = re.compile(
         r"[-*]?\s*[`\"]?([A-Za-z0-9_.]+)[`\"]?\s*:\s*[`\"]?([^`\"\n\r,}]+)[`\"]?\s*(?:,|$|\n)",
         flags=re.MULTILINE,
     )
 
-    matches = pattern.findall(llm_response)
+    patch = []
 
-    for field, raw_value in matches:
+    for field, raw_value in pattern.findall(llm_response):
         field = field.strip()
         raw_value = raw_value.strip().strip(".").strip()
 
         if not _looks_like_field_path(field):
             continue
 
-        value = _parse_value(raw_value)
-
         patch.append(
             {
                 "operation": "replace",
                 "field": field,
                 "old_value": None,
-                "new_value": value,
-                "reason": "Alteração extraída automaticamente da resposta textual da LLM.",
+                "new_value": _parse_value(raw_value),
+                "reason": "Alteração extraída de texto livre.",
             }
         )
 
@@ -288,7 +299,7 @@ def _looks_like_field_path(field: str) -> bool:
         "trapArea",
         "analog",
         "sqnumMode",
-        "ttlValues",
+        "ttlMsValues",
         "cbStatus",
         "incrementStNumOnFault",
     ]
@@ -320,8 +331,7 @@ def _parse_value(value: str) -> Any:
 
     bool_match = re.search(r"\b(true|false|verdadeiro|falso)\b", value, flags=re.IGNORECASE)
     if bool_match:
-        bool_value = bool_match.group(1).lower()
-        return bool_value in ["true", "verdadeiro"]
+        return bool_match.group(1).lower() in ["true", "verdadeiro"]
 
     number_match = re.search(r"-?\d+(?:\.\d+)?", value)
     if number_match:

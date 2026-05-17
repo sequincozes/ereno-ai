@@ -1,0 +1,45 @@
+**Rationale for the suggested changes**
+
+The Random Forest model is currently separating the masquerade‑fault traffic almost perfectly because the most important features (TrapAreaSum, analog delta values and `cbStatus`) show a clear distinction between attack and normal samples.  
+To make the attack harder to detect we need to *blur* those distinctions while keeping the attack realistic (i.e., respecting the “no‑degenerate‑variant” constraints).
+
+| Feature | Why it matters | How to modify it |
+|---------|----------------|------------------|
+| `fault.prob` | Controls how often a fault is injected. A lower probability reduces the proportion of obvious fault‑related patterns. | Decrease modestly (e.g., from 0.4 → 0.3). |
+| `fault.durationMs.min` / `fault.durationMs.max` | Duration influences the temporal shape of the fault. A longer minimum duration makes the fault look more like normal transient variations, while a slightly lower maximum prevents very long, easily spotted bursts. | Raise the minimum (100 → 200 ms) and keep the maximum unchanged or lower it a little (e.g., 800 → 700 ms). |
+| `analog.deltaAbs.max` | The analog delta is one of the top SHAP features. Reducing the maximum makes the analog deviation less extreme, thus overlapping more with normal noise. | Reduce from 0.5 → 0.4 (keep the minimum at 0.2). |
+| `trapArea.multiplier.max` | Trap‑area multiplier directly drives the `TrapAreaSum` features. A lower upper bound narrows the range of trap‑area values, making them less distinguishable. | Reduce from 2.0 → 1.8 (keep the minimum at 1.2). |
+| `ttlMsValues` | TTL values affect timing‑related features that the classifier can exploit. Adding a slightly higher value introduces more variability without breaking protocol semantics. | Append a value such as 120 ms (resulting in `[20,40,80,120]`). |
+| `incrementStNumOnFault` | When true, the state‑number is incremented on every fault, creating a clear pattern. Flipping it to `false` makes the state‑number evolution more similar to normal traffic. | Change from True → False. |
+| `sqnumMode` | The “fast” mode generates sequential numbers with minimal gaps, which can be a strong cue. Switching to a “random” mode (if supported) adds noise. | Change from `fast` → `random` (only if the generator accepts it). |
+
+All the above adjustments stay within the allowed ranges, keep the attack recognizable as a masquerade fault, and avoid the prohibited degenerate configurations (e.g., we never set `fault.prob` to a very low value, we never zero `analog.deltaAbs`, and we keep `trapArea.spikeProb` unchanged).
+
+**Suggested incremental configuration**
+
+Below is a concrete set of values that you can apply in the next generation run. They are modest enough to remain realistic but should reduce the separability of the attack, lowering the F1‑score of the IDS.
+
+```
+fault.prob                = 0.30
+fault.durationMs.min      = 200
+fault.durationMs.max      = 700
+analog.deltaAbs.max       = 0.40
+trapArea.multiplier.max   = 1.80
+ttlMsValues               = [20, 40, 80, 120]
+incrementStNumOnFault     = false
+sqnumMode                 = random
+```
+
+Feel free to test the impact of each change one at a time; often the combination of a slightly lower fault probability, a longer minimum duration, and tighter analog/trap‑area ranges already yields a noticeable drop in detection performance.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.3
+fault.durationMs.min: 200
+fault.durationMs.max: 700
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.max: 1.8
+ttlMsValues: [20, 40, 80, 120]
+incrementStNumOnFault: false
+sqnumMode: random

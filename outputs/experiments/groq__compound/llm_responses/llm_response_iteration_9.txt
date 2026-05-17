@@ -1,0 +1,22 @@
+Para tornar o ataque Masquerade menos distinguível pelo Random Forest, a ideia é “misturar” as características do ataque com as do tráfego normal, alterando gradualmente os parâmetros que mais influenciam as features usadas pelo modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**Estratégia geral**
+
+1. **Reduzir a amplitude dos valores analógicos** – diminuindo o limite superior de `analog.deltaAbs.max` e aumentando levemente o limite inferior, de modo que as variações analógicas do ataque fiquem mais próximas das observadas em mensagens normais.  
+2. **Atenuar o impacto do TrapArea** – diminuindo o multiplicador máximo e aumentando o mínimo, além de reduzir a probabilidade de spikes (`trapArea.spikeProb`). Isso faz com que o “peso” do TrapArea nos vetores de características seja menos pronunciado.  
+3. **Ajustar a duração e a frequência do fault** – ampliando o intervalo de duração (`fault.durationMs.min`/`max`) e aumentando levemente a probabilidade de ocorrência (`fault.prob`). Um fault mais longo e um pouco mais frequente tende a se sobrepor ao tráfego regular, dificultando a separação.  
+4. **Variar levemente o TTL** – aumentar `ttlMsValues` para que o tempo de vida das mensagens seja mais heterogêneo.  
+5. **Manter o `cbStatus` inalterado** – como ele já tem importância alta, mudar seu valor poderia descaracterizar o ataque; portanto, deixamos como está.  
+
+Essas mudanças são pequenas o suficiente para permanecerem plausíveis dentro de um cenário realista, mas combinadas tendem a reduzir a separabilidade entre as amostras de ataque e as de tráfego normal, o que deve baixar o F1‑score do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 200
+fault.durationMs.max: 1000
+ttlMsValues: 30
+analog.deltaAbs.min: 0.07
+analog.deltaAbs.max: 0.35
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.15

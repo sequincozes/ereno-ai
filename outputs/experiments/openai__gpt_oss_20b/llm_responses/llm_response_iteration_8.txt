@@ -1,0 +1,28 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, as alterações sugeridas visam aumentar a sobreposição dos valores de características que o Random Forest utiliza (TrapAreaSum, valores analógicos e cbStatus) com os padrões normais, mantendo o ataque funcional e plausível. As mudanças são graduais e evitam os desvios degenerados indicados.
+
+**Alterações sugeridas**
+
+- **fault.prob**: manter em 0.4 (não reduzir para valores muito baixos).  
+- **fault.durationMs.min**: reduzir para 200 ms, permitindo que o ataque inicie mais rapidamente e se assemelhe a pacotes normais.  
+- **fault.durationMs.max**: aumentar para 4000 ms, ampliando a faixa de duração e reduzindo a distinção temporal.  
+- **cbStatus**: alterar para 0, alinhando o valor com o que pode ocorrer em tráfego normal e diminuindo a importância dessa feature.  
+- **incrementStNumOnFault**: manter em True (não alterar).  
+- **sqnumMode**: manter em “random” (não alterar).  
+- **ttlMsValues**: aumentar para 300 ms, aproximando o TTL de valores típicos de pacotes normais.  
+- **analog.deltaAbs.min**: manter em 0.7 (não reduzir).  
+- **analog.deltaAbs.max**: reduzir para 0.8, diminuindo a amplitude de variação analógica e tornando-a mais próxima do normal.  
+- **trapArea.multiplier.min**: reduzir para 1.0, diminuindo a base do multiplicador.  
+- **trapArea.multiplier.max**: reduzir para 1.2, estreitando a faixa de multiplicação.  
+- **trapArea.spikeProb**: manter em 0.4 (não zerar).  
+
+Essas alterações devem tornar o ataque mais difícil de distinguir pelo classificador, reduzindo o f1‑score sem comprometer a viabilidade do ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 200
+fault.durationMs.max: 4000
+cbStatus: 0
+ttlMsValues: 300
+analog.deltaAbs.max: 0.8
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.2

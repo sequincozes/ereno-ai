@@ -1,0 +1,27 @@
+Para tornar a separabilidade do ataque “masquerade_fault” mais difícil para o Random Forest, podemos aumentar a variabilidade dos parâmetros que influenciam as features mais relevantes (TrapAreaSum, valores analógicos e cbStatus) sem violar as restrições de não degeneração. A seguir, apresento ajustes graduais e plausíveis:
+
+1. **Probabilidade do ataque** – Um pequeno aumento em `fault.prob` (de 0,4 para 0,45) aumenta a frequência dos eventos de ataque, o que pode diluir a distinção entre ataque e tráfego normal quando o modelo tenta aprender padrões raros.
+
+2. **Duração do ataque** – Amplie o intervalo máximo de `fault.durationMs` de 4000 ms para 6000 ms. Isso gera sequências mais longas de mensagens de ataque, o que pode fazer com que as métricas de soma de TrapArea se assemelhem mais às observações normais de longa duração.
+
+3. **Status do CB** – Alterar `cbStatus` de 0 para 1 nas instâncias de ataque reduz a diferença entre ataque e tráfego normal, já que o modelo pode ter aprendido que `cbStatus = 0` é indicativo de ataque. Se o tráfego normal também contém valores 1, a separabilidade diminui.
+
+4. **TTL** – Aumentar `ttlMsValues` de 300 ms para 500 ms faz com que as mensagens de ataque tenham um tempo de vida mais longo, o que pode alterar a distribuição de soma de TrapArea.
+
+5. **Valores analógicos** – Elevar o intervalo de `analog.deltaAbs` de 0,7–0,8 para 0,6–0,9 aumenta a variação nos valores analógicos, tornando mais difícil que o modelo identifique um padrão consistente de ataque.
+
+6. **Multiplicador de TrapArea** – Expandir `trapArea.multiplier.max` de 1,25 para 1,5 aumenta a amplitude das somas de TrapArea, introduzindo mais sobreposição com valores normais.
+
+7. **Probabilidade de pico** – Aumentar `trapArea.spikeProb` de 0,4 para 0,5 introduz mais picos aleatórios nas somas de TrapArea, confundindo o modelo que pode ter aprendido a associar picos específicos a ataques.
+
+Essas alterações mantêm a plausibilidade do cenário de ataque e evitam as restrições de degeneração, ao mesmo tempo que introduzem maior variabilidade nos atributos críticos para a classificação.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.max: 6000
+cbStatus: 1
+ttlMsValues: 500
+analog.deltaAbs.min: 0.6
+analog.deltaAbs.max: 0.9
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.5

@@ -1,0 +1,60 @@
+[2026-05-16 20:41:00] Iniciando execução de todos os modelos.
+[2026-05-16 20:41:00] Modelos: ['qwen/qwen3-32b', 'llama-3.1-8b-instant', 'llama-3.3-70b-versatile', 'openai/gpt-oss-20b', 'openai/gpt-oss-120b', 'groq/compound', 'groq/compound-mini']
+[2026-05-16 20:41:00] Total de iterações por modelo: 30
+[2026-05-16 20:41:00] Modelo 1/7
+[2026-05-16 20:41:00] ================================================================================
+[2026-05-16 20:41:00] Iniciando modelo: qwen/qwen3-32b
+[2026-05-16 20:41:00] Iterações: 30
+[2026-05-16 20:41:00] ================================================================================
+[2026-05-16 20:53:15] [ERRO] Modelo falhou com return code 1: qwen/qwen3-32b
+[2026-05-16 20:53:16] [SAVE] Outputs salvos para modelo: qwen/qwen3-32b
+[2026-05-16 20:53:16] Aguardando 60s antes do próximo modelo...
+[2026-05-16 20:54:16] Modelo 2/7
+[2026-05-16 20:54:16] ================================================================================
+[2026-05-16 20:54:16] Iniciando modelo: llama-3.1-8b-instant
+[2026-05-16 20:54:16] Iterações: 30
+[2026-05-16 20:54:16] ================================================================================
+[2026-05-16 21:03:29] [OK] Modelo finalizado: llama-3.1-8b-instant
+[2026-05-16 21:03:30] [SAVE] Outputs salvos para modelo: llama-3.1-8b-instant
+[2026-05-16 21:03:30] Aguardando 60s antes do próximo modelo...
+[2026-05-16 21:04:30] Modelo 3/7
+[2026-05-16 21:04:30] ================================================================================
+[2026-05-16 21:04:30] Iniciando modelo: llama-3.3-70b-versatile
+[2026-05-16 21:04:30] Iterações: 30
+[2026-05-16 21:04:30] ================================================================================
+[2026-05-16 21:13:36] [OK] Modelo finalizado: llama-3.3-70b-versatile
+[2026-05-16 21:13:36] [SAVE] Outputs salvos para modelo: llama-3.3-70b-versatile
+[2026-05-16 21:13:36] Aguardando 60s antes do próximo modelo...
+[2026-05-16 21:14:36] Modelo 4/7
+[2026-05-16 21:14:36] ================================================================================
+[2026-05-16 21:14:36] Iniciando modelo: openai/gpt-oss-20b
+[2026-05-16 21:14:36] Iterações: 30
+[2026-05-16 21:14:36] ================================================================================
+[2026-05-16 21:23:41] [OK] Modelo finalizado: openai/gpt-oss-20b
+[2026-05-16 21:23:42] [SAVE] Outputs salvos para modelo: openai/gpt-oss-20b
+[2026-05-16 21:23:42] Aguardando 60s antes do próximo modelo...
+[2026-05-16 21:24:42] Modelo 5/7
+[2026-05-16 21:24:42] ================================================================================
+[2026-05-16 21:24:42] Iniciando modelo: openai/gpt-oss-120b
+[2026-05-16 21:24:42] Iterações: 30
+[2026-05-16 21:24:42] ================================================================================
+[2026-05-16 21:29:46] [OK] Modelo finalizado: openai/gpt-oss-120b
+[2026-05-16 21:29:46] [SAVE] Outputs salvos para modelo: openai/gpt-oss-120b
+[2026-05-16 21:29:46] Aguardando 60s antes do próximo modelo...
+[2026-05-16 21:30:46] Modelo 6/7
+[2026-05-16 21:30:46] ================================================================================
+[2026-05-16 21:30:46] Iniciando modelo: groq/compound
+[2026-05-16 21:30:46] Iterações: 30
+[2026-05-16 21:30:46] ================================================================================
+[2026-05-16 21:46:30] [OK] Modelo finalizado: groq/compound
+[2026-05-16 21:46:31] [SAVE] Outputs salvos para modelo: groq/compound
+[2026-05-16 21:46:31] Aguardando 60s antes do próximo modelo...
+[2026-05-16 21:47:31] Modelo 7/7
+[2026-05-16 21:47:31] ================================================================================
+[2026-05-16 21:47:31] Iniciando modelo: groq/compound-mini
+[2026-05-16 21:47:31] Iterações: 30
+[2026-05-16 21:47:31] ================================================================================
+[2026-05-16 21:59:41] [OK] Modelo finalizado: groq/compound-mini
+[2026-05-16 21:59:42] [SAVE] Outputs salvos para modelo: groq/compound-mini
+[2026-05-16 21:59:42] Execução de todos os modelos concluída.
+[2026-05-16 21:59:42] Resultados em: /home/camilla/trabalhos/adversarial_agno_agent/outputs/experiments

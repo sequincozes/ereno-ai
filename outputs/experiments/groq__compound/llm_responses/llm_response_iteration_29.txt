@@ -1,0 +1,20 @@
+Para tornar o ataque de “masquerade_fault” menos distinguível pelo Random Forest, a ideia é suavizar as diferenças nas variáveis que mais influenciam a classificação (TrapAreaSum, valores analógicos e cbStatus) sem destruir a natureza do ataque.  
+
+**Estratégias adotadas**
+
+1. **Aumentar levemente a probabilidade do fault** – um fault.prob um pouco maior (por exemplo 0.40) gera mais ocorrências do ataque, diluindo a relação entre a presença do ataque e as demais características e dificultando a aprendizagem de um padrão estável.  
+
+2. **Ajustar a amplitude dos valores analógicos** – ao elevar o limite inferior (de 0.07 para 0.10) e reduzir o limite superior (de 0.32 para 0.25) o intervalo de variação dos deltas analógicos fica mais próximo do observado no tráfego normal, reduzindo a importância da feature analog.deltaAbs para o classificador.  
+
+3. **Modificar a faixa do multiplicador de trap‑area** – diminuindo o limite inferior (de 1.08 para 1.05) e ampliando o superior (de 1.25 para 1.30) introduz maior variabilidade nos valores de TrapAreaSum, fazendo com que esses valores se sobreponham mais ao tráfego legítimo.  
+
+Essas alterações são graduais, plausíveis dentro do cenário de geração de tráfego GOOSE e obedecem às restrições de não gerar variantes degeneradas (não reduzimos fault.prob excessivamente, nem zeramos analog.deltaAbs ou trapArea.spikeProb).  
+
+Com essas mudanças, espera‑se que o modelo Random Forest perca parte da separabilidade entre ataque e tráfego normal, resultando em um f1‑score ligeiramente menor e, consequentemente, em uma avaliação mais robusta da capacidade de detecção do IDS.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.25
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.3

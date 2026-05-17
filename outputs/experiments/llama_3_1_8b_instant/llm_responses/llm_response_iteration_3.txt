@@ -1,0 +1,12 @@
+Considerando as informações fornecidas e o objetivo de dificultar a classificação do ataque pelo IDS, sugiro as seguintes alterações graduais e plausíveis:
+
+- Reduzir a probabilidade de ocorrência do ataque (`fault.prob`) para 0,4, mantendo a durabilidade do ataque dentro do intervalo mínimo e máximo (`fault.durationMs.min` e `fault.durationMs.max`) para evitar variantes degeneradas.
+- Aumentar o valor máximo do delta absoluto analógico (`analog.deltaAbs.max`) para 0,5, permitindo uma maior variação nos valores analógicos e dificultando a separabilidade do ataque.
+- Aumentar o valor máximo do multiplicador da área de trapa (`trapArea.multiplier.max`) para 1,5, permitindo uma maior variação na área de trapa e dificultando a separabilidade do ataque.
+- Manter o valor da probabilidade de ocorrência de um pico (`trapArea.spikeProb`) em 0,3, pois essa variável já está em um valor razoável e não é necessário alterá-la.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.3

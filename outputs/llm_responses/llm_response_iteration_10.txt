@@ -1,0 +1,27 @@
+Para tornar o ataque de “masquerade_fault” menos distinguível pelo Random Forest, é útil reduzir a diferença entre as características que mais influenciam a classificação (TrapAreaSum, valores analógicos e cbStatus) e o tráfego normal.  
+
+**Estratégias sugeridas**
+
+1. **Aproximar o cbStatus ao valor típico do tráfego legítimo** – mudar de 1 para 0 (ou outro valor observado nos dados normais) diminui a importância dessa feature.  
+2. **Aumentar a variabilidade dos valores de TrapArea** – ampliar o intervalo de multiplier e reduzir levemente a probabilidade de spikes faz com que os valores de TrapAreaSum se mesclem mais ao padrão normal.  
+3. **Expandir o intervalo de variação analógica** – elevar analog.deltaAbs.max e baixar analog.deltaAbs.min faz com que as diferenças de amplitude se aproximem das variações naturais dos sensores.  
+4. **Tornar a sequência de números de sequência menos previsível** – usar modo sequential e desativar o incremento automático de stNum diminui um padrão que o modelo pode explorar.  
+5. **Ajustar o tempo de vida (TTL) das mensagens** – aumentar ttlMsValues para valores que também ocorram em mensagens legítimas ajuda a “diluir” o ataque no tempo.  
+6. **Moderar a probabilidade de ocorrência do fault** – reduzir fault.prob um pouco (sem torná‑lo muito baixo) diminui a concentração de amostras de ataque muito marcadas.  
+7. **Ampliar a duração do fault** – estender o intervalo de fault.durationMs faz com que os períodos de ataque se misturem a variações de carga normais.
+
+Essas alterações são graduais, plausíveis e obedecem às restrições de não gerar variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.55
+fault.durationMs.min: 2000
+fault.durationMs.max: 8000
+cbStatus: 0
+incrementStNumOnFault: false
+sqnumMode: sequential
+ttlMsValues: 1500
+analog.deltaAbs.min: 0.01
+analog.deltaAbs.max: 0.5
+trapArea.multiplier.min: 0.9
+trapArea.multiplier.max: 1.4
+trapArea.spikeProb: 0.15

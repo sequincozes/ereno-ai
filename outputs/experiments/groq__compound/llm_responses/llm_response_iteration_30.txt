@@ -1,0 +1,23 @@
+**Reasoning**
+
+The current Random Forest model separates the attack from normal traffic mainly by using the features **TrapAreaSum**, the analog value changes (**analog.deltaAbs**), and the **cbStatus** flag. To make the attack harder to detect we should:
+
+1. **Make the fault duration overlap more with normal traffic** – increase the maximum duration (`fault.durationMs.max`). A longer possible duration creates more variability and can blend with normal message timing.
+
+2. **Broaden the analog delta range** – lower the minimum (`analog.deltaAbs.min`) and raise the maximum (`analog.deltaAbs.max`). This widens the distribution of analog value changes, reducing the distinctiveness of the attack’s analog signature.
+
+3. **Reduce the contrast of the trap‑area multiplier** – lower the minimum multiplier (`trapArea.multiplier.min`) toward 1.0 and raise the maximum (`trapArea.multiplier.max`). This makes the trap‑area contribution less extreme and more similar to normal traffic.
+
+4. **Slightly lower the spike probability** – decreasing `trapArea.spikeProb` makes spikes less frequent, again moving the attack’s statistical profile toward the baseline.
+
+All these adjustments stay within the allowed ranges, keep the attack recognizable (no degenerate variant), and respect the constraints (do not set `fault.prob` too low, do not zero `analog.deltaAbs`, do not zero `trapArea.spikeProb`). They are incremental and realistic, so the IDS should see a reduced separability and a lower F1‑score for the attack class.
+
+**Proposed parameter changes**
+
+ALTERACOES_APLICAVEIS
+fault.durationMs.max: 4000
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.2

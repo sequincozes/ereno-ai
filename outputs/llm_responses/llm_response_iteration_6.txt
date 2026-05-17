@@ -1,0 +1,12 @@
+Para reduzir a separabilidade do ataque em relação ao tráfego normal, podemos tornar as variações de `trapArea` e dos valores analógicos menos pronunciadas, alongar levemente a duração do fault e introduzir alguma aleatoriedade no número de sequência. Essas mudanças são graduais, mantêm a plausibilidade do ataque e evitam os limites proibidos.
+
+ALTERACOES_APLICAVEIS
+fault.durationMs.min: 1500
+fault.durationMs.max: 4000
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.35
+trapArea.multiplier.min: 0.98
+trapArea.multiplier.max: 1.05
+trapArea.spikeProb: 0.25
+sqnumMode: random
+ttlMsValues: 500

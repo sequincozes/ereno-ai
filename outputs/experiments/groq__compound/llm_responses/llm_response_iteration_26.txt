@@ -1,0 +1,23 @@
+**Rationale**
+
+The Random Forest model relies heavily on the *TrapArea*‑related sums, the analog delta values and the `cbStatus` flag. To make the masquerade‑fault traffic blend more with normal GOOSE traffic we should:
+
+1. **Narrow the amplitude of the analog disturbance** – a smaller `analog.deltaAbs` range makes the voltage/current variations look less anomalous.
+2. **Bring the trap‑area scaling closer to the nominal value** – moving the multiplier interval toward 1.0 reduces the spike in the `TrapAreaSum` features that the model currently uses.
+3. **Slightly lower the probability of a trap‑area spike** – a lower `trapArea.spikeProb` means fewer conspicuous spikes.
+4. **Make the fault duration a bit longer and less deterministic** – widening the duration window (and raising the minimum) spreads the fault over more samples, reducing the sharpness of the temporal pattern.
+5. **Increase the overall fault occurrence probability modestly** – a slightly higher `fault.prob` adds more attack instances, which can dilute the distinction between attack and normal samples without making the attack unrealistic.
+
+All these adjustments stay within the allowed ranges, avoid degenerate configurations, and are incremental enough to keep the synthetic scenario plausible while reducing the separability that the IDS currently exploits.
+
+**Proposed parameter changes**
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 1500
+fault.durationMs.max: 2500
+analog.deltaAbs.min: 0.08
+analog.deltaAbs.max: 0.35
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.15
+trapArea.spikeProb: 0.15

@@ -1,0 +1,49 @@
+**Análise do cenário atual**
+
+- **Métricas do IDS**: o Random Forest está quase perfeito (F1 ≈ 0.996). As features mais importantes são as somas de *TrapArea* (vsbCTrapAreaSum, isbATrapAreaSum, etc.) e o campo **cbStatus**.
+- **Objetivo**: tornar o tráfego de ataque mais parecido com o tráfego normal, diminuindo a separabilidade nas dimensões acima, sem criar uma variante degenerada (não reduzir excessivamente `fault.prob`, não zerar `analog.deltaAbs` nem `trapArea.spikeProb`).
+
+**Estratégias plausíveis**
+
+| Campo | Por que mudar | Efeito esperado |
+|-------|---------------|-----------------|
+| `fault.prob` | Reduzir levemente a probabilidade de ocorrência do fault faz com que o ataque apareça de forma mais esparsa, aproximando‑se ao padrão de falhas esporádicas do tráfego normal. | Diminui a frequência de padrões “fault‑heavy” que o modelo aprende. |
+| `fault.durationMs.min` / `fault.durationMs.max` | Aumentar a duração mínima e/ou máxima cria sobreposições com durações típicas de mensagens GOOSE normais, que podem variar bastante. | Torna a distribuição de tempos menos discriminativa. |
+| `cbStatus` | Alterar o código de status para um valor que também ocorre em situações normais (por exemplo 1 ou 3) reduz a força discriminativa desse atributo. | Diminui a importância de `cbStatus` no modelo. |
+| `incrementStNumOnFault` | Passar de **True** para **False** impede que o número de sequência (stNum) seja incrementado apenas durante o fault, evitando um padrão de incremento que o modelo pode explorar. | Reduz a regularidade temporal do ataque. |
+| `ttlMsValues` | Aumentar ligeiramente (ex.: de 20 ms para 30 ms) introduz variação no tempo de vida da mensagem, aproximando‑se ao comportamento de mensagens normais que podem ter TTL variáveis. | Dilui a característica de TTL constante. |
+| `analog.deltaAbs.max` | Diminuir o limite superior (ex.: de 0.6 para 0.45) faz com que as variações analógicas do ataque fiquem mais próximas das variações observadas em condições normais. | Reduz a distinção baseada em valores analógicos. |
+| `trapArea.multiplier.min` / `trapArea.multiplier.max` | Ajustar o intervalo para valores mais próximos de 1 (ex.: 0.95‑1.2) faz com que o “área de armadilha” gerada pelo ataque se assemelhe ao nível de ruído normal. | Atenua a importância das features de *TrapAreaSum*. |
+| `trapArea.spikeProb` | Manter, mas pode ser levemente reduzido (ex.: de 0.3 para 0.25) para que picos de “trap area” ocorram com menos frequência, aproximando‑se ao padrão de picos ocasionais no tráfego normal. | Diminui a frequência de picos que o modelo usa como sinal. |
+
+**Proposta de ajustes graduais**
+
+1. **Primeira iteração (pequenas mudanças)**  
+   - `fault.prob`: 0.40 (reduz 0.05)  
+   - `fault.durationMs.min`: 600 (aumenta 100 ms)  
+   - `cbStatus`: 1 (valor ainda válido no protocolo)  
+   - `incrementStNumOnFault`: false  
+
+2. **Segunda iteração (refinamento de valores analógicos e de trap area)**  
+   - `analog.deltaAbs.max`: 0.45 (reduz 0.15)  
+   - `trapArea.multiplier.min`: 0.95  
+   - `trapArea.multiplier.max`: 1.2  
+   - `trapArea.spikeProb`: 0.25  
+
+3. **Terceira iteração (ajuste de TTL)**  
+   - `ttlMsValues`: 30  
+
+Essas mudanças são graduais, mantêm o ataque reconhecível como “masquerade_fault” e evitam valores extremos que poderiam gerar uma variante degenerada. Cada passo pode ser testado separadamente para observar a queda progressiva do F1‑score.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.40
+fault.durationMs.min: 600
+cbStatus: 1
+incrementStNumOnFault: false
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.25
+ttlMsValues: 30

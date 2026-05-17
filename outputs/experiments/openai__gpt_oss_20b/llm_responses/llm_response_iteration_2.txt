@@ -1,0 +1,27 @@
+Para tornar o ataque de masquerade mais “camuflado” em relação ao tráfego normal, as alterações propostas visam reduzir a diferença nas características que o Random Forest utiliza com maior peso (TrapAreaSum, valores analógicos e cbStatus) e introduzir mais variabilidade no fluxo de pacotes. As mudanças são graduais e mantêm o ataque dentro de limites plausíveis para uma subestação elétrica.
+
+**Principais ajustes sugeridos**
+
+1. **Probabilidade do ataque (`fault.prob`)** – reduzir ligeiramente a frequência do ataque para que o modelo não aprenda um padrão de ocorrência muito distinto.  
+2. **Duração do ataque (`fault.durationMs`)** – aumentar o intervalo mínimo e máximo para que o ataque se estenda por períodos mais longos, tornando‑o menos abrupto.  
+3. **Incremento de número de sequência (`incrementStNumOnFault`)** – desativar para que o número de sequência não siga um padrão previsível.  
+4. **Modo de numeração de sequência (`sqnumMode`)** – mudar para “random” para introduzir aleatoriedade nos números de sequência.  
+5. **TTL em milissegundos (`ttlMsValues`)** – aumentar para prolongar a vida útil dos pacotes de ataque.  
+6. **Delta absoluto analógico (`analog.deltaAbs`)** – estreitar o intervalo para valores mais próximos dos valores normais.  
+7. **Multiplicador de área de trap (`trapArea.multiplier`)** – reduzir o intervalo mínimo e máximo para aproximar os valores de trap de valores típicos de tráfego normal.  
+8. **Probabilidade de pico (`trapArea.spikeProb`)** – diminuir ligeiramente para suavizar a ocorrência de picos de tráfego.  
+
+Essas alterações mantêm a essência do ataque (mascaramento de falha) enquanto introduzem variações que dificultam a separação clara entre tráfego normal e malicioso pelo modelo Random Forest.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 200
+fault.durationMs.max: 1500
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: 30
+analog.deltaAbs.min: 0.4
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.2
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.35

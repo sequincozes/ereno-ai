@@ -1,0 +1,21 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+**Observações**
+
+* Reduzir a probabilidade de falha (`fault.prob`) pode não ser eficaz, pois o modelo pode aprender a identificar padrões de falha mesmo com uma probabilidade baixa.
+* Manter o valor de `analog.deltaAbs.min` igual a 0,2 pode ser uma boa opção, pois isso mantém a característica analógica do ataque.
+* Reduzir o valor de `trapArea.multiplier.max` pode ser uma boa opção, pois isso reduz a amplitude da área de armazenamento de trapaça.
+* Manter o valor de `trapArea.spikeProb` igual a 0,3 pode ser uma boa opção, pois isso mantém a probabilidade de picos de trapaça.
+
+**Alterações sugeridas**
+
+* `fault.prob`: 0,3
+* `analog.deltaAbs.max`: 0,5
+* `trapArea.multiplier.max`: 1,2
+* `trapArea.spikeProb`: 0,4
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0,3
+analog.deltaAbs.max: 0,5
+trapArea.multiplier.max: 1,2
+trapArea.spikeProb: 0,4

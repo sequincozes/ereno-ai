@@ -1,0 +1,29 @@
+Para tornar o ataque de masquerade mais “camuflado” frente ao Random Forest, a ideia é reduzir a disparidade entre os valores gerados durante o ataque e os valores típicos do tráfego normal, sem alterar a essência do ataque. Isso pode ser feito ajustando alguns parâmetros de forma que os padrões de TrapAreaSum, valores analógicos e status do CB fiquem mais próximos dos valores de operação normal, enquanto mantemos a probabilidade de ocorrência e a duração dentro de limites plausíveis.
+
+**Principais ajustes sugeridos**
+
+1. **Duração do falha** – Aumentar ligeiramente o intervalo mínimo e máximo de `fault.durationMs` faz com que o ataque dure mais tempo, mas de forma mais “suave”, evitando picos bruscos que o modelo possa detectar.  
+2. **Sequência de números de sequência** – Alterar `sqnumMode` de `sequential` para `random` quebra a regularidade que o modelo pode ter aprendido a usar como indicador de ataque.  
+3. **Incremento de número de sequência** – Desativar `incrementStNumOnFault` reduz a tendência de gerar números de sequência em ordem crescente, tornando o tráfego mais semelhante ao normal.  
+4. **TTL** – Um valor de `ttlMsValues` ligeiramente maior ajuda a suavizar a janela de validade dos pacotes, diminuindo a chance de detecção baseada em TTL.  
+5. **Valores analógicos** – Reduzir o intervalo de `analog.deltaAbs` para valores mais próximos do normal diminui a diferença de amplitude que o modelo usa para separar ataque de normal.  
+6. **Multiplicador de TrapArea** – Restringir o intervalo de `trapArea.multiplier` a valores mais próximos de 1 reduz a variação de TrapAreaSum, que é uma das features mais importantes.  
+7. **Probabilidade de pico** – Diminuir `trapArea.spikeProb` diminui a frequência de picos de TrapAreaSum, tornando o tráfego mais “plano”.  
+
+Essas mudanças são graduais e mantêm a viabilidade do ataque, mas tornam a separabilidade do Random Forest mais difícil, o que deve refletir em uma queda no f1‑score do ataque.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 3500
+fault.durationMs.max: 8500
+cbStatus: 0
+incrementStNumOnFault: False
+sqnumMode: random
+ttlMsValues: 2500
+analog.deltaAbs.min: 0.5
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.15
+trapArea.spikeProb: 0.2

@@ -1,0 +1,25 @@
+**Reasoning and suggested adjustments**
+
+The current Random Forest model relies heavily on the *TrapArea*‑related sums, the analog delta values and the `cbStatus` flag. To make the masquerade‑fault traffic blend more with normal traffic we should:
+
+1. **Lower the distinctiveness of the trap‑area spikes** – bring the multiplier range closer to 1 and reduce the spike probability. This will shrink the amplitude of the trap‑area feature values that the model currently uses as strong discriminators.
+
+2. **Narrow the analog variation** – decreasing the maximum absolute analog delta makes the analog feature distribution overlap more with normal samples, without eliminating the variation completely (the minimum stays at 0.1).
+
+3. **Increase the overall fault occurrence probability** – a slightly higher `fault.prob` makes attacks appear more frequently, which can reduce the model’s ability to treat them as rare outliers.
+
+4. **Slightly extend the fault duration range** – a larger `fault.durationMs.max` adds variability to the temporal pattern, making it harder for the classifier to learn a tight time‑window signature.
+
+5. **Reduce the TTL (time‑to‑live) of GOOSE messages** – a smaller `ttlMsValues` shortens the lifespan of each message, causing more inter‑mixing of attack and normal packets in the sliding‑window features.
+
+All these changes stay within the allowed ranges, keep the attack recognizable as a masquerade fault, and avoid the degenerate configurations that were explicitly prohibited.
+
+**Proposed parameter changes**
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.max: 2500
+ttlMsValues: 20
+analog.deltaAbs.max: 0.3
+trapArea.multiplier.max: 1.1
+trapArea.spikeProb: 0.1

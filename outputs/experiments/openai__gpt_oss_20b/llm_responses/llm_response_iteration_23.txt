@@ -1,0 +1,15 @@
+Para tornar o ataque de masquerade mais difícil de distinguir do tráfego normal, sugiro ajustes que aumentem a variabilidade interna do ataque e reduzam a diferença em relação aos valores típicos de tráfego legítimo. As alterações propostas mantêm o ataque funcional e evitam criar variantes degeneradas.
+
+**ALTERACOES_APLICAVEIS**  
+fault.prob: 0.5  
+fault.durationMs.min: 4000  
+fault.durationMs.max: 8000  
+cbStatus: 0  
+incrementStNumOnFault: True  
+sqnumMode: random  
+ttlMsValues: 5000  
+analog.deltaAbs.min: 0.49  
+analog.deltaAbs.max: 0.51  
+trapArea.multiplier.min: 1.0  
+trapArea.multiplier.max: 1.1  
+trapArea.spikeProb: 0.2

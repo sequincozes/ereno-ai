@@ -1,0 +1,28 @@
+Olá! Vou ajudá-lo a dificultar a classificação do ataque cibernético no IDS.
+
+Primeiramente, é importante notar que o modelo de classificação atual é um Random Forest, que usa principalmente features como TrapAreaSum, valores analógicos e cbStatus. Para dificultar a classificação, precisamos reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+Aqui estão algumas sugestões de mudanças graduais e plausíveis para reduzir a separabilidade do ataque:
+
+1. **Aumentar a probabilidade de falha (fault.prob)**: Isso fará com que o ataque seja mais difícil de detectar, pois a probabilidade de falha será maior.
+ * Sugestão: aumentar fault.prob para 0,6 ou 0,7.
+
+2. **Aumentar o tempo de duração da falha (fault.durationMs.max)**: Isso fará com que o ataque seja mais difícil de detectar, pois o tempo de duração da falha será maior.
+ * Sugestão: aumentar fault.durationMs.max para 2500 ou 3000.
+
+3. **Aumentar o valor máximo da multiplicação da área de armazenamento (trapArea.multiplier.max)**: Isso fará com que o ataque seja mais difícil de detectar, pois o valor máximo da multiplicação da área de armazenamento será maior.
+ * Sugestão: aumentar trapArea.multiplier.max para 1,8 ou 2,0.
+
+4. **Aumentar a probabilidade de pico (trapArea.spikeProb)**: Isso fará com que o ataque seja mais difícil de detectar, pois a probabilidade de pico será maior.
+ * Sugestão: aumentar trapArea.spikeProb para 0,5 ou 0,6.
+
+5. **Manter os valores analógicos (analog.deltaAbs)**: Isso fará com que o ataque seja mais difícil de detectar, pois os valores analógicos serão mantidos.
+ * Sugestão: manter analog.deltaAbs.min e analog.deltaAbs.max nos valores atuais.
+
+Aqui está a seção ALTERACOES_APLICAVEIS com as sugestões de mudanças:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0,6
+fault.durationMs.max: 2500
+trapArea.multiplier.max: 1,8
+trapArea.spikeProb: 0,5

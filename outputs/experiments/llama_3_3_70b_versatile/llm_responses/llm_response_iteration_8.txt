@@ -1,0 +1,23 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que definem o comportamento do ataque. O objetivo é reduzir a separabilidade do ataque em relação ao tráfego normal, tornando mais desafiador para o IDS distinguir entre os dois.
+
+Considerando as métricas atuais e as características do ataque, podemos sugerir as seguintes alterações:
+
+- Aumentar a probabilidade de falha (`fault.prob`) para 0.4, o que pode aumentar a frequência do ataque e torná-lo mais difícil de detectar.
+- Ajustar o valor mínimo e máximo da duração da falha (`fault.durationMs.min` e `fault.durationMs.max`) para 30 e 800, respectivamente, para variar a duração do ataque e dificultar a detecção.
+- Manter o `cbStatus` em 1, pois alterá-lo pode descaracterizar o ataque.
+- Alterar o modo de sequência de números (`sqnumMode`) para 'medium', o que pode introduzir mais variabilidade no tráfego de ataque.
+- Ajustar o valor do TTL (`ttlMsValues`) para 30, para alterar o tempo de vida dos pacotes e potencialmente confundir o IDS.
+- Aumentar o valor mínimo e máximo da variação analógica (`analog.deltaAbs.min` e `analog.deltaAbs.max`) para 0.05 e 0.6, respectivamente, para aumentar a variabilidade dos sinais analógicos durante o ataque.
+- Ajustar o multiplicador mínimo e máximo da área de armadilha (`trapArea.multiplier.min` e `trapArea.multiplier.max`) para 1.05 e 1.6, respectivamente, para alterar a magnitude dos picos durante o ataque.
+- Manter a probabilidade de pico (`trapArea.spikeProb`) em 0.3, pois alterá-la para zero descaracterizaria o ataque.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 30
+fault.durationMs.max: 800
+sqnumMode: medium
+ttlMsValues: 30
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.05
+trapArea.multiplier.max: 1.6

@@ -1,0 +1,25 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, concentre‑se nos atributos que mais influenciam o Random Forest (os sums de *TrapArea* e o *cbStatus*).  
+Algumas estratégias plausíveis:
+
+* **Diminuir a amplitude do “TrapArea”** – ajuste o multiplicador para ficar mais próximo de 1, de modo que os valores de área de disparo não se destaquem tanto.  
+* **Abaixar a probabilidade de “spike”** – menos picos abruptos tornam o padrão de ataque mais parecido com o tráfego regular.  
+* **Reduzir a variação dos valores analógicos** – limites menores para `deltaAbs` evitam diferenças marcantes nos sinais analógicos.  
+* **Alterar o `cbStatus`** – usar um valor que também ocorra em condições normais (por exemplo 1) diminui a distinção baseada nessa feature.  
+* **Desativar o incremento de `stNum`** durante a falha – evita um padrão de sequência que o classificador pode aprender.  
+* **Ajustar a duração da falha** – ampliar o intervalo faz com que a duração se misture ao comportamento típico da rede.  
+* **Aumentar levemente o TTL** – traz os pacotes para dentro da faixa de valores observados em tráfego legítimo.
+
+Essas mudanças são graduais, mantêm a plausibilidade do ataque e obedecem às restrições (não zeram probabilidades críticas nem descaracterizam o ataque).
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.7
+fault.durationMs.min: 3000
+fault.durationMs.max: 5000
+cbStatus: 1
+incrementStNumOnFault: false
+ttlMsValues: 1200
+analog.deltaAbs.min: 0.015
+analog.deltaAbs.max: 0.15
+trapArea.multiplier.min: 0.99
+trapArea.multiplier.max: 1.05
+trapArea.spikeProb: 0.1

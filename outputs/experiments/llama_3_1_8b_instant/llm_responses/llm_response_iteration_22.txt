@@ -1,0 +1,21 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+- Reduzir a probabilidade de falha (`fault.prob`) para 0,5, mantendo-a ainda alta para evitar variantes degeneradas.
+- Reduzir o mínimo da duração da falha (`fault.durationMs.min`) para 100, mantendo-a ainda razoável para evitar que o ataque seja facilmente detectado.
+- Reduzir o máximo da duração da falha (`fault.durationMs.max`) para 2000, mantendo-a ainda razoável para evitar que o ataque seja facilmente detectado.
+- Manter o valor de `cbStatus` igual a 1, pois não há necessidade de alterá-lo.
+- Manter o valor de `incrementStNumOnFault` igual a True, pois não há necessidade de alterá-lo.
+- Manter o valor de `sqnumMode` igual a 'slow', pois não há necessidade de alterá-lo.
+- Reduzir o valor mínimo do multiplicador da área de armazenamento (`trapArea.multiplier.min`) para 1,0, mantendo-o ainda razoável para evitar que o ataque seja facilmente detectado.
+- Reduzir o valor máximo do multiplicador da área de armazenamento (`trapArea.multiplier.max`) para 1,5, mantendo-o ainda razoável para evitar que o ataque seja facilmente detectado.
+- Reduzir a probabilidade de pico (`trapArea.spikeProb`) para 0,2, mantendo-a ainda razoável para evitar que o ataque seja facilmente detectado.
+
+Aqui está a seção ALTERACOES_APLICAVEIS com as sugestões de alterações:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+fault.durationMs.min: 100
+fault.durationMs.max: 2000
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.5
+trapArea.spikeProb: 0.2

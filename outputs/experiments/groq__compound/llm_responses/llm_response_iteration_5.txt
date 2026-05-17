@@ -1,0 +1,28 @@
+**Raciocínio e recomendações**
+
+O classificador Random Forest está, atualmente, separando perfeitamente o tráfego de ataque do tráfego normal (f1 = 1.0). Os recursos mais importantes para essa separação são:
+
+* **TrapAreaSum** – derivado dos parâmetros `trapArea.multiplier` e `trapArea.spikeProb`.
+* **Valores analógicos** – controlados por `analog.deltaAbs.min` e `analog.deltaAbs.max`.
+* **cbStatus** – já fixo em `1`.
+
+Para reduzir a separabilidade, precisamos tornar o padrão do ataque mais parecido com o tráfego normal, sem violar as restrições de “não degenerar”:
+
+1. **Aumentar a probabilidade de falha (`fault.prob`)** – um valor maior gera mais ocorrências de falha, mas, ao mesmo tempo, dilui a distinção entre “evento de falha” e “evento normal”. Um aumento moderado para **0.5** mantém o ataque plausível e evita valores muito baixos.
+
+2. **Atenuar as variações analógicas** – diminuindo o intervalo de `analog.deltaAbs` (ex.: de 0.2‑0.4 para 0.1‑0.3) as alterações nos valores analógicos ficam menos pronunciadas, aproximando‑se dos valores típicos do tráfego normal.
+
+3. **Reduzir a amplitude da área de influência do ataque** – ao baixar `trapArea.multiplier.min` para **1.0** e `trapArea.multiplier.max` para **1.5**, o “impacto” do ataque nas áreas de trap diminui, tornando as diferenças de `TrapAreaSum` menos marcantes.
+
+4. **Manter `trapArea.spikeProb`** – deixamos em **0.3** (valor original) para não zerar a probabilidade de spikes, atendendo à restrição de não criar variantes degeneradas.
+
+Essas mudanças são graduais, plausíveis dentro do modelo de geração de tráfego da ERENO e utilizam apenas campos listados como editáveis. Elas devem introduzir mais sobreposição entre as distribuições de características do ataque e do tráfego normal, reduzindo o F1‑score do classificador.
+
+---
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+analog.deltaAbs.min: 0.1
+analog.deltaAbs.max: 0.3
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.5

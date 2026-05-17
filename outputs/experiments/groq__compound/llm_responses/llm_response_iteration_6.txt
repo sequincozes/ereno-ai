@@ -1,0 +1,19 @@
+Para tornar o ataque de Masquerade menos distinguível pelo Random Forest, focamos nas variáveis que mais influenciam o modelo (TrapAreaSum, valores analógicos e cbStatus). A ideia é suavizar as diferenças entre tráfego de ataque e tráfego normal, mantendo o ataque ainda plausível e evitando variantes degeneradas.
+
+**Estratégia adotada**
+
+1. **Reduzir ligeiramente a probabilidade do fault** – diminui a frequência do ataque, dificultando a aprendizagem de um padrão forte.  
+2. **Ampliar o intervalo de duração do fault** – aumenta a variabilidade temporal, fazendo com que alguns ataques pareçam mais curtos ou mais longos que o padrão atual.  
+3. **Aumentar levemente o limite superior do delta analógico** – traz valores analógicos de ataque mais próximos dos valores normais, reduzindo a separabilidade.  
+4. **Ajustar o multiplicador máximo da área de captura (trapArea)** – eleva o valor máximo, aproximando‑o dos limites observados em tráfego legítimo.  
+5. **Diminuir um pouco a probabilidade de spikes na área de captura** – reduz a ocorrência de picos muito evidentes que o modelo usa como sinal forte de ataque.
+
+Essas mudanças são graduais, ainda dentro de faixas realistas, e utilizam apenas campos listados como editáveis. Elas devem gerar um conjunto de dados onde as características do ataque se misturam mais com o tráfego normal, o que tende a baixar o F1‑score do classificador.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 150
+fault.durationMs.max: 800
+analog.deltaAbs.max: 0.4
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.25

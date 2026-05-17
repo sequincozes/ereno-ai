@@ -1,0 +1,27 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de mudanças graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Aumentar a probabilidade de falha (fault.prob)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+fault.prob: 0.5
+
+2. **Aumentar o valor máximo da duração da falha (fault.durationMs.max)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+fault.durationMs.max: 1200
+
+3. **Aumentar o valor mínimo da multiplicação da área de armazenamento (trapArea.multiplier.min)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+trapArea.multiplier.min: 1.2
+
+4. **Aumentar o valor máximo da probabilidade de pico (trapArea.spikeProb)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+trapArea.spikeProb: 0.6
+
+5. **Mudar o modo de sequência de números (sqnumMode)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+sqnumMode: 'slow'
+
+6. **Aumentar o valor mínimo da diferença absoluta dos valores analógicos (analog.deltaAbs.min)**: Isso pode dificultar a detecção do ataque, pois o modelo precisará lidar com uma maior variabilidade nos dados.
+ * ALTERACOES_APLICAVEIS
+analog.deltaAbs.min: 0.3
+
+Essas mudanças devem ser aplicadas gradualmente e testadas para verificar se elas reduzem a separabilidade do ataque em relação ao tráfego normal. Lembre-se de que a ideia é dificultar a detecção do ataque, mas não descaracterizá-lo.

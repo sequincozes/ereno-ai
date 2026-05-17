@@ -1,0 +1,25 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+**Observações**
+
+* Para evitar variantes degeneradas, não reduzirei o `fault.prob` para valores muito baixos.
+* Não zerarei `analog.deltaAbs` para manter a caracterização do ataque.
+* Não zerarei `trapArea.spikeProb` para manter a caracterização do ataque.
+* Não descaracterizarei o ataque alterando drasticamente os valores.
+
+**Alterações sugeridas**
+
+* **fault.prob**: 0,35 (reduzindo ligeiramente a probabilidade de falha)
+* **fault.durationMs.min**: 45 (aumentando ligeiramente o tempo mínimo de duração da falha)
+* **fault.durationMs.max**: 720 (aumentando ligeiramente o tempo máximo de duração da falha)
+* **analog.deltaAbs.max**: 0,6 (aumentando ligeiramente o valor máximo de variação analógica)
+* **trapArea.multiplier.max**: 1,8 (aumentando ligeiramente o valor máximo de multiplicador da área de armazenamento)
+* **trapArea.spikeProb**: 0,4 (aumentando ligeiramente a probabilidade de picos na área de armazenamento)
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0.35
+fault.durationMs.min: 45
+fault.durationMs.max: 720
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.max: 1.8
+trapArea.spikeProb: 0.4

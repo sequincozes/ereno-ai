@@ -1,0 +1,26 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, as alterações propostas visam tornar os valores gerados mais próximos dos padrões observados em pacotes legítimos, mantendo a essência do ataque. As mudanças são graduais e evitam os limites de segurança indicados (não reduzir demais a probabilidade de falha, não zerar variáveis críticas, nem descaracterizar o ataque).
+
+**Principais ajustes sugeridos**
+
+1. **Probabilidade de falha (`fault.prob`)** – diminui‑se ligeiramente para 0,4, mantendo um número razoável de ocorrências sem tornar o ataque muito raro.
+2. **Duração da falha (`fault.durationMs.min` e `fault.durationMs.max`)** – reduz‑se o intervalo mínimo para 1200 ms e o máximo para 4000 ms, aproximando‑se de durações típicas de eventos normais.
+3. **Variação analógica (`analog.deltaAbs.min` e `analog.deltaAbs.max`)** – estreita‑se o intervalo para 0,55–0,75, diminuindo a diferença em relação aos valores de referência.
+4. **Multiplicador de área de falha (`trapArea.multiplier.min` e `trapArea.multiplier.max`)** – aproxima‑se de 1,1–1,2, tornando a área de falha mais semelhante à normal.
+5. **Probabilidade de pico (`trapArea.spikeProb`)** – reduz‑se ligeiramente para 0,25, diminuindo a frequência de picos que podem chamar atenção.
+6. **Status do CB (`cbStatus`)** – altera‑se para 0, o que ajuda a reduzir a importância desta feature no modelo, mantendo o ataque funcional.
+
+Essas alterações devem tornar o conjunto de dados mais desafiador para o Random Forest, diminuindo a precisão e o F1‑score do ataque sem comprometer a viabilidade do cenário de teste.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 1200
+fault.durationMs.max: 4000
+cbStatus: 0
+incrementStNumOnFault: True
+sqnumMode: sequential
+ttlMsValues: 1800
+analog.deltaAbs.min: 0.55
+analog.deltaAbs.max: 0.75
+trapArea.multiplier.min: 1.1
+trapArea.multiplier.max: 1.2
+trapArea.spikeProb: 0.25

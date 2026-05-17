@@ -1,0 +1,15 @@
+Para reduzir a separabilidade do ataque “masquerade_fault” em relação ao tráfego normal, as alterações propostas aumentam a variabilidade dos parâmetros que influenciam as features mais relevantes (TrapAreaSum, valores analógicos e TTL). Isso introduz mais ruído e torna mais difícil para o Random Forest distinguir o padrão de ataque. As mudanças são graduais e mantêm a viabilidade do ataque.
+
+**ALTERACOES_APLICAVEIS**  
+fault.prob: 0.4  
+fault.durationMs.min: 400  
+fault.durationMs.max: 2000  
+cbStatus: 1  
+incrementStNumOnFault: True  
+sqnumMode: random  
+ttlMsValues: 60  
+analog.deltaAbs.min: 0.5  
+analog.deltaAbs.max: 0.7  
+trapArea.multiplier.min: 1.15  
+trapArea.multiplier.max: 1.25  
+trapArea.spikeProb: 0.4

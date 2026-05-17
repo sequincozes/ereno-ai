@@ -1,0 +1,23 @@
+Para dificultar a classificação do ataque cibernético do tipo Masquerade pelo Sistema de Detecção de Intrusão (IDS) com classificador Random Forest, é necessário realizar ajustes nos parâmetros do arquivo JSON que controlam o comportamento do ataque. Considerando as métricas atuais e as características do modelo, podemos sugerir as seguintes alterações:
+
+1. **Ajuste na probabilidade de falha (fault.prob)**: Reduzir ligeiramente a probabilidade de falha pode tornar o ataque menos óbvio para o modelo, mas é importante evitar reduzir demais para não tornar o ataque degenerado. Uma redução para 0.35 pode ser um ponto de partida.
+
+2. **Ajuste no tempo de duração da falha (fault.durationMs.min e fault.durationMs.max)**: Alterar a duração da falha pode afetar a capacidade do modelo em detectar o ataque. Reduzir o mínimo e aumentar o máximo pode criar mais variabilidade no ataque, dificultando a detecção.
+
+3. **Ajuste nos valores analógicos (analog.deltaAbs.min e analog.deltaAbs.max)**: Ajustar os valores analógicos pode afetar a separabilidade do ataque em relação ao tráfego normal. Reduzir o mínimo e aumentar o máximo pode criar mais sobreposição entre o tráfego normal e o ataque.
+
+4. **Ajuste na área de armadilha (trapArea.multiplier.min e trapArea.multiplier.max)**: Alterar a área de armadilha pode afetar a capacidade do modelo em detectar o ataque. Reduzir o mínimo e aumentar o máximo pode criar mais variabilidade no ataque.
+
+5. **Ajuste na probabilidade de pico (trapArea.spikeProb)**: Ajustar a probabilidade de pico pode afetar a capacidade do modelo em detectar o ataque. Reduzir ligeiramente a probabilidade pode tornar o ataque menos óbvio.
+
+Com base nessas considerações, as alterações sugeridas são:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 20
+fault.durationMs.max: 1000
+analog.deltaAbs.min: 0.05
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.min: 1.02
+trapArea.multiplier.max: 1.6
+trapArea.spikeProb: 0.25

@@ -1,0 +1,8 @@
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.min: 2000
+fault.durationMs.max: 6000
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.1
+trapArea.spikeProb: 0.15

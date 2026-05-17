@@ -1,0 +1,17 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de alterações para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob: 0.5`, tente `fault.prob: 0.4`. Isso reduz a frequência com que o ataque ocorre, tornando-o mais difícil de detectar.
+2. **Aumentar o tempo de duração da falha**: Em vez de `fault.durationMs.min: 30` e `fault.durationMs.max: 600`, tente `fault.durationMs.min: 60` e `fault.durationMs.max: 900`. Isso aumenta o tempo de duração da falha, tornando-a mais difícil de detectar.
+3. **Aumentar o valor máximo da variação analógica**: Em vez de `analog.deltaAbs.max: 0.7`, tente `analog.deltaAbs.max: 0.8`. Isso aumenta a variação analógica, tornando-a mais difícil de detectar.
+4. **Aumentar o valor máximo do multiplicador de área de armadilha**: Em vez de `trapArea.multiplier.max: 2.0`, tente `trapArea.multiplier.max: 2.5`. Isso aumenta o multiplicador de área de armadilha, tornando-a mais difícil de detectar.
+5. **Reduzir a probabilidade de pico de área de armadilha**: Em vez de `trapArea.spikeProb: 0.4`, tente `trapArea.spikeProb: 0.3`. Isso reduz a probabilidade de pico de área de armadilha, tornando-a mais difícil de detectar.
+
+Com essas alterações, o ataque se torna mais difícil de detectar, pois as características que o definem são mais próximas das características do tráfego normal.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 60
+fault.durationMs.max: 900
+analog.deltaAbs.max: 0.8
+trapArea.multiplier.max: 2.5
+trapArea.spikeProb: 0.3

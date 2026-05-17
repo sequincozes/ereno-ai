@@ -1,0 +1,14 @@
+Considerando as metas do seu experimento e as informações fornecidas, aqui estão algumas sugestões de alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal:
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob: 0.5`, tente `fault.prob: 0.4`. Isso pode dificultar a detecção do ataque, pois a probabilidade de falha é menor.
+2. **Aumentar o valor máximo de deltaAbs**: Em vez de `analog.deltaAbs.max: 0.5`, tente `analog.deltaAbs.max: 0.6`. Isso pode dificultar a detecção do ataque, pois o valor máximo de deltaAbs é maior.
+3. **Aumentar o valor máximo de multiplicador de área de armadilha**: Em vez de `trapArea.multiplier.max: 2.5`, tente `trapArea.multiplier.max: 3.0`. Isso pode dificultar a detecção do ataque, pois o valor máximo de multiplicador de área de armadilha é maior.
+4. **Reduzir a probabilidade de pico de área de armadilha**: Em vez de `trapArea.spikeProb: 0.2`, tente `trapArea.spikeProb: 0.1`. Isso pode dificultar a detecção do ataque, pois a probabilidade de pico de área de armadilha é menor.
+
+Com essas alterações, você pode criar um ataque mais difícil de detectar para o IDS. Lembre-se de que é importante evitar variantes degeneradas, como reduzir a probabilidade de falha para valores muito baixos ou zerar os valores de deltaAbs e spikeProb.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+analog.deltaAbs.max: 0.6
+trapArea.multiplier.max: 3.0
+trapArea.spikeProb: 0.1

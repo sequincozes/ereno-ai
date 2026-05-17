@@ -1,0 +1,20 @@
+Considerando as informações fornecidas, vou sugerir algumas alterações graduais e plausíveis para reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+**Observações**
+
+* Reduzir a probabilidade de falha (`fault.prob`) pode não ser eficaz, pois o modelo pode aprender a reconhecer padrões de falha mesmo com uma probabilidade baixa.
+* Manter `analog.deltaAbs.min` e `analog.deltaAbs.max` iguais pode não ser suficiente para dificultar a classificação, pois o modelo pode aprender a reconhecer padrões de variação nos valores analógicos.
+* Reduzir `trapArea.spikeProb` pode não ser eficaz, pois o modelo pode aprender a reconhecer padrões de probabilidade de pico mesmo com uma probabilidade baixa.
+
+**Sugestões de alterações**
+
+* `fault.prob`: 0,6 (aumentar a probabilidade de falha pode dificultar a classificação)
+* `analog.deltaAbs.max`: 0,6 (aumentar a variação máxima nos valores analógicos pode dificultar a classificação)
+* `trapArea.multiplier.max`: 1,8 (aumentar a multiplicação máxima pode dificultar a classificação)
+* `trapArea.spikeProb`: 0,4 (manter a probabilidade de pico, mas com uma variação maior)
+
+**ALTERACOES_APLICAVEIS**
+fault.prob: 0,6
+analog.deltaAbs.max: 0,6
+trapArea.multiplier.max: 1,8
+trapArea.spikeProb: 0,4

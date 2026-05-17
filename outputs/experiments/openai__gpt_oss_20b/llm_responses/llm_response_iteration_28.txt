@@ -1,0 +1,17 @@
+Para tornar o ataque de masquerade mais difícil de ser distinguido pelo Random Forest, podemos introduzir variações que aumentem a sobreposição entre os padrões de tráfego malicioso e normal, sem comprometer a viabilidade do ataque. Ajustes graduais em parâmetros que influenciam diretamente as features mais relevantes (TrapAreaSum, valores analógicos e cbStatus) podem reduzir a separabilidade sem gerar variantes degeneradas.  
+
+A seguir, apresento as alterações sugeridas, mantendo os limites de plausibilidade e evitando valores extremos que possam tornar o ataque facilmente identificável ou inviável.
+
+**ALTERACOES_APLICAVEIS**  
+fault.prob: 0.5  
+fault.durationMs.min: 2500  
+fault.durationMs.max: 3500  
+cbStatus: 0  
+incrementStNumOnFault: True  
+sqnumMode: random  
+ttlMsValues: 8000  
+analog.deltaAbs.min: 0.49  
+analog.deltaAbs.max: 0.52  
+trapArea.multiplier.min: 1.2  
+trapArea.multiplier.max: 1.3  
+trapArea.spikeProb: 0.3

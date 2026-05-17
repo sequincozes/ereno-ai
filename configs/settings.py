@@ -19,11 +19,33 @@ METRICS_CSV_PATH = OUTPUTS_DIR / "metrics_history.csv"
 LLM_RESPONSES_DIR = OUTPUTS_DIR / "llm_responses"
 ATTACK_CONFIGS_DIR = OUTPUTS_DIR / "attack_configs"
 
-MODEL_ID = "openai/gpt-oss-120b"
+EXPERIMENTS_DIR = OUTPUTS_DIR / "experiments"
 
-TEMPERATURE = 0.4
+# Modelos disponíveis para testar um por vez.
+MODEL_IDS = [
+    "qwen/qwen3-32b",
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "groq/compound",
+    "groq/compound-mini",
+]
 
-TOTAL_ITERATIONS = 10
+# Modelo padrão, caso você rode apenas: python main.py
+MODEL_ID = "llama-3.1-8b-instant"
+
+TEMPERATURE = 0.2
+TOTAL_ITERATIONS = 30
+
+# Otimização de tokens
+HISTORY_WINDOW = 1
+TOP_FEATURE_IMPORTANCES = 5
+MAX_EDITABLE_FIELDS = 12
+
+# Pausas para reduzir risco de rate limit
+SLEEP_BETWEEN_ITERATIONS_SECONDS = 8
+SLEEP_BETWEEN_MODELS_SECONDS = 60
 
 ERENO_PROJECT_PATH = str(BASE_DIR / "ERENO-2.0")
 
@@ -37,5 +59,5 @@ ERENO_RUN_COMMAND = [
     "mvn",
     "exec:java",
     "-Dexec.mainClass=br.ufu.facom.ereno.ActionRunner",
-    "-Dexec.args=config/actions/action_create_attack_dataset.json"
+    "-Dexec.args=config/actions/action_create_attack_dataset.json",
 ]

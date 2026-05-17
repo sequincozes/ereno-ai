@@ -1,0 +1,23 @@
+Para tornar o ataque de *masquerade_fault* menos perceptível pelo Random Forest, a estratégia é reduzir a disparidade entre os valores gerados pelo ataque e os valores típicos do tráfego normal, mantendo a viabilidade do ataque.  
+
+1. **Duração do ataque** – Aumentar o intervalo mínimo e reduzir o máximo faz com que a duração fique mais próxima de valores comuns em pacotes normais, diminuindo a separabilidade temporal.  
+2. **Status do CB** – Alterar `cbStatus` para 0 (ou outro valor que ocorra com frequência no tráfego normal) diminui a importância dessa feature, que o modelo já usa fortemente.  
+3. **Valores analógicos** – Ajustar `analog.deltaAbs` para um intervalo mais estreito e centrado (0.49‑0.51) aproxima os valores do que normalmente é observado, tornando a diferença menos evidente.  
+4. **Área de trap** – Reduzir a variação do multiplicador (`1.35‑1.45`) e a probabilidade de pico (`0.35`) faz com que a soma das áreas de trap fique mais próxima dos valores típicos, diminuindo a separabilidade baseada nessas features.  
+5. **Probabilidade de falha** – Mantém‑se em 0.45 para garantir que o ataque ainda ocorra com frequência suficiente, evitando que o modelo aprenda que a baixa ocorrência é indicativa de anomalia.  
+
+Essas alterações são graduais e plausíveis dentro do contexto de operação de subestações, mantendo a integridade funcional do ataque enquanto dificulta a classificação.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.45
+fault.durationMs.min: 3000
+fault.durationMs.max: 4000
+cbStatus: 0
+incrementStNumOnFault: True
+sqnumMode: sequential
+ttlMsValues: 9000
+analog.deltaAbs.min: 0.49
+analog.deltaAbs.max: 0.51
+trapArea.multiplier.min: 1.35
+trapArea.multiplier.max: 1.45
+trapArea.spikeProb: 0.35

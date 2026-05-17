@@ -1,0 +1,35 @@
+Para tornar o ataque de Masquerade menos distinguível pelo Random Forest, podemos aproximar os valores de ataque dos padrões observados no tráfego “normal”. As features mais importantes (TrapAreaSum, valores analógicos e cbStatus) podem ser suavizadas de forma que a variação introduzida pelo ataque se misture ao ruído natural da rede.
+
+**Estratégias sugeridas**
+
+1. **Aumentar a probabilidade do ataque** (`fault.prob`). Um ataque mais frequente faz com que o modelo veja mais exemplos semelhantes ao normal, reduzindo a capacidade de separar as duas classes.
+
+2. **Estender a duração do fault** (`fault.durationMs.min` / `max`). Durações mais longas criam sobreposições temporais com sessões normais, dificultando a detecção baseada em mudanças bruscas.
+
+3. **Uniformizar o `cbStatus`**. Se o status de controle usado nos pacotes de ataque for o mesmo que o predominante no tráfego legítimo (por exemplo 0), a feature perde poder discriminativo.
+
+4. **Desativar o incremento de `stNum`** (`incrementStNumOnFault`). Mantendo o número de sequência estável, evitamos um padrão que o Random Forest pode explorar.
+
+5. **Mudar o modo de geração de `sqnum`** para um comportamento mais “normal” (`sqnumMode: 'normal'`). O modo “fast” pode gerar padrões de sequência que se destacam.
+
+6. **Aumentar o TTL** (`ttlMsValues`). Valores de TTL mais altos aproximam o comportamento do ataque ao dos pacotes normais.
+
+7. **Ajustar a variação analógica** (`analog.deltaAbs`). Reduzir ligeiramente o intervalo (mas sem chegar a zero) faz com que as mudanças analógicas pareçam menos anômalas.
+
+8. **Aproximar o multiplicador de `trapArea` ao 1** e ampliar levemente a probabilidade de “spike”. Isso diminui a magnitude dos picos de área de captura, tornando‑os mais parecidos com flutuações normais.
+
+Essas alterações são graduais, mantêm a plausibilidade do cenário e evitam as restrições de variantes degeneradas.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.65
+fault.durationMs.min: 1000
+fault.durationMs.max: 3500
+cbStatus: 0
+incrementStNumOnFault: false
+sqnumMode: normal
+ttlMsValues: 300
+analog.deltaAbs.min: 0.15
+analog.deltaAbs.max: 0.45
+trapArea.multiplier.min: 0.95
+trapArea.multiplier.max: 1.1
+trapArea.spikeProb: 0.35

@@ -1,0 +1,16 @@
+Considerando o contexto e as orientações fornecidas, aqui estão algumas sugestões de alterações para dificultar a classificação do ataque pelo IDS:
+
+1. **Reduzir a probabilidade de falha**: Em vez de `fault.prob = 0.4`, tente `fault.prob = 0.3` ou `fault.prob = 0.35`. Isso pode reduzir a separabilidade do ataque em relação ao tráfego normal.
+2. **Aumentar a duração máxima da falha**: Em vez de `fault.durationMs.max = 2500`, tente `fault.durationMs.max = 3000` ou `fault.durationMs.max = 3500`. Isso pode dificultar a detecção do ataque.
+3. **Aumentar o valor máximo da variação analógica**: Em vez de `analog.deltaAbs.max = 0.6`, tente `analog.deltaAbs.max = 0.7` ou `analog.deltaAbs.max = 0.8`. Isso pode reduzir a separabilidade do ataque em relação ao tráfego normal.
+4. **Aumentar o valor máximo do multiplicador da área de armadilha**: Em vez de `trapArea.multiplier.max = 2.0`, tente `trapArea.multiplier.max = 2.2` ou `trapArea.multiplier.max = 2.5`. Isso pode dificultar a detecção do ataque.
+5. **Manter a probabilidade de pico de armadilha**: Em vez de `trapArea.spikeProb = 0.3`, tente `trapArea.spikeProb = 0.2` ou `trapArea.spikeProb = 0.25`. Isso pode reduzir a separabilidade do ataque em relação ao tráfego normal.
+
+Com base nessas sugestões, aqui está a seção ALTERACOES_APLICAVEIS:
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.35
+fault.durationMs.max: 3000
+analog.deltaAbs.max: 0.7
+trapArea.multiplier.max: 2.2
+trapArea.spikeProb: 0.2

@@ -1,0 +1,25 @@
+Para tornar o ataque de masquerade mais “camuflado” frente ao Random Forest, a estratégia é reduzir a disparidade entre os valores de ataque e os valores típicos de tráfego normal nas features que mais influenciam a classificação (TrapAreaSum, valores analógicos e cbStatus). Isso pode ser alcançado ajustando os parâmetros de forma que os valores de ataque se aproximem mais dos padrões normais, mantendo a viabilidade do ataque.
+
+**Principais ajustes sugeridos**
+
+1. **Duração do ataque** – Diminuir a variação de duração para que o intervalo fique mais próximo de valores típicos de tráfego normal.  
+2. **Incremento de número de sequência** – Desativar o incremento automático de número de sequência para reduzir a variação de seqnum que pode ser usada como pista de ataque.  
+3. **Modo de seqnum** – Alterar de “random” para “sequential” para tornar a sequência mais previsível e menos distinta.  
+4. **TTL** – Aumentar ligeiramente o TTL para aproximar o tempo de vida das mensagens do padrão normal.  
+5. **Valores analógicos** – Reduzir a amplitude de deltaAbs para que os desvios analógicos sejam menores e mais próximos dos valores normais.  
+6. **Multiplicador de TrapArea** – Diminuir o intervalo de multiplicador para que a soma de TrapArea fique mais próxima dos valores típicos.  
+7. **Probabilidade de falha** – Manter o valor atual (0.55) para garantir que o ataque ainda ocorra com frequência suficiente.  
+8. **Probabilidade de pico** – Manter 0.3 para não eliminar a característica de pico que pode ser relevante para o ataque.  
+
+Essas mudanças são graduais e mantêm a essência do ataque, mas reduzem a separabilidade nas features mais importantes para o modelo.
+
+ALTERACOES_APLICAVEIS
+fault.durationMs.min: 3000
+fault.durationMs.max: 7000
+incrementStNumOnFault: False
+sqnumMode: sequential
+ttlMsValues: 4000
+analog.deltaAbs.min: 0.48
+analog.deltaAbs.max: 0.52
+trapArea.multiplier.min: 1.0
+trapArea.multiplier.max: 1.2

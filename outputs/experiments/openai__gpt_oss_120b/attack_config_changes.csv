@@ -1,0 +1,15 @@
+iteration,field,previous_value,current_value
+26,analog.deltaAbs.max,0.8,0.5
+26,analog.deltaAbs.min,0.2,0.1
+26,cbStatus,1,2
+26,fault.durationMs.max,800,1200
+26,fault.durationMs.min,50,200
+26,fault.prob,0.6,0.7
+26,sqnumMode,fast,slow
+26,trapArea.multiplier.max,2.5,1.8
+26,trapArea.multiplier.min,1.2,1.0
+26,trapArea.spikeProb,0.5,0.3
+26,ttlMsValues,,30
+26,ttlMsValues[0],20,
+26,ttlMsValues[1],40,
+26,ttlMsValues[2],80,

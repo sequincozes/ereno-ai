@@ -1,0 +1,25 @@
+Para tornar o ataque de *masquerade_fault* menos perceptível pelo Random Forest, a estratégia é reduzir a disparidade entre os valores gerados para o tráfego malicioso e os padrões normais, mantendo a viabilidade do ataque. Abaixo estão sugestões de ajustes graduais nos parâmetros que influenciam fortemente as features de decisão do modelo (TrapAreaSum, valores analógicos e cbStatus).  
+
+**Principais considerações**  
+- **fault.prob**: diminuir ligeiramente a probabilidade de ocorrência do falha para 0,4 mantém o ataque frequente o suficiente, mas reduz a densidade de exemplos anômalos.  
+- **fault.durationMs**: estreitar o intervalo de duração (2600 ms – 3400 ms) aproxima o comportamento do ataque de eventos normais de curta duração, dificultando a distinção baseada em tempo.  
+- **ttlMsValues**: reduzir de 8000 ms para 7000 ms faz com que o pacote expire mais cedo, semelhante a pacotes normais.  
+- **analog.deltaAbs**: limitar a variação a 0,49 – 0,51 diminui a amplitude de alteração nos valores analógicos, tornando-os mais próximos dos valores típicos.  
+- **trapArea.multiplier**: reduzir o multiplicador para 1,15 – 1,25 diminui a amplitude das áreas de trap, aproximando-as dos valores observados em tráfego normal.  
+- **trapArea.spikeProb**: reduzir a probabilidade de pico para 0,25 mantém a ocorrência de picos, mas em menor frequência, alinhando‑se mais ao padrão normal.  
+- **sqnumMode**: mudar de *random* para *sequential* faz com que o número de sequência siga um padrão previsível, semelhante ao comportamento normal.  
+- **incrementStNumOnFault** e **cbStatus** permanecem inalterados, pois são essenciais para a viabilidade do ataque e já são usados pelo modelo como discriminadores fortes.  
+
+Essas alterações devem reduzir a separabilidade do ataque nas features mais relevantes, levando a uma queda no f1‑score sem tornar o ataque inviável.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.4
+fault.durationMs.min: 2600
+fault.durationMs.max: 3400
+ttlMsValues: 7000
+analog.deltaAbs.min: 0.49
+analog.deltaAbs.max: 0.51
+trapArea.multiplier.min: 1.15
+trapArea.multiplier.max: 1.25
+trapArea.spikeProb: 0.25
+sqnumMode: sequential

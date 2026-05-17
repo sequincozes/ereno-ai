@@ -1,0 +1,14 @@
+Considerando as informações fornecidas e o contexto do experimento, aqui estão algumas sugestões de alterações para dificultar a classificação do ataque pelo IDS:
+
+1. **Aumentar a probabilidade de falha**: Em vez de `fault.prob = 0.4`, tente aumentar para `fault.prob = 0.6`. Isso pode tornar mais difícil para o IDS distinguir entre o tráfego normal e o ataque.
+2. **Reduzir a duração mínima da falha**: Em vez de `fault.durationMs.min = 30`, tente reduzir para `fault.durationMs.min = 10`. Isso pode tornar mais difícil para o IDS detectar a falha.
+3. **Aumentar a multiplicador de área de armadilha**: Em vez de `trapArea.multiplier.max = 1.5`, tente aumentar para `trapArea.multiplier.max = 2.0`. Isso pode tornar mais difícil para o IDS distinguir entre o tráfego normal e o ataque.
+4. **Reduzir a probabilidade de pico de área de armadilha**: Em vez de `trapArea.spikeProb = 0.3`, tente reduzir para `trapArea.spikeProb = 0.2`. Isso pode tornar mais difícil para o IDS detectar a falha.
+
+Com essas alterações, você pode tentar gerar um novo dataset e reexecutar o experimento para ver se as métricas de desempenho do IDS mudaram.
+
+ALTERACOES_APLICAVEIS
+fault.prob: 0.6
+fault.durationMs.min: 10
+trapArea.multiplier.max: 2.0
+trapArea.spikeProb: 0.2
