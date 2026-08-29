@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "adversarial-ids"
+version = "0.1.0"
+description = "Loop adversarial Red vs. Blue para robustez de IDS em Smart Grids (IEC-61850 / GOOSE) com agentes Agno."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "agno",
+    "groq",
+    "python-dotenv",
+    "pandas",
+    "scikit-learn",
+    "pydantic>=2",
+]
+
+[project.optional-dependencies]
+dashboard = ["streamlit"]
+shap = ["shap"]
+dev = ["pytest"]
+
+[project.scripts]
+adversarial-ids = "adversarial_ids.interfaces.cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+adversarial_ids = ["prompts/*.md"]
+
+[tool.pytest.ini_options]
+# Coloca a raiz do repo no sys.path para importar `tests.fakes` (stubs da #3).
+pythonpath = ["."]
+testpaths = ["tests"]

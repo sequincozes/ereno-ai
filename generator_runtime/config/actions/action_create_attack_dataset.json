@@ -1,0 +1,105 @@
+{
+  "action": "create_attack_dataset",
+  "description": "Generate labeled attack dataset from benign data",
+  "input": {
+    "benignDataPath": "target/benign_data/41716500612531_5%fault_benign_data.csv",
+    "verifyBenignData": true
+  },
+  "output": {
+    "directory": "target/training",
+    "filename": "training_dataset_claude_v6.csv",
+    "format": "csv"
+  },
+  "datasetStructure": {
+    "messagesPerSegment": 50000,
+    "includeBenignSegment": true,
+    "shuffleSegments": false
+  },
+  "attackSegments": [
+    {
+      "name": "uc01_random_replay",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc01_random_replay.json",
+      "description": "Random replay attack"
+    },
+    {
+      "name": "uc02_inverse_replay",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc02_inverse_replay.json",
+      "description": "Inverse replay attack"
+    },
+    {
+      "name": "uc03_masquerade_fault",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc03_masquerade_fault.json",
+      "description": "Masquerade fake fault attack"
+    },
+    {
+      "name": "uc04_masquerade_normal",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc04_masquerade_normal.json",
+      "description": "Masquerade fake normal attack"
+    },
+    {
+      "name": "uc05_injection",
+      "enabled": true,
+      "attackConfig": "config/attacks/uc05_injection.json",
+      "description": "Random injection attack"
+    },
+    {
+      "name": "uc06_high_stnum",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc06_high_stnum_injection.json",
+      "description": "High StNum injection attack"
+    },
+    {
+      "name": "uc07_flooding",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc07_flooding.json",
+      "description": "Flooding attack"
+    },
+    {
+      "name": "uc08_grayhole",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc08_grayhole.json"
+    },
+    {
+      "name": "uc10_delayed_replay",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc10_delayed_replay.json"
+    },
+    {
+      "name": "uc10_delayed_replay_batch_dump",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc10_delayed_replay_batch_dump.json",
+      "description": "UC10 batch dump delayed replay"
+    },
+    {
+      "name": "uc10_delayed_replay_backoff",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc10_delayed_replay_backoff.json",
+      "description": "UC10 backoff delayed replay"
+    },
+    {
+      "name": "uc10_delayed_replay_double_drop",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc10_delayed_replay_double_drop.json",
+      "description": "UC10 double drop delayed replay"
+    }
+  ],
+  "gooseFlow": {
+    "numberOfMessages": 50000,
+    "goID": "IntLockA",
+    "ethSrc": "01:0c:cd:01:2f:80",
+    "ethDst": "01:0c:cd:01:2f:81",
+    "ethType": "0x88B8",
+    "gooseAppid": "0x00003001",
+    "TPID": "0x8100",
+    "ndsCom": true,
+    "test": true,
+    "cbstatus": true
+  },
+  "devices": {
+    "useCVariants": true
+  }
+}
