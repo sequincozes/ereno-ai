@@ -1,3 +1,0 @@
-model_id=groq/compound-mini
-status=completed
-timestamp=2026-05-16T21:59:41.873763
