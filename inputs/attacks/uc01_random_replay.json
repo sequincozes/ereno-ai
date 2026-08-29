@@ -1,0 +1,33 @@
+{
+  "attackType": "random_replay",
+  "enabled": true,
+  "count": {
+    "lambda": 600
+  },
+  "windowS": {
+    "min": 2.0,
+    "max": 8.0
+  },
+  "delayMs": {
+    "min": 50.0,
+    "max": 500.0
+  },
+  "burst": {
+    "prob": 0.12,
+    "min": 2,
+    "max": 5,
+    "gapMs": {
+      "min": 80.0,
+      "max": 300.0
+    }
+  },
+  "reorderProb": 0.05,
+  "ttlOverride": {
+    "valuesMs": [100, 150, 200, 250],
+    "prob": 0.08
+  },
+  "ethSpoof": {
+    "srcProb": 0.02,
+    "dstProb": 0.01
+  }
+}

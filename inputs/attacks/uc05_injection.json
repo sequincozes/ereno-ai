@@ -1,0 +1,13 @@
+{
+  "attackType": "injection",
+  "description": "Random message injection attack (UC05)",
+  "numInjectedMessages": 50,
+  "randomSeed": 42,
+  "injectionPattern": "random",
+  "comment": "injectionPattern: 'random' | 'uniform' | 'burst' clones legitimate messages with the attack label; 'synthetic' builds new GOOSE messages with random fields drawn from the ranges below (legacy uc05 behavior).",
+  "stNum": { "min": 0, "max": 100 },
+  "sqNum": { "min": 0, "max": 100 },
+  "cbStatus": { "values": [0, 1] },
+  "ttlMs": { "min": 10000, "max": 12000 },
+  "confRev": { "min": 0, "max": 100 }
+}

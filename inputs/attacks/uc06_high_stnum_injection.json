@@ -1,0 +1,23 @@
+{
+  "attackType": "high_stnum_injection",
+  "enabled": true,
+  "description": "Injection with moderately elevated stNum values (20-50 vs normal 0-1)",
+  "count": {
+    "lambda": 400
+  },
+  "jump": {
+    "min": 20,
+    "max": 50
+  },
+  "sqnumResetProb": 0.4,
+  "sqNumDelta": { "min": 0, "max": 5 },
+  "randomizeTimestamp": false,
+  "ttlOverride": {
+    "valuesMs": [100, 200],
+    "prob": 0.3
+  },
+  "padBytes": {
+    "min": 0,
+    "max": 24
+  }
+}

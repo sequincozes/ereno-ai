@@ -1,0 +1,11 @@
+{
+  "attackType": "delayed_replay",
+  "enabled": true,
+  "burstInterval": { "min": 200, "max": 500 },
+  "burstMax": 100,
+  "selectionProb": { "value": 0.5 },
+  "networkDelayMs": { "min": 50.0, "max": 200.0 },
+  "shiftSendTimestamp": true,
+  "orderBy": "received",
+  "replaceWithFake": false
+}
