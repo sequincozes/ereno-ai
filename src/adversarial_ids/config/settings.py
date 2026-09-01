@@ -90,6 +90,10 @@ GENERATOR_ATTACK_CONFIG_RELATIVE_PATH = "config/attacks/uc03_masquerade_fault.js
 
 GENERATOR_ACTION_CONFIG_RELATIVE_PATH = "config/actions/action_create_attack_dataset.json"
 
+GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH = (
+    "config/actions/action_create_benign_dataset.json"
+)
+
 # This filename must match the output file defined inside:
 # generator_runtime/config/actions/action_create_attack_dataset.json
 GENERATOR_OUTPUT_DATASET_PATH = (

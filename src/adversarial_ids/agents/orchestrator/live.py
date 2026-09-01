@@ -33,6 +33,7 @@ from adversarial_ids.config.attacks_registry import (
 from adversarial_ids.config.settings import (
     BASELINE_DATASET_PATH,
     GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
+    GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_OUTPUT_DATASET_PATH,
     GENERATOR_RUN_COMMAND,
     GENERATOR_RUNTIME_DIR,
@@ -272,6 +273,10 @@ def _build_generator(generator_mode: str, spec: AttackSpec) -> GeneratorRunner:
         run_command=GENERATOR_RUN_COMMAND,
         suggested_config_path=str(OUTPUTS_DIR / "suggested_attack_config.json"),
         action_config_relative_path=GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
+        benign_action_config_relative_path=(
+            GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH
+        ),
+        benign_seed_path=BASELINE_DATASET_PATH,
         segment_name=spec.segment_name,
         cached_dataset_path=cached_dataset,
     )
