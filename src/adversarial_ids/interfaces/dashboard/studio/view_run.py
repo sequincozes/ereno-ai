@@ -16,6 +16,16 @@ _POLL_SECONDS = 0.6
 def _render_progress(job: ExperimentJob) -> None:
     pct, phase = job.progress()
     running = job.is_running()
+    benign_status = job.benign_generation_status()
+    if benign_status == "generating":
+        st.warning(
+            "O dataset benigno não foi encontrado. Ele está sendo gerado "
+            "automaticamente a partir do seed local antes da execução do ataque."
+        )
+    elif benign_status == "created":
+        st.success(
+            "Dataset benigno gerado com sucesso. A execução do ataque pode continuar."
+        )
     state_badge = ("Executando", "warn") if running else (
         ("Falhou", "bad") if job.error else ("Concluído", "good"))
     left, right = st.columns([3, 1])

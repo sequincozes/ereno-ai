@@ -159,6 +159,16 @@ class ExperimentJob:
         end = self.finished_at or time.time()
         return end - self.started_at
 
+    def benign_generation_status(self) -> str | None:
+        """Estado do preparo automático do dataset benigno, quando aplicável."""
+        status = None
+        for line in self.logs():
+            if "[GEN:BENIGN] AUSENTE" in line:
+                status = "generating"
+            elif "[GEN:BENIGN] CRIADO" in line:
+                status = "created"
+        return status
+
     def progress(self) -> tuple[int, str]:
         """Heurística de progresso a partir dos logs (iteração atual / fase)."""
         current = 0
@@ -176,6 +186,10 @@ class ExperimentJob:
                     pass
             elif "gerando e avaliando" in s.lower():
                 phase = f"Iteração {current} · gerando + avaliando IDS"
+            elif "[GEN:BENIGN] AUSENTE" in s:
+                phase = "Preparando dataset benigno"
+            elif "[GEN:BENIGN] CRIADO" in s:
+                phase = "Dataset benigno pronto"
             elif "concluída" in s.lower():
                 phase = "Concluído"
         if not self.is_running():
