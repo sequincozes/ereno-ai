@@ -30,7 +30,7 @@
     },
     {
       "name": "uc03_masquerade_fault",
-      "enabled": false,
+      "enabled": true,
       "attackConfig": "config/attacks/uc03_masquerade_fault.json",
       "description": "Masquerade fake fault attack"
     },
@@ -42,7 +42,7 @@
     },
     {
       "name": "uc05_injection",
-      "enabled": true,
+      "enabled": false,
       "attackConfig": "config/attacks/uc05_injection.json",
       "description": "Random injection attack"
     },
