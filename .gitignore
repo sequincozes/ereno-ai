@@ -2,6 +2,9 @@
 venv/
 .venv/
 env/
+.uv-cache/
+.uv-cache-test/
+.pytest_cache/
 
 AGENTS.md
 issues.md

@@ -20,6 +20,17 @@ dashboard), não reproduzir a variação física por configuração.
 uv sync --extra dev
 ```
 
+O repositório configura `.uv-cache/` como cache local em `uv.toml`, evitando
+dependência do cache global do usuário. Para validar a toolchain e registrar um
+baseline completo, execute:
+
+```bash
+uv run python scripts/verify_environment.py
+```
+
+O baseline inicial e o procedimento de interpretação estão documentados em
+[`docs/environment_baseline.md`](environment_baseline.md).
+
 ---
 
 ## 2. Os dois modos do gerador
