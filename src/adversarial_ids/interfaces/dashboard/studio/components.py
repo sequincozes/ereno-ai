@@ -1,4 +1,4 @@
-"""Componentes de UI do ERENO AI Studio.
+"""Componentes de UI do ERENO AI.
 
 Peças de apresentação renderizadas como HTML (via ``st.markdown``) para termos
 controle estético total, independente dos internals do Streamlit. Todas as

@@ -1,4 +1,4 @@
-"""ERENO AI Studio — entrypoint do frontend Streamlit.
+"""ERENO AI — entrypoint do frontend Streamlit.
 
 Execute com:
 
@@ -43,7 +43,7 @@ def _sidebar_brand() -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="ERENO AI Studio",
+        page_title="ERENO AI",
         page_icon="🛡️",
         layout="wide",
         initial_sidebar_state="expanded",

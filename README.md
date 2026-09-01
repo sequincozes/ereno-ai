@@ -206,7 +206,7 @@ Principais opções (`uv run adversarial-ids --help`):
 Ao final, a CLI informa onde os resultados foram salvos
 (`outputs/iteration_history.json`) e como abrir o dashboard.
 
-### ERENO AI Studio — frontend completo (recomendado)
+### ERENO AI — frontend completo (recomendado)
 
 Interface Streamlit que substitui o uso via terminal: **toda** a execução
 (configuração de parâmetros, disparo do loop com logs ao vivo e o dashboard de

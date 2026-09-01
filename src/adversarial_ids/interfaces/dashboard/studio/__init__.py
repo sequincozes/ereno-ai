@@ -1,4 +1,4 @@
-"""ERENO AI Studio — camada de UI (Streamlit) do loop adversarial.
+"""ERENO AI — camada de UI (Streamlit) do loop adversarial.
 
 Frontend completo e temático (sala de controle de subestação) que substitui o
 uso via terminal: configuração de parâmetros, execução com logs ao vivo e o

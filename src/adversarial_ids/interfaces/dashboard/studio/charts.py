@@ -1,4 +1,4 @@
-"""Gráficos do ERENO AI Studio (Altair sobre superfície escura).
+"""Gráficos do ERENO AI (Altair sobre superfície escura).
 
 Paleta de séries validada pela skill de dataviz (blue/orange/aqua, ``--mode
 dark``). Um eixo só, legenda quando ≥ 2 séries, hover com crosshair e tooltip,

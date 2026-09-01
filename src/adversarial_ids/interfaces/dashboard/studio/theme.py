@@ -1,4 +1,4 @@
-"""Injeção do design system do ERENO AI Studio.
+"""Injeção do design system do ERENO AI.
 
 Toda a estética vive aqui: fontes (Chakra Petch / IBM Plex Sans / JetBrains
 Mono), a paleta de sala de controle de subestação, a atmosfera de fundo (grid +
