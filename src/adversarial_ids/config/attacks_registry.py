@@ -38,6 +38,7 @@ class AttackSpec:
     label: str
     baseline_filename: str
     description: str
+    intent_capability_id: str | None = None
 
     @property
     def baseline_path(self) -> Path:
@@ -56,6 +57,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Masquerade de falha falsa (uc03): injeta uma falha forjada em GOOSE "
             "manipulando estado do disjuntor, stNum, valores analógicos e a trap area."
         ),
+        intent_capability_id="masquerade_fault.v1",
     ),
     AttackSpec(
         key="random_replay",
