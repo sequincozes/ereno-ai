@@ -30,6 +30,11 @@ from adversarial_ids.domain.attack_config import (
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
 from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
 from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
+from adversarial_ids.domain.feedback_decision import (
+    FeedbackDecision,
+    FeedbackStopReason,
+    RoundOutcome,
+)
 from adversarial_ids.domain.iteration_record import IterationRecord
 from adversarial_ids.domain.intent_spec import (
     DesiredEffect,
@@ -78,4 +83,7 @@ __all__ = [
     "LoopRecord",
     "LoopStage",
     "LoopStageStatus",
+    "FeedbackDecision",
+    "FeedbackStopReason",
+    "RoundOutcome",
 ]
