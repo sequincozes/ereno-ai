@@ -17,6 +17,7 @@ from adversarial_ids.domain.analyst_output import (
     DeceptiveFeature,
     Mitigation,
 )
+from adversarial_ids.domain.attack_candidate import AttackCandidate, FieldChange
 from adversarial_ids.domain.attack_config import (
     AnalogConfig,
     AttackConfig,
@@ -26,6 +27,9 @@ from adversarial_ids.domain.attack_config import (
     Multiplier,
     TrapAreaConfig,
 )
+from adversarial_ids.domain.dataset_bundle import DatasetBundle
+from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
+from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
 from adversarial_ids.domain.iteration_record import IterationRecord
 from adversarial_ids.domain.intent_spec import (
     DesiredEffect,
@@ -34,6 +38,7 @@ from adversarial_ids.domain.intent_spec import (
     IntentRestrictions,
     IntentSpec,
 )
+from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.domain.metrics import FeatureImportance, Metrics
 
 from adversarial_ids.domain.strategist_output import (  # M1 · issue #4
@@ -62,4 +67,15 @@ __all__ = [
     "IntentObjective",
     "DesiredEffect",
     "IntentIntensity",
+    "AttackCandidate",
+    "FieldChange",
+    "DatasetBundle",
+    "DetectionReport",
+    "ConfusionMatrix",
+    "DefensePlan",
+    "DefenseAction",
+    "Evidence",
+    "LoopRecord",
+    "LoopStage",
+    "LoopStageStatus",
 ]
