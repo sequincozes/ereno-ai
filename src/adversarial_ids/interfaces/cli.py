@@ -6,7 +6,7 @@ import argparse
 import importlib.util
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TextIO
 
@@ -17,13 +17,17 @@ from adversarial_ids.config.attacks_registry import (
 from adversarial_ids.config.settings import (
     GENERATOR_MODE,
     ITERATION_HISTORY_PATH,
+    LOOP_RECORDS_PATH,
     MODEL_ID,
     TOTAL_ITERATIONS,
 )
+from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.interfaces.experiment_runner import (
     ExperimentRunner,
     create_default_runner,
 )
+
+RunIntentLoop = Callable[..., LoopRecord]
 
 
 def _dashboard_app_path() -> Path:
@@ -85,11 +89,22 @@ def create_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--engine",
-        choices=("demo", "live"),
+        choices=("demo", "live", "intent"),
         default="demo",
         help=(
             "demo (default): replay do histórico golden, sem Groq/Java. "
-            "live: executa o loop real (exige GROQ_API_KEY)."
+            "live: loop real Strategist->Analyst (exige GROQ_API_KEY). "
+            "intent: pipeline intent-driven ponta a ponta (E3/E4; exige "
+            "GROQ_API_KEY e --prompt)."
+        ),
+    )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help=(
+            "Apenas com --engine intent: intenção em linguagem natural "
+            "(ex.: 'reduza o recall variando a temporização da falha'). O "
+            "ataque-base vem da própria intenção, não de --attack."
         ),
     )
     parser.add_argument(
@@ -128,14 +143,81 @@ def create_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _stage_marker(status: LoopStageStatus) -> str:
+    return {
+        LoopStageStatus.SUCCEEDED: "OK",
+        LoopStageStatus.FAILED: "FALHOU",
+        LoopStageStatus.SKIPPED: "PULADO",
+        LoopStageStatus.RUNNING: "RODANDO",
+        LoopStageStatus.PENDING: "PENDENTE",
+    }.get(status, status.value)
+
+
+def _print_loop_record_summary(record: LoopRecord, *, stdout: TextIO) -> None:
+    print(f"\nLoop intent-driven concluído: run_id={record.run_id}", file=stdout)
+    for stage in record.stages:
+        line = f"  [{_stage_marker(stage.status)}] {stage.name}"
+        if stage.artifact_ref:
+            line += f" -> {stage.artifact_ref}"
+        if stage.error:
+            line += f" ({stage.error})"
+        print(line, file=stdout)
+    print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
+
+
+def _run_intent_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    run_intent_loop: RunIntentLoop | None,
+) -> int:
+    if not args.prompt:
+        print(
+            "Erro: --engine intent exige --prompt (a intenção em linguagem natural).",
+            file=stderr,
+        )
+        return 2
+
+    if run_intent_loop is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            run_intent_loop as run_intent_loop,
+        )
+
+    try:
+        record = run_intent_loop(
+            prompt=args.prompt,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao executar o loop intent-driven: {error}", file=stderr)
+        return 1
+
+    _print_loop_record_summary(record, stdout=stdout)
+    has_failed_stage = any(
+        stage.status == LoopStageStatus.FAILED for stage in record.stages
+    )
+    return 1 if has_failed_stage else 0
+
+
 def run_cli(
     runner: ExperimentRunner | None = None,
     argv: Sequence[str] | None = None,
     *,
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
+    run_intent_loop: RunIntentLoop | None = None,
 ) -> int:
     args = create_parser().parse_args(argv)
+
+    if args.engine == "intent":
+        return _run_intent_engine(
+            args, stdout=stdout, stderr=stderr, run_intent_loop=run_intent_loop
+        )
 
     generator_mode = args.generator_mode
     if runner is None:

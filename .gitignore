@@ -34,3 +34,4 @@ generator_runtime/config/attacks/*
 !generator_runtime/config/attacks/uc03_masquerade_fault.json
 
 .claude/
+CLAUDE.md
