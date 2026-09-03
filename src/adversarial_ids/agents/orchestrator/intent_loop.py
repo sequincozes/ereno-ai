@@ -21,9 +21,19 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
   ``DetectionReport`` da mesma execução — toda evidência do ``DefensePlan``
   precisa bater com um valor real do relatório.
 
-FEEDBACK (E10, política de retroalimentação) não tem lógica própria nesta
-entrega — entra no ``LoopRecord`` como estágio ``skipped`` com o motivo,
-nunca fabricado como se tivesse rodado.
+- FEEDBACK    — ``core.feedback_policy.decide_feedback`` (E10): decide,
+  deterministicamente a partir do ``DetectionReport`` e do ``DefensePlan``
+  desta rodada, se a campanha continua e qual é a próxima ``IntentSpec``.
+  Nenhuma LLM roda neste estágio — mesmo guardrail central do pipeline.
+
+``run(prompt)`` resolve **uma** rodada (mantém a assinatura histórica: uma
+intenção em linguagem natural por chamada). ``run_campaign(prompt, rounds=N)``
+encadeia até N rodadas: a partir da segunda, a ``IntentSpec`` não vem mais do
+``IntentLike`` — vem de ``FeedbackDecision.next_intent`` da rodada anterior, e
+o estágio ``intent`` é registrado como ``skipped`` (nenhuma chamada de LLM
+naquela rodada, nunca fabricado como se tivesse rodado). Cada rodada ainda é
+um ``LoopRecord`` completo, persistido individualmente; a linhagem da
+campanha vive em ``LoopRecord.round``/``parent_run_id``.
 
 Diferente do ``AdversarialWorkflow`` (loop legado Strategist↔Analyst, N
 iterações de uma ``AttackConfig`` ajustada por tool calling livre), este
@@ -43,7 +53,9 @@ Nota de modo cacheado: em ``generator_mode="cached"`` o dataset do baseline
 e o do candidato compilado são o **mesmo arquivo** (limitação já documentada
 do ``GeneratorRunner``/loop legado — ver README "Limitações conhecidas") —
 o DetectionReport resultante não reflete a variação física do ataque. Use
-``generator_mode="jar"`` para medir o efeito real da intenção compilada.
+``generator_mode="jar"`` para medir o efeito real da intenção compilada. Por
+consequência, uma campanha em modo cacheado para na rodada 2 com
+``no_improvement``: a métrica-objetivo não se move porque o dataset é o mesmo.
 """
 
 from __future__ import annotations
@@ -55,11 +67,13 @@ from typing import Any, Protocol, runtime_checkable
 from adversarial_ids.config.attacks_registry import AttackSpec, get_attack_spec
 from adversarial_ids.config.settings import (
     BASELINE_DATASET_PATH,
+    FEEDBACK_MIN_DELTA,
     GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_OUTPUT_DATASET_PATH,
     GENERATOR_RUN_COMMAND,
     GENERATOR_RUNTIME_DIR,
+    INTENT_LOOP_DEFAULT_ROUNDS,
     INTENT_LOOP_MIN_ATTACK_ROWS,
     INTENT_LOOP_MIN_NORMAL_ROWS,
     INTENT_LOOP_OUTPUT_DIR,
@@ -67,12 +81,14 @@ from adversarial_ids.config.settings import (
 )
 from adversarial_ids.core.dataset_bundle_builder import build_dataset_bundle
 from adversarial_ids.core.detection_reporter import build_detection_report
+from adversarial_ids.core.feedback_policy import decide_feedback
 from adversarial_ids.core.generator_runner import GeneratorRunner
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
 from adversarial_ids.core.intent_compiler import compile_attack_candidate
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
 from adversarial_ids.domain.defense_plan import DefensePlan
 from adversarial_ids.domain.detection_report import DetectionReport
+from adversarial_ids.domain.feedback_decision import FeedbackDecision, RoundOutcome
 from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json, save_json
@@ -118,6 +134,7 @@ class IntentLoopOrchestrator:
         min_attack_rows: int = INTENT_LOOP_MIN_ATTACK_ROWS,
         min_normal_rows: int = INTENT_LOOP_MIN_NORMAL_ROWS,
         cached_dataset_path: Path | str | None = None,
+        feedback_min_delta: float = FEEDBACK_MIN_DELTA,
     ) -> None:
         if generator_mode not in _VALID_GENERATOR_MODES:
             raise ValueError(
@@ -137,12 +154,17 @@ class IntentLoopOrchestrator:
         self.cached_dataset_path = (
             Path(cached_dataset_path) if cached_dataset_path is not None else None
         )
+        # Ganho mínimo para a campanha considerar que a rodada progrediu (E10).
+        # Exposto no construtor pelo mesmo motivo de ``min_attack_rows``: em
+        # modo cacheado a métrica nunca se move, então um teste que precise
+        # rodar mais de duas rodadas passa 0.0 aqui.
+        self.feedback_min_delta = feedback_min_delta
 
     # ------------------------------------------------------------------ #
     # Loop principal                                                      #
     # ------------------------------------------------------------------ #
     def run(self, prompt: str, *, seed: int = 42) -> LoopRecord:
-        """Roda o pipeline ponta a ponta para ``prompt`` e devolve o ``LoopRecord``.
+        """Roda **uma** rodada ponta a ponta e devolve o ``LoopRecord``.
 
         Não recebe um ``attack`` separado: o ataque-base vem de
         ``IntentSpec.base_attack``, extraído do próprio ``prompt`` pelo
@@ -153,6 +175,90 @@ class IntentLoopOrchestrator:
         capturada, anexada ao ``LoopStage`` correspondente, e o registro
         (parcial) é persistido e devolvido do mesmo jeito. Inspecione
         ``record.stages`` para saber onde/por que uma execução parou.
+
+        Para encadear rodadas pela política de feedback, use
+        ``run_campaign``.
+        """
+
+        record, _decision = self._run_round(prompt, seed=seed)
+        return record
+
+    def run_campaign(
+        self,
+        prompt: str,
+        *,
+        rounds: int = INTENT_LOOP_DEFAULT_ROUNDS,
+        seed: int = 42,
+    ) -> tuple[LoopRecord, ...]:
+        """Encadeia até ``rounds`` rodadas; a rodada N+1 nasce da política (E10).
+
+        A rodada 1 interpreta ``prompt`` com o ``IntentLike``. Cada rodada
+        seguinte roda a ``IntentSpec`` que o estágio FEEDBACK da anterior
+        produziu — sem nova chamada de LLM do lado Red. A campanha para no
+        primeiro destes casos: a decisão diz para parar, algum estágio da
+        rodada falhou (o FEEDBACK nem chega a rodar), ou ``rounds`` foi
+        atingido.
+
+        Nunca levanta, pelo mesmo motivo de ``run()``: devolve os registros
+        já concluídos (todos individualmente persistidos), e a causa da
+        parada fica no ``LoopStage`` que falhou ou no ``feedback.json`` da
+        última rodada.
+        """
+
+        if rounds < 1:
+            raise ValueError(f"rounds precisa ser >= 1 (veio {rounds}).")
+
+        records: list[LoopRecord] = []
+        history: tuple[RoundOutcome, ...] = ()
+        next_intent: IntentSpec | None = None
+        parent_run_id: str | None = None
+
+        for round_index in range(1, rounds + 1):
+            record, decision = self._run_round(
+                prompt,
+                seed=seed,
+                intent_override=next_intent,
+                round_index=round_index,
+                parent_run_id=parent_run_id,
+                max_rounds=rounds,
+                history=history,
+            )
+            records.append(record)
+
+            if decision is None or not decision.should_continue:
+                break
+
+            history += (
+                RoundOutcome(
+                    round=round_index,
+                    run_id=record.run_id,
+                    objective_value=decision.objective_value,
+                ),
+            )
+            next_intent = decision.next_intent
+            parent_run_id = record.run_id
+
+        return tuple(records)
+
+    # ------------------------------------------------------------------ #
+    # Uma rodada — os sete estágios, o registro e a decisão de feedback   #
+    # ------------------------------------------------------------------ #
+    def _run_round(
+        self,
+        prompt: str,
+        *,
+        seed: int = 42,
+        intent_override: IntentSpec | None = None,
+        round_index: int = 1,
+        parent_run_id: str | None = None,
+        max_rounds: int = 1,
+        history: tuple[RoundOutcome, ...] = (),
+    ) -> tuple[LoopRecord, FeedbackDecision | None]:
+        """Roda os sete estágios de uma rodada e devolve registro + decisão.
+
+        A decisão volta junto (em vez de ser relida do ``feedback.json``) para
+        que ``run_campaign`` não dependa de I/O para saber se continua. É
+        ``None`` quando algum estágio falhou antes do FEEDBACK.
         """
 
         run_id = new_run_id()
@@ -161,13 +267,19 @@ class IntentLoopOrchestrator:
         started = time.perf_counter()
         record_seed = seed
         resolved: dict[str, Any] = {}
+        decision: FeedbackDecision | None = None
 
         try:
-            intent = self._stage(
-                stages, run_dir, "intent",
-                lambda: self.intent_agent.interpret(prompt),
-                persist_as="intent.json",
-            )
+            if intent_override is None:
+                intent = self._stage(
+                    stages, run_dir, "intent",
+                    lambda: self.intent_agent.interpret(prompt),
+                    persist_as="intent.json",
+                )
+            else:
+                intent = self._inherited_intent_stage(
+                    stages, run_dir, intent_override, round_index
+                )
             record_seed = intent.seed
 
             def _compile_candidate() -> Any:
@@ -209,12 +321,28 @@ class IntentLoopOrchestrator:
             )
 
             report_ref = str(run_dir / "detection_report.json")
-            self._stage(
+            defense_plan = self._stage(
                 stages, run_dir, "defender",
                 lambda: self.defender_agent.defend(
                     detection_report, report_ref=report_ref
                 ),
                 persist_as="defense_plan.json",
+            )
+
+            decision = self._stage(
+                stages, run_dir, "feedback",
+                lambda: decide_feedback(
+                    intent=intent,
+                    report=detection_report,
+                    plan=defense_plan,
+                    run_id=run_id,
+                    round_index=round_index,
+                    max_rounds=max_rounds,
+                    parent_run_id=parent_run_id,
+                    history=history,
+                    min_delta=self.feedback_min_delta,
+                ),
+                persist_as="feedback.json",
             )
         except Exception:
             # A causa já foi anexada ao LoopStage correspondente por
@@ -222,14 +350,6 @@ class IntentLoopOrchestrator:
             # o que foi concluído (+ o estágio que falhou) é persistido
             # abaixo do mesmo jeito.
             pass
-        else:
-            stages.append(
-                LoopStage(
-                    name="feedback",
-                    status=LoopStageStatus.SKIPPED,
-                    error="Política de feedback (E10) ainda não implementada nesta entrega.",
-                )
-            )
 
         record = LoopRecord(
             run_id=run_id,
@@ -237,12 +357,49 @@ class IntentLoopOrchestrator:
             seed=record_seed,
             stages=tuple(stages),
             total_duration_seconds=time.perf_counter() - started,
+            round=round_index,
+            parent_run_id=parent_run_id,
         )
 
         if self.save_path is not None:
             append_loop_record(self.save_path, record)
 
-        return record
+        return record, decision
+
+    # ------------------------------------------------------------------ #
+    # Estágio INTENT herdado (rodadas 2+) — nenhuma chamada de LLM        #
+    # ------------------------------------------------------------------ #
+    def _inherited_intent_stage(
+        self,
+        stages: list[LoopStage],
+        run_dir: Path,
+        intent: IntentSpec,
+        round_index: int,
+    ) -> IntentSpec:
+        """Persiste a intenção que a política (E10) produziu, sem chamar o LLM.
+
+        Registrado como ``skipped``, nunca ``succeeded``: o status precisa
+        continuar dizendo a verdade sobre o que rodou nesta rodada — o
+        ``IntentLike`` real não foi chamado, então não há duração de LLM a
+        medir nem uma proposta a validar de novo (já passou pelos dois
+        portões quando a rodada anterior a produziu).
+        """
+
+        artifact_path = run_dir / "intent.json"
+        save_json(artifact_path, intent.model_dump(mode="json"))
+        stages.append(
+            LoopStage(
+                name="intent",
+                status=LoopStageStatus.SKIPPED,
+                artifact_ref=str(artifact_path),
+                error=(
+                    f"Intenção herdada da rodada {round_index - 1} pela "
+                    "política de feedback (E10): nenhuma chamada de LLM "
+                    "nesta rodada."
+                ),
+            )
+        )
+        return intent
 
     # ------------------------------------------------------------------ #
     # Estágio DETECTOR — treina no baseline, avalia o candidato compilado #
