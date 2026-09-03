@@ -229,6 +229,18 @@ uv run adversarial-ids --engine intent --prompt "reduza o recall variando a temp
 rodada gera um `LoopRecord` próprio em `outputs/loop_records.json`,
 encadeado pelo `parent_run_id` da rodada anterior.
 
+Não há `--attack` no motor intent: o ataque-base vem da própria intenção
+(`IntentSpec.base_attack`, extraída do prompt pelo `IntentAgent` a partir do
+catálogo real de capacidades — ver `docs/attack_capabilities.md`). Os 11
+ataques registrados têm capacidade intent-driven habilitada, mas **os 10 que
+não são `masquerade_fault` só são fisicamente mensuráveis em
+`--generator-mode jar`**: em `cached` o dataset servido é sempre o de
+`masquerade_fault` (`data/baseline_dataset.csv`), então o portão de
+integração (PREPROCESS) rejeita qualquer outro ataque por rótulo de classe
+ausente. As quatro variantes `delayed_replay*` também compartilham a mesma
+classe rotulada no dataset (`delayed_replay`), então esse portão não as
+distingue entre si.
+
 ### ERENO AI — frontend completo (recomendado)
 
 Interface Streamlit que substitui o uso via terminal: **toda** a execução

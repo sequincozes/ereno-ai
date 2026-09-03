@@ -36,7 +36,7 @@ um ``LoopRecord`` completo, persistido individualmente; a linhagem da
 campanha vive em ``LoopRecord.round``/``parent_run_id``.
 
 Diferente do ``AdversarialWorkflow`` (loop legado Strategist↔Analyst, N
-iterações de uma ``AttackConfig`` ajustada por tool calling livre), este
+iterações de uma config de ataque ajustada por tool calling livre), este
 orquestrador resolve **uma** intenção em linguagem natural por chamada —
 não itera. Os dois loops compartilham o núcleo determinístico
 (``GeneratorRunner``/``IdsEvaluator``) mas não o controlador nem o contrato

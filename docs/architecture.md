@@ -1,5 +1,12 @@
 # Arquitetura do sistema
 
+> **Nota de desatualização**: este documento descreve um estado anterior ao
+> workflow Agno Team e ao pipeline intent-driven (E1–E10), ambos já
+> implementados e wired end-to-end. Para a arquitetura atual, ver `CLAUDE.md`
+> (visão geral das duas pipelines), `docs/feedback_policy.md` (política E10) e
+> `docs/attack_capabilities.md` (catálogo de capacidades por ataque). Reescrever
+> este arquivo é trabalho separado — não incluído aqui.
+
 ## Visão geral
 
 O Laboratório Inteligente avalia um IDS baseado em Random Forest sobre tráfego

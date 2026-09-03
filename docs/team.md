@@ -53,7 +53,7 @@ As fronteiras compartilhadas são:
 
 | Contrato | Produzido por | Consumido por |
 |---|---|---|
-| `AttackConfig` | Base compartilhada | Strategist, validador e gerador |
+| Config do ataque (dict, schema variável por ataque) | Base compartilhada | Strategist, validador e gerador |
 | `Metrics` | Avaliador do IDS | Strategist, Analyst e dashboard |
 | `IterationRecord` | Memória/workflow | CLI, dashboard e histórico |
 | `ExperimentRunner` | Interface M4 | CLI, dashboard e futuro adaptador do workflow |
