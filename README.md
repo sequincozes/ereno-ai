@@ -206,6 +206,29 @@ Principais opções (`uv run adversarial-ids --help`):
 Ao final, a CLI informa onde os resultados foram salvos
 (`outputs/iteration_history.json`) e como abrir o dashboard.
 
+### CLI — pipeline intent-driven (`--engine intent`)
+
+Executa o pipeline INTENT→GENERATOR→ERENO→PREPROCESS→DETECTOR→DEFENDER→
+FEEDBACK a partir de uma intenção em linguagem natural (exige
+`GROQ_API_KEY`):
+
+```bash
+uv run adversarial-ids --engine intent --prompt "reduza o recall variando a temporização da falha"
+```
+
+Para encadear rodadas pela política de feedback (E10) — a partir da segunda
+rodada, a intenção vem da política, não de uma nova chamada de LLM:
+
+```bash
+uv run adversarial-ids --engine intent --prompt "reduza o recall variando a temporização da falha" \
+  --generator-mode jar --rounds 3
+```
+
+`--rounds` (default 1) é específico do `--engine intent` — distinto de
+`--iterations`, que pertence ao loop legado (`--engine live`/`demo`). Cada
+rodada gera um `LoopRecord` próprio em `outputs/loop_records.json`,
+encadeado pelo `parent_run_id` da rodada anterior.
+
 ### ERENO AI — frontend completo (recomendado)
 
 Interface Streamlit que substitui o uso via terminal: **toda** a execução
@@ -370,3 +393,7 @@ IDS e do histórico tipado, não de um corpus recuperado).
   modelo Groq escolhido e pode variar entre execuções (não determinístico no live).
 - O IDS de referência é um Random Forest simples; não representa um detector de
   produção, e sim um alvo controlado para o estudo adversarial.
+- Uma campanha `--engine intent --rounds N` em **modo cacheado** para na rodada 2
+  (`no_improvement`): a métrica-objetivo não se move porque o dataset é o mesmo em
+  toda rodada. Use `--generator-mode jar` para uma campanha fisicamente mensurável.
+  Veja [docs/feedback_policy.md](docs/feedback_policy.md).
