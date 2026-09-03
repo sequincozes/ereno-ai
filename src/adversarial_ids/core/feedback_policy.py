@@ -15,8 +15,10 @@ exatamente elas, na ordem "aprofundar antes de alargar":
 1. ``intensity``: ``low`` → ``medium`` → ``high`` (o passo do compilador vai de
    0.2 a 0.85 da distância até a borda do campo).
 2. ``restrictions.max_fields_changed``: ``+1`` por rodada, até o número de
-   campos candidatos do efeito (12 em ``masquerade_fault``, teto do contrato
-   também 12).
+   campos candidatos do efeito **naquele ataque** (calculado por
+   ``resolve_candidate_paths`` — 12 em ``masquerade_fault``/``lower_recall``,
+   2 em ``injection``, e assim por diante). O teto do contrato
+   (``MAX_FIELDS_CHANGED_CEILING``) é só uma trava de sanidade acima disso.
 
 A ``seed`` **não** é alavanca: ``intent_compiler._select_field_paths`` embaralha
 os candidatos com ``random.Random(intent.seed)`` e corta em ``[:limite]``, então
@@ -53,13 +55,11 @@ from adversarial_ids.domain.feedback_decision import (
     RoundOutcome,
 )
 from adversarial_ids.domain.intent_spec import (
+    MAX_FIELDS_CHANGED_CEILING,
     DesiredEffect,
     IntentIntensity,
     IntentSpec,
 )
-
-# Teto do contrato para ``IntentRestrictions.max_fields_changed``.
-_MAX_FIELDS_CEILING = 12
 
 # Qual métrica do DetectionReport a intenção pede para minimizar. Os efeitos
 # que não são de evasão não têm métrica correspondente no relatório: a política
@@ -69,6 +69,11 @@ _OBJECTIVE_METRIC_BY_EFFECT: dict[DesiredEffect, str | None] = {
     DesiredEffect.LOWER_RECALL: "recall",
     DesiredEffect.MIMIC_NORMAL_TRAFFIC: "recall",
     DesiredEffect.INCREASE_ATTACK_ACTIVITY: None,
+    # Inalcançável pelo catálogo real hoje — nenhum AttackCapability anuncia
+    # este efeito (não há métrica de pressão de recurso no DetectionReport;
+    # ver config/attack_capabilities.py). Mantido por exaustividade do enum:
+    # sem esta entrada, uma capacidade futura que o anunciasse levantaria
+    # KeyError aqui em vez de um erro acionável no portão de validação.
     DesiredEffect.INCREASE_RESOURCE_PRESSURE: None,
 }
 
@@ -98,7 +103,7 @@ def _fields_ceiling(intent: IntentSpec) -> int:
     """
 
     _, candidates = resolve_candidate_paths(intent)
-    return min(_MAX_FIELDS_CEILING, len(candidates))
+    return min(MAX_FIELDS_CHANGED_CEILING, len(candidates))
 
 
 def _derive_intent(intent: IntentSpec, **changes: Any) -> IntentSpec:

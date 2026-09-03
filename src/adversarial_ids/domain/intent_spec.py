@@ -31,13 +31,23 @@ class IntentIntensity(str, Enum):
     HIGH = "high"
 
 
+# Limite de sanidade de ``max_fields_changed`` — NÃO é a contagem de campos de
+# nenhum ataque específico. Era 12 (a contagem do masquerade_fault, único
+# ataque habilitado até o catálogo crescer); o random_replay tem 15 folhas
+# editáveis. O teto real por ataque/efeito é calculado em
+# ``core/feedback_policy._fields_ceiling``, que já faz
+# ``min(MAX_FIELDS_CHANGED_CEILING, len(candidatos do efeito))`` — esta
+# constante só evita um valor absurdo antes desse cálculo rodar.
+MAX_FIELDS_CHANGED_CEILING = 16
+
+
 class IntentRestrictions(BaseModel):
     """Restrições determinísticas aplicadas ao futuro compilador."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     preserve_attack_semantics: bool = True
-    max_fields_changed: int = Field(default=3, ge=1, le=12)
+    max_fields_changed: int = Field(default=3, ge=1, le=MAX_FIELDS_CHANGED_CEILING)
     allowed_fields: tuple[str, ...] | None = None
     forbidden_fields: tuple[str, ...] = ()
 

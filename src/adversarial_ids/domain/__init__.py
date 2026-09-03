@@ -3,7 +3,8 @@
 Contratos de I/O congelados na Fase 0 — a fronteira exata entre os membros.
 
 Schemas base (issue #2, M3):
-  - AttackConfig      — configuração do ataque sintético (12 campos editáveis)
+  - attack_configs/*  — um schema por ataque ERENO registrado (ver
+                        ``domain/attack_configs/__init__.py``)
   - Metrics           — saída da avaliação do IDS (Random Forest)
   - IterationRecord   — unidade do histórico; costura os 4 schemas
 
@@ -18,14 +19,23 @@ from adversarial_ids.domain.analyst_output import (
     Mitigation,
 )
 from adversarial_ids.domain.attack_candidate import AttackCandidate, FieldChange
-from adversarial_ids.domain.attack_config import (
+from adversarial_ids.domain.attack_configs import (
     AnalogConfig,
-    AttackConfig,
-    DeltaAbs,
-    DurationMs,
+    CONFIG_MODEL_BY_ATTACK,
+    DelayedReplayBackoffConfig,
+    DelayedReplayBatchDumpConfig,
+    DelayedReplayConfig,
+    DelayedReplayDoubleDropConfig,
     FaultConfig,
-    Multiplier,
+    FloodingConfig,
+    GrayholeConfig,
+    HighStNumInjectionConfig,
+    InjectionConfig,
+    InverseReplayConfig,
+    MasqueradeFaultConfig,
+    RandomReplayConfig,
     TrapAreaConfig,
+    config_model_for,
 )
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
 from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
@@ -37,6 +47,7 @@ from adversarial_ids.domain.feedback_decision import (
 )
 from adversarial_ids.domain.iteration_record import IterationRecord
 from adversarial_ids.domain.intent_spec import (
+    MAX_FIELDS_CHANGED_CEILING,
     DesiredEffect,
     IntentIntensity,
     IntentObjective,
@@ -55,13 +66,22 @@ __all__ = [
     "AnalystOutput",
     "DeceptiveFeature",
     "Mitigation",
-    "AttackConfig",
+    "MasqueradeFaultConfig",
     "FaultConfig",
-    "DurationMs",
     "AnalogConfig",
-    "DeltaAbs",
     "TrapAreaConfig",
-    "Multiplier",
+    "RandomReplayConfig",
+    "InverseReplayConfig",
+    "InjectionConfig",
+    "HighStNumInjectionConfig",
+    "FloodingConfig",
+    "GrayholeConfig",
+    "DelayedReplayConfig",
+    "DelayedReplayBackoffConfig",
+    "DelayedReplayBatchDumpConfig",
+    "DelayedReplayDoubleDropConfig",
+    "CONFIG_MODEL_BY_ATTACK",
+    "config_model_for",
     "Change",
     "StrategistOutput",
     "Metrics",
@@ -69,6 +89,7 @@ __all__ = [
     "IterationRecord",
     "IntentSpec",
     "IntentRestrictions",
+    "MAX_FIELDS_CHANGED_CEILING",
     "IntentObjective",
     "DesiredEffect",
     "IntentIntensity",

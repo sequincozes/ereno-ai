@@ -1,9 +1,10 @@
 """core/experiment_memory.py — histórico do experimento como IterationRecord (#17).
 
 Persiste cada passo do loop adversarial como um ``IterationRecord`` (#2), a
-unidade de histórico que costura ``AttackConfig`` + ``StrategistOutput`` +
-``Metrics`` + ``AnalystOutput``. É o que o Orquestrador (#16) alimenta e o que o
-Dashboard (#19) e a memória do Estrategista (#8) leem de volta.
+unidade de histórico que costura a config do ataque (dict, schema variável) +
+``StrategistOutput`` + ``Metrics`` + ``AnalystOutput``. É o que o Orquestrador
+(#16) alimenta e o que o Dashboard (#19) e a memória do Estrategista (#8) leem
+de volta.
 
 Formato em disco (idêntico ao golden ``data/iteration_history.json`` da #3)::
 
@@ -58,8 +59,9 @@ class ExperimentMemory:
     ) -> IterationRecord:
         """Monta e anexa um ``IterationRecord`` a partir de peças frouxas.
 
-        Mantém a assinatura que ``interfaces/cli.py`` já chama. Valida
-        ``attack_json`` → ``AttackConfig`` e ``metrics`` → ``Metrics``.
+        Mantém a assinatura que ``interfaces/cli.py`` já chama.
+        ``attack_json`` é guardado como dict (schema variável — qualquer tipo
+        de ataque); ``metrics`` é validado como ``Metrics``.
         ``strategist_output`` aceita ``StrategistOutput`` (tipado) ou
         ``dict`` (retrocompatível, validado via ``StrategistOutput.model_validate``).
         Se apenas ``llm_response`` for informado, cria um ``StrategistOutput``

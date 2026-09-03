@@ -36,7 +36,7 @@ from adversarial_ids.config.attack_capabilities import (
 )
 from adversarial_ids.config.attacks_registry import get_attack_spec
 from adversarial_ids.domain.attack_candidate import AttackCandidate, FieldChange
-from adversarial_ids.domain.attack_config import AttackConfig
+from adversarial_ids.domain.attack_configs import config_model_for
 from adversarial_ids.domain.intent_spec import DesiredEffect, IntentIntensity, IntentSpec
 from adversarial_ids.shared.json_io import load_json
 
@@ -54,18 +54,43 @@ _STEP_BY_INTENSITY: dict[IntentIntensity, float] = {
     IntentIntensity.HIGH: 0.85,
 }
 
-# Campos numéricos pareados cuja ordenação (min <= max) o AttackConfig valida.
-# Ao aplicar mudanças em ordem alfabética de path, "max" é resolvido antes de
-# "min" — o valor recém-calculado do campo em ``diff`` é clampado contra o
-# irmão já presente na config de trabalho (baseline, se não estiver no diff).
-_PAIRED_SIBLING: dict[str, str] = {
-    "fault.durationMs.min": "fault.durationMs.max",
-    "fault.durationMs.max": "fault.durationMs.min",
-    "analog.deltaAbs.min": "analog.deltaAbs.max",
-    "analog.deltaAbs.max": "analog.deltaAbs.min",
-    "trapArea.multiplier.min": "trapArea.multiplier.max",
-    "trapArea.multiplier.max": "trapArea.multiplier.min",
-}
+
+def _flip_direction(direction: str) -> str:
+    return "decrease" if direction == "increase" else "increase"
+
+# Campos numéricos pareados cuja ordenação (min <= max) o schema por ataque
+# valida (ver ``domain/attack_configs/``). Ao aplicar mudanças em ordem
+# alfabética de path, "max" é resolvido antes de "min" — o valor recém-
+# calculado do campo em ``diff`` é clampado contra o irmão já presente na
+# config de trabalho (baseline, se não estiver no diff).
+#
+# Detecção **estrutural**, não uma lista de caminhos: os 11 baselines têm mais
+# de 20 objetos ``{min, max}`` (``burst``, ``dropRate``, ``networkDelayMs``,
+# ``padBytes``, ...) e enumerá-los repetiria o problema que
+# ``shared/validator._enforce_min_le_max`` já resolve estruturalmente para o
+# loop legado — a diferença é o escopo: lá a varredura é global sobre a config
+# final, aqui é local ao objeto pai do campo que está mudando.
+_RANGE_SIBLING_LEAF = {"min": "max", "max": "min"}
+
+
+def _paired_sibling_path(config: dict[str, Any], path: str) -> tuple[str, str] | None:
+    """Irmão de um par ``{min, max}``: ``(caminho_do_irmão, folha)`` ou ``None``."""
+
+    parent_path, _, leaf = path.rpartition(".")
+    sibling_leaf = _RANGE_SIBLING_LEAF.get(leaf)
+    if sibling_leaf is None:
+        return None
+
+    parent = _get_by_path(config, parent_path) if parent_path else config
+    if not isinstance(parent, dict):
+        return None
+
+    sibling_value = parent.get(sibling_leaf)
+    if not isinstance(sibling_value, (int, float)) or isinstance(sibling_value, bool):
+        return None
+
+    sibling_path = f"{parent_path}.{sibling_leaf}" if parent_path else sibling_leaf
+    return sibling_path, leaf
 
 
 class IntentCompilerError(ValueError):
@@ -160,14 +185,25 @@ def _compute_new_value(
 
 
 def _clamp_paired(config: dict[str, Any], path: str, value: Any) -> Any:
-    sibling_path = _PAIRED_SIBLING.get(path)
-    if sibling_path is None:
+    """Trava um limite do par no irmão vigente, preservando ``min <= max``.
+
+    ``_select_field_paths`` devolve os caminhos em ordem alfabética, então
+    "...max" é sempre resolvido antes de "...min". Cada um é clampado contra
+    o valor *corrente* do irmão no ``config`` de trabalho — a baseline se o
+    irmão não foi selecionado, o valor recém-escrito se foi (``_set_by_path``
+    já mutou o dict). A invariante vale ao fim do laço para qualquer
+    subconjunto do par.
+    """
+
+    resolved = _paired_sibling_path(config, path)
+    if resolved is None:
         return value
 
+    sibling_path, leaf = resolved
     sibling_value = _get_by_path(config, sibling_path)
-    if path.endswith(".min") and value > sibling_value:
+    if leaf == "min" and value > sibling_value:
         return sibling_value
-    if path.endswith(".max") and value < sibling_value:
+    if leaf == "max" and value < sibling_value:
         return sibling_value
     return value
 
@@ -196,7 +232,10 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
     for path in selected_paths:
         field = fields_by_path[path]
         old_value = _get_by_path(config, path)
-        new_value = _compute_new_value(field, old_value, direction, step)
+        # Campos "inverse" (gaps, intervalos) ficam mais agressivos quando o
+        # valor DIMINUI — a direção efetiva é o oposto da direção do efeito.
+        field_direction = _flip_direction(direction) if field.polarity == "inverse" else direction
+        new_value = _compute_new_value(field, old_value, field_direction, step)
         new_value = _clamp_paired(config, path, new_value)
         if new_value == old_value:
             continue
@@ -209,8 +248,14 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
             "configuração distinta da baseline."
         )
 
+    config_model = config_model_for(spec.key)
+    if config_model is None:
+        raise IntentCompilerError(
+            f"Ataque {spec.key!r} não tem schema de config registrado em "
+            "domain/attack_configs/ — não é possível validar o candidato."
+        )
     try:
-        AttackConfig.model_validate(config)
+        config_model.model_validate(config)
     except Exception as exc:  # noqa: BLE001 - relançado como erro acionável
         raise IntentCompilerError(
             f"Configuração compilada é inválida: {exc}"

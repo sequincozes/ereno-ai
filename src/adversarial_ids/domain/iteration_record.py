@@ -22,8 +22,8 @@ class IterationRecord(BaseModel):
     iteration: int = Field(ge=0)
     # A configuração do ataque é dados de schema variável (cada tipo de ataque do
     # ERENO tem seus próprios campos), então guardamos o dict cru em vez de um
-    # schema tipado por ataque. Ver ``domain/attack_config.py`` (schema estrito do
-    # uc03, mantido apenas para validação/testes do masquerade).
+    # schema tipado por ataque. Ver ``domain/attack_configs/`` (um schema
+    # estrito por ataque registrado, usado pelo compilador intent-driven).
     attack_config: dict[str, Any]
     strategist_output: StrategistOutput | None = None
     metrics: Metrics
@@ -33,7 +33,7 @@ class IterationRecord(BaseModel):
     @field_validator("attack_config", mode="before")
     @classmethod
     def _coerce_attack_config(cls, value: Any) -> Any:
-        """Aceita tanto ``dict`` quanto qualquer ``BaseModel`` (ex.: ``AttackConfig``)."""
+        """Aceita tanto ``dict`` quanto qualquer ``BaseModel`` (ex.: ``MasqueradeFaultConfig``)."""
         if isinstance(value, BaseModel):
             return value.model_dump(mode="json")
         return value

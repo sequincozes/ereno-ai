@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -9,10 +10,12 @@ import pytest
 from pydantic import ValidationError
 
 from adversarial_ids.config.attack_capabilities import (
+    ATTACK_CAPABILITY_CATALOG,
     MASQUERADE_FAULT_CAPABILITY,
     get_attack_capability,
     validate_intent_capability,
 )
+from adversarial_ids.config.attacks_registry import ATTACK_REGISTRY, get_attack_spec
 from adversarial_ids.domain import (
     DesiredEffect,
     IntentIntensity,
@@ -100,9 +103,30 @@ def test_valid_intent_passes_deterministic_capability_gate():
     assert capability.capability_id == "masquerade_fault.v1"
 
 
-def test_attack_without_intent_capability_fails_with_actionable_error():
+def test_attack_without_intent_capability_fails_with_actionable_error(monkeypatch):
+    """Mantém o branch de "capacidade ausente" coberto agora que todo ataque
+    registrado tem uma — injeta uma spec sem ``intent_capability_id`` em vez
+    de depender de um ataque real ficar sem capacidade."""
+    spec = dataclasses.replace(get_attack_spec("flooding"), intent_capability_id=None)
+    monkeypatch.setitem(ATTACK_REGISTRY, "flooding", spec)
+
     with pytest.raises(ValueError, match="ainda não possui capacidade intent-driven"):
-        get_attack_capability("random_replay")
+        get_attack_capability("flooding")
+
+
+def test_every_registered_attack_has_an_intent_capability():
+    for spec in ATTACK_REGISTRY.values():
+        capability = get_attack_capability(spec.key)
+        assert capability.attack_key == spec.key
+        assert capability.capability_id == spec.intent_capability_id
+
+
+def test_unknown_capability_id_on_a_registered_spec_is_a_runtime_error(monkeypatch):
+    spec = dataclasses.replace(get_attack_spec("flooding"), intent_capability_id="ghost.v1")
+    monkeypatch.setitem(ATTACK_REGISTRY, "flooding", spec)
+
+    with pytest.raises(RuntimeError, match="referencia capacidade inexistente"):
+        get_attack_capability("flooding")
 
 
 def test_unknown_attack_fails_with_registry_options():
