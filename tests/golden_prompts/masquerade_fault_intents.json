@@ -1,0 +1,329 @@
+[
+  {
+    "id": "valid-01",
+    "category": "valid",
+    "prompt": "Reduza o recall do IDS variando a duração da falha do disjuntor, mantendo o ataque plausível.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["fault.durationMs.min", "fault.durationMs.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-02",
+    "category": "valid",
+    "prompt": "Quero avaliar a robustez do IDS aumentando a probabilidade de injeção da falha.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "high",
+      "allowed_fields": ["fault.prob"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-03",
+    "category": "valid",
+    "prompt": "Ajuste os deltas analógicos para o ataque se camuflar como tráfego normal.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "medium",
+      "allowed_fields": ["analog.deltaAbs.min", "analog.deltaAbs.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-04",
+    "category": "valid",
+    "prompt": "Reduza bastante o F1 do IDS mexendo no estado forjado do disjuntor e no avanço do stNum.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "high",
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-05",
+    "category": "valid",
+    "prompt": "Avalie a robustez aumentando a atividade do ataque via spike na trap area, mas sem tocar em fault.prob.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "forbidden_fields": ["fault.prob"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-06",
+    "category": "valid",
+    "prompt": "Reduza o recall variando somente os valores de TTL usados nas mensagens GOOSE forjadas.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "low",
+      "allowed_fields": ["ttlMsValues"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-07",
+    "category": "valid",
+    "prompt": "Reduza o recall trocando apenas a estratégia de evolução do sqNum durante o ataque.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["sqnumMode"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-08",
+    "category": "valid",
+    "prompt": "Faça o ataque parecer tráfego normal ajustando os multiplicadores da área do trapézio.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "medium",
+      "allowed_fields": ["trapArea.multiplier.min", "trapArea.multiplier.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-09",
+    "category": "valid",
+    "prompt": "Reduza bastante o F1 do IDS, mas sem mexer no estado forjado do disjuntor.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "high",
+      "forbidden_fields": ["cbStatus"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-10",
+    "category": "valid",
+    "prompt": "Reduza o recall variando a probabilidade de falha, usando a semente 123 para reprodutibilidade.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["fault.prob"],
+      "seed": 123
+    }
+  },
+  {
+    "id": "ambiguous-01",
+    "category": "ambiguous",
+    "prompt": "Deixe o ataque mais discreto.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "seed": 42
+    }
+  },
+  {
+    "id": "ambiguous-02",
+    "category": "ambiguous",
+    "prompt": "Teste a robustez do IDS de um jeito genérico.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "seed": 42
+    }
+  },
+  {
+    "id": "ambiguous-03",
+    "category": "ambiguous",
+    "prompt": "Faça o ataque parecer mais com tráfego normal, sem exagerar.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "low",
+      "seed": 42
+    }
+  },
+  {
+    "id": "ambiguous-04",
+    "category": "ambiguous",
+    "prompt": "Quero ver o IDS sofrendo mais com esse ataque.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "seed": 42
+    }
+  },
+  {
+    "id": "ambiguous-05",
+    "category": "ambiguous",
+    "prompt": "Só ajuste alguma coisa pra reduzir a detecção, não importa o quê.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "max_fields_changed": 3,
+      "seed": 42
+    }
+  },
+  {
+    "id": "invalid-01",
+    "category": "invalid",
+    "prompt": "Aplique essa evasão no ataque random_replay.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "random_replay",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "seed": 42
+    },
+    "expected_error": "ainda não possui capacidade intent-driven"
+  },
+  {
+    "id": "invalid-02",
+    "category": "invalid",
+    "prompt": "Faça essa evasão no ataque teleport_attack.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "teleport_attack",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "seed": 42
+    },
+    "expected_error": "Ataque desconhecido"
+  },
+  {
+    "id": "invalid-03",
+    "category": "invalid",
+    "prompt": "Sobrecarregue os recursos do sistema usando esse ataque de falha mascarada.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_resource_pressure",
+      "intensity": "medium",
+      "seed": 42
+    },
+    "expected_error": "não é suportado"
+  },
+  {
+    "id": "invalid-04",
+    "category": "invalid",
+    "prompt": "Desative a detecção mudando o attackType do ataque.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["attackType"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-05",
+    "category": "invalid",
+    "prompt": "Desligue completamente o ataque (enabled=false) para sumir da detecção.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["enabled"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-06",
+    "category": "invalid",
+    "prompt": "Aumente a atividade do ataque, mas nunca toque em fault.prob nem em trapArea.spikeProb.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "forbidden_fields": ["fault.prob", "trapArea.spikeProb"],
+      "seed": 42
+    },
+    "expected_error": "removem todos os campos"
+  },
+  {
+    "id": "invalid-07",
+    "category": "invalid",
+    "prompt": "Mude fault.prob, mas também nunca mude fault.prob.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["fault.prob"],
+      "forbidden_fields": ["fault.prob"],
+      "seed": 42
+    },
+    "expected_error": "permitidos e proibidos"
+  },
+  {
+    "id": "invalid-08",
+    "category": "invalid",
+    "prompt": "Nunca mude cbStatus, nunca mude cbStatus, e reduza o F1.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "forbidden_fields": ["cbStatus", "cbStatus"],
+      "seed": 42
+    },
+    "expected_error": "repetidos"
+  },
+  {
+    "id": "invalid-09",
+    "category": "invalid",
+    "prompt": "Faça o ataque ficar invisível para sempre, custe o que custar.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "become_invisible",
+      "intensity": "medium",
+      "seed": 42
+    },
+    "expected_error": "desired_effect inválido"
+  },
+  {
+    "id": "invalid-10",
+    "category": "invalid",
+    "prompt": "Mude o máximo de parâmetros possível, uns 20, para confundir o IDS.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "high",
+      "max_fields_changed": 20,
+      "seed": 42
+    },
+    "expected_error": "max_fields_changed"
+  }
+]
