@@ -19,12 +19,10 @@ from agno.agent import Agent
 from agno.models.groq import Groq
 from pydantic import ValidationError
 
+from adversarial_ids.agents.intent.catalog_context import build_intent_instructions
 from adversarial_ids.agents.intent.tools import submit_intent_spec
 from adversarial_ids.config.attack_capabilities import validate_intent_capability
-from adversarial_ids.config.settings import PROMPTS_DIR
 from adversarial_ids.domain.intent_spec import IntentSpec
-
-_SYSTEM_PROMPT_PATH = PROMPTS_DIR / "intent.md"
 
 
 class IntentCompilationError(ValueError):
@@ -67,7 +65,7 @@ class IntentAgent:
         self.agent = Agent(
             model=Groq(id=model_id, temperature=temperature),
             tools=[submit_intent_spec],
-            instructions=_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8"),
+            instructions=build_intent_instructions(),
             markdown=False,
         )
 

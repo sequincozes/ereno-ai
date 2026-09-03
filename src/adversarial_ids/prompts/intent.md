@@ -16,21 +16,36 @@ texto livre — sempre registre sua interpretação chamando a ferramenta
 - **objective**: `"assess_ids_robustness"` (avaliação exploratória, sem
   intenção explícita de evasão) ou `"evade_detection"` (o pedido busca
   reduzir a detectabilidade do ataque).
-- **base_attack**: a chave do ataque ERENO mencionada ou implícita no pedido
-  (ex.: `"masquerade_fault"`). Nesta versão, apenas `masquerade_fault`
-  possui capacidade intent-driven habilitada.
-- **desired_effect**: o efeito mensurável mais próximo do pedido —
-  `"lower_f1"`, `"lower_recall"`, `"mimic_normal_traffic"`,
-  `"increase_attack_activity"` ou `"increase_resource_pressure"`.
+- **base_attack**: a chave do ataque ERENO mencionada ou implícita no pedido.
+  Escolha entre os ataques listados na seção **Catálogo de capacidades**
+  injetada ao final destas instruções — ela é gerada do catálogo real e é a
+  lista autoritativa; não invente uma chave que não esteja lá. Guia rápido de
+  disambiguação: muitas mensagens por segundo → `flooding`; mensagens
+  desaparecendo seletivamente → `grayhole`; reenvio de mensagens antigas →
+  `random_replay` (aleatório), `inverse_replay` (ordem invertida) ou
+  `delayed_replay` (retidas e reenviadas depois, com variantes `_backoff` e
+  `_batch_dump`); stNum anômalo → `high_stnum`; mensagens novas inseridas →
+  `injection`; falha forjada no disjuntor → `masquerade_fault`.
+- **desired_effect**: o efeito mensurável mais próximo do pedido, dentre os
+  listados para o ataque escolhido na seção do catálogo — `"lower_f1"`,
+  `"lower_recall"`, `"mimic_normal_traffic"` ou `"increase_attack_activity"`.
+  `"increase_resource_pressure"` existe no contrato mas não é suportado por
+  nenhum ataque nesta versão (não há métrica de pressão de recurso no
+  relatório de detecção) — se o pedido for de saturação de recursos, use
+  `"increase_attack_activity"` no ataque mais próximo (ex.: `flooding`).
 - **intensity**: `"low"`, `"medium"` ou `"high"`, conforme a agressividade
   pedida. Use `"medium"` quando o pedido não for explícito.
 - **allowed_fields** / **forbidden_fields**: só preencha quando o pedido
   restringir explicitamente quais campos podem ou não mudar (caminhos dot,
-  ex.: `"fault.durationMs.max"`). Deixe vazio quando o pedido não impuser
-  essa restrição — o portão de validação decide os campos elegíveis a partir
-  do catálogo de capacidades do ataque.
+  ex.: `"fault.durationMs.max"`). Os caminhos válidos são **só os listados
+  para aquele ataque** na seção do catálogo — um caminho de outro ataque, ou
+  que não exista, é rejeitado. Deixe vazio quando o pedido não impuser essa
+  restrição — o portão de validação decide os campos elegíveis a partir do
+  catálogo de capacidades do ataque.
 - **max_fields_changed**: quantos campos, no máximo, o compilador pode
-  alterar (padrão 3).
+  alterar (padrão 3). O teto efetivo é o número de campos daquele ataque
+  capazes do efeito pedido — alguns ataques têm poucos (ex.: `injection` só
+  tem 2 no total).
 - **seed**: semente determinística; use `42` quando o pedido não especificar.
 
 ## Restrições absolutas
