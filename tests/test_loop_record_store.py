@@ -49,3 +49,23 @@ def test_append_loop_record_disk_format_is_a_plain_list_under_loop_records(tmp_p
     raw = json.loads(path.read_text(encoding="utf-8"))
     assert set(raw.keys()) == {"loop_records"}
     assert raw["loop_records"][0]["run_id"] == "run-1"
+
+
+def test_records_persisted_before_the_e10_lineage_fields_still_load(tmp_path):
+    """Justifica manter schema_version=1 (E10): um registro sem round/
+    parent_run_id (gravado antes desta entrega) continua carregando, com os
+    defaults assumindo a rodada 1 sem campanha."""
+
+    path = tmp_path / "loop_records.json"
+    pre_e10 = _record("run-0").model_dump(mode="json")
+    del pre_e10["round"]
+    del pre_e10["parent_run_id"]
+    path.write_text(
+        json.dumps({"loop_records": [pre_e10]}), encoding="utf-8"
+    )
+
+    records = load_loop_records(path)
+
+    assert len(records) == 1
+    assert records[0].round == 1
+    assert records[0].parent_run_id is None

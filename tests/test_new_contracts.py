@@ -23,6 +23,8 @@ from adversarial_ids.domain import (
     DesiredEffect,
     DetectionReport,
     Evidence,
+    FeedbackDecision,
+    FeedbackStopReason,
     FieldChange,
     IntentObjective,
     IntentSpec,
@@ -196,3 +198,107 @@ def test_loop_record_requires_at_least_one_stage():
             seed=42,
             stages=(),
         )
+
+
+# --------------------------------------------------------------------------- #
+# Linhagem da campanha (E10) — LoopRecord.round / parent_run_id               #
+# --------------------------------------------------------------------------- #
+def _loop_record(**overrides: object) -> LoopRecord:
+    data: dict[str, object] = {
+        "run_id": "run-1",
+        "source_prompt": "Reduza o recall.",
+        "seed": 42,
+        "stages": (LoopStage(name="intent", status=LoopStageStatus.SUCCEEDED),),
+    }
+    data.update(overrides)
+    return LoopRecord.model_validate(data)
+
+
+def test_loop_record_defaults_round_to_one_with_no_parent():
+    record = _loop_record()
+
+    assert record.round == 1
+    assert record.parent_run_id is None
+
+
+def test_loop_record_rejects_a_round_below_one():
+    with pytest.raises(ValidationError):
+        _loop_record(round=0)
+
+
+def test_loop_record_accepts_a_parent_run_id_for_a_chained_round():
+    record = _loop_record(round=2, parent_run_id="run-1")
+
+    assert record.round == 2
+    assert record.parent_run_id == "run-1"
+
+
+def test_loop_record_rejects_round_one_with_a_parent_run_id():
+    with pytest.raises(ValidationError, match="parent_run_id"):
+        _loop_record(round=1, parent_run_id="run-0")
+
+
+def test_loop_record_rejects_a_later_round_without_a_parent_run_id():
+    with pytest.raises(ValidationError, match="parent_run_id"):
+        _loop_record(round=2, parent_run_id=None)
+
+
+# --------------------------------------------------------------------------- #
+# FeedbackDecision (E10)                                                      #
+# --------------------------------------------------------------------------- #
+def _decision(**overrides: object) -> FeedbackDecision:
+    data: dict[str, object] = {
+        "should_continue": True,
+        "stop_reason": FeedbackStopReason.CONTINUE_CAMPAIGN,
+        "objective_metric": "recall",
+        "objective_value": 0.8,
+        "best_value_so_far": 0.8,
+        "best_round": 1,
+        "round": 1,
+        "run_id": "run-1",
+        "defense_priority": "high",
+        "next_intent": _intent(),
+        "rationale": "recall=0.8000 na rodada 1 de 3; escalando intensidade.",
+    }
+    data.update(overrides)
+    return FeedbackDecision.model_validate(data)
+
+
+def test_feedback_decision_is_versioned_frozen_and_json_stable():
+    decision = _decision()
+
+    assert decision.schema_version == 1
+    dumped = decision.model_dump(mode="json")
+    assert FeedbackDecision.model_validate_json(json.dumps(dumped)) == decision
+
+
+def test_feedback_decision_rejects_continue_without_next_intent():
+    with pytest.raises(ValidationError, match="next_intent"):
+        _decision(should_continue=True, next_intent=None)
+
+
+def test_feedback_decision_rejects_stop_with_a_next_intent():
+    with pytest.raises(ValidationError, match="next_intent"):
+        _decision(
+            should_continue=False,
+            stop_reason=FeedbackStopReason.MAX_ROUNDS_REACHED,
+        )
+
+
+def test_feedback_decision_rejects_should_continue_disagreeing_with_stop_reason():
+    with pytest.raises(ValidationError, match="stop_reason"):
+        _decision(
+            should_continue=False,
+            stop_reason=FeedbackStopReason.CONTINUE_CAMPAIGN,
+            next_intent=None,
+        )
+
+
+def test_feedback_decision_rejects_round_one_with_a_parent_run_id():
+    with pytest.raises(ValidationError, match="parent_run_id"):
+        _decision(round=1, parent_run_id="run-0")
+
+
+def test_feedback_decision_rejects_a_later_round_without_a_parent_run_id():
+    with pytest.raises(ValidationError, match="parent_run_id"):
+        _decision(round=2, parent_run_id=None)

@@ -31,6 +31,7 @@ from adversarial_ids.domain.intent_spec import (
     IntentObjective,
     IntentSpec,
 )
+from adversarial_ids.domain.feedback_decision import FeedbackDecision
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json
 from adversarial_ids.shared.loop_record_store import load_loop_records
@@ -174,6 +175,7 @@ def _orchestrator(
     cached_dataset_path: Path | None = None,
     min_attack_rows: int = 5,
     min_normal_rows: int = 5,
+    feedback_min_delta: float = 0.01,
 ) -> IntentLoopOrchestrator:
     return IntentLoopOrchestrator(
         intent_agent=intent_agent,
@@ -184,6 +186,7 @@ def _orchestrator(
         save_path=tmp_path / "loop_records.json",
         min_attack_rows=min_attack_rows,
         min_normal_rows=min_normal_rows,
+        feedback_min_delta=feedback_min_delta,
     )
 
 
@@ -210,7 +213,7 @@ def test_orchestrator_rejects_unknown_generator_mode():
 # --------------------------------------------------------------------------- #
 # Caminho feliz — ponta a ponta                                               #
 # --------------------------------------------------------------------------- #
-def test_run_completes_all_six_implemented_stages_and_skips_feedback(tmp_path):
+def test_run_completes_all_seven_stages_including_feedback(tmp_path):
     agent = _StubIntentAgent(_intent())
     defender = _StubDefenderAgent()
     orchestrator = _orchestrator(tmp_path, agent, defender_agent=defender)
@@ -234,14 +237,14 @@ def test_run_completes_all_six_implemented_stages_and_skips_feedback(tmp_path):
     statuses = {stage.name: stage.status for stage in record.stages}
     for implemented in (
         "intent", "generator", "ereno", "preprocess", "detector", "defender",
+        "feedback",
     ):
         assert statuses[implemented] == LoopStageStatus.SUCCEEDED
-    assert statuses["feedback"] == LoopStageStatus.SKIPPED
 
-    # FEEDBACK (E10) é o único estágio fora de escopo nesta entrega — nunca
-    # finge ter rodado, sempre traz o motivo.
+    # Uma execução avulsa (run(), não run_campaign()) sempre tem max_rounds=1
+    # — o FEEDBACK para na rodada 1 pelo teto de rodadas, honestamente.
     feedback = next(s for s in record.stages if s.name == "feedback")
-    assert "E10" in (feedback.error or "")
+    assert feedback.artifact_ref.endswith("feedback.json")
 
     # O Defender recebeu o DetectionReport real desta execução, não um stub vazio.
     assert len(defender.received_reports) == 1
@@ -272,6 +275,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "dataset_bundle.json",
         "detection_report.json",
         "defense_plan.json",
+        "feedback.json",
     ):
         assert (run_dir / filename).exists(), filename
 
@@ -279,11 +283,15 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
     assert stage_by_name["intent"].artifact_ref == str(run_dir / "intent.json")
     assert stage_by_name["preprocess"].artifact_ref == str(run_dir / "dataset_bundle.json")
     assert stage_by_name["defender"].artifact_ref == str(run_dir / "defense_plan.json")
+    assert stage_by_name["feedback"].artifact_ref == str(run_dir / "feedback.json")
     # O estágio ERENO referencia o trace CSV gerado, não um JSON.
     assert stage_by_name["ereno"].artifact_ref.endswith(".csv")
 
     # O plano persistido é um DefensePlan válido e fundamentado no relatório.
     DefensePlan.model_validate(load_json(run_dir / "defense_plan.json"))
+
+    # A decisão persistida é um FeedbackDecision válido.
+    FeedbackDecision.model_validate(load_json(run_dir / "feedback.json"))
 
 
 def test_run_appends_the_record_to_the_loop_record_store(tmp_path):
@@ -306,6 +314,124 @@ def test_two_runs_get_isolated_artifact_directories(tmp_path):
     assert first.run_id != second.run_id
     persisted = load_loop_records(tmp_path / "loop_records.json")
     assert [r.run_id for r in persisted] == [first.run_id, second.run_id]
+
+
+def test_a_single_run_is_recorded_as_round_one_with_no_parent(tmp_path):
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent)
+
+    record = orchestrator.run("Reduza o recall.")
+
+    assert record.round == 1
+    assert record.parent_run_id is None
+
+
+# --------------------------------------------------------------------------- #
+# Campanha multi-rodada (run_campaign, E10)                                   #
+# --------------------------------------------------------------------------- #
+def test_run_campaign_rejects_a_non_positive_round_count(tmp_path):
+    orchestrator = _orchestrator(tmp_path, _StubIntentAgent(_intent()))
+
+    with pytest.raises(ValueError, match="rounds"):
+        orchestrator.run_campaign("Reduza o recall.", rounds=0)
+
+
+def test_run_campaign_of_one_round_matches_a_plain_run(tmp_path):
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=1)
+
+    assert len(records) == 1
+    assert records[0].round == 1
+    assert agent.received_prompts == ["Reduza o recall."]
+
+
+def test_run_campaign_stops_at_the_plateau_in_cached_mode(tmp_path):
+    # Modo cacheado serve o mesmo dataset em toda rodada — a métrica não se
+    # move, então a política para com "no_improvement" na rodada 2 mesmo
+    # pedindo um teto de rodadas maior.
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=5)
+
+    assert len(records) == 2
+    first, second = records
+    assert first.round == 1
+    assert first.parent_run_id is None
+    assert second.round == 2
+    assert second.parent_run_id == first.run_id
+
+    # A LLM só é chamada na primeira rodada — a segunda intenção nasce da
+    # política de feedback, não de uma nova interpretação do prompt.
+    assert agent.received_prompts == ["Reduza o recall."]
+
+    # A rodada 2 herda a intenção sem chamar o IntentLike: o estágio intent
+    # fica "skipped", nunca fabricado como se a LLM tivesse rodado de novo.
+    intent_stage_round_2 = second.stages[0]
+    assert intent_stage_round_2.name == "intent"
+    assert intent_stage_round_2.status == LoopStageStatus.SKIPPED
+    assert "herdada" in intent_stage_round_2.error
+    assert intent_stage_round_2.artifact_ref.endswith("intent.json")
+
+
+def test_run_campaign_runs_every_round_when_the_epsilon_allows_zero_improvement(tmp_path):
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent, feedback_min_delta=0.0)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=3)
+
+    assert [r.round for r in records] == [1, 2, 3]
+    assert records[1].parent_run_id == records[0].run_id
+    assert records[2].parent_run_id == records[1].run_id
+    # A LLM ainda é chamada uma única vez pela campanha inteira.
+    assert agent.received_prompts == ["Reduza o recall."]
+
+
+def test_run_campaign_persists_one_loop_record_per_round(tmp_path):
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent, feedback_min_delta=0.0)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=3)
+
+    persisted = load_loop_records(tmp_path / "loop_records.json")
+    assert [r.run_id for r in persisted] == [r.run_id for r in records]
+
+
+def test_run_campaign_keeps_the_same_source_prompt_across_rounds(tmp_path):
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent, feedback_min_delta=0.0)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=3)
+
+    assert {r.source_prompt for r in records} == {"Reduza o recall."}
+
+
+def test_run_campaign_escalates_the_intensity_of_the_second_round(tmp_path):
+    agent = _StubIntentAgent(_intent(seed=7))
+    orchestrator = _orchestrator(tmp_path, agent)
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=5)
+
+    run_dir = tmp_path / "artifacts" / records[1].run_id
+    second_intent = load_json(run_dir / "intent.json")
+    assert second_intent["intensity"] == "high"
+
+
+def test_run_campaign_aborts_when_a_round_fails(tmp_path):
+    orchestrator = _orchestrator(
+        tmp_path, _StubIntentAgent(_intent()), defender_agent=_FailingDefenderAgent()
+    )
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=3)
+
+    assert len(records) == 1
+    assert "feedback" not in [s.name for s in records[0].stages]
+    assert records[0].stages[-1].status == LoopStageStatus.FAILED
+
+    persisted = load_loop_records(tmp_path / "loop_records.json")
+    assert [r.run_id for r in persisted] == [records[0].run_id]
 
 
 # --------------------------------------------------------------------------- #
@@ -381,4 +507,27 @@ def test_run_marks_defender_failed_when_the_plan_is_ungrounded(tmp_path):
     assert "feedback" not in names
 
     # run() nunca levanta, mesmo com o portão de evidência rejeitando o plano.
+    assert record.total_duration_seconds is not None
+
+
+def test_run_marks_feedback_failed_when_the_policy_raises(tmp_path, monkeypatch):
+    def _boom(**_kwargs):
+        raise RuntimeError("política quebrada")
+
+    monkeypatch.setattr(
+        "adversarial_ids.agents.orchestrator.intent_loop.decide_feedback", _boom
+    )
+    agent = _StubIntentAgent(_intent())
+    orchestrator = _orchestrator(tmp_path, agent)
+
+    record = orchestrator.run("Reduza o recall.")
+
+    names = [s.name for s in record.stages]
+    assert names == [
+        "intent", "generator", "ereno", "preprocess", "detector", "defender", "feedback",
+    ]
+    assert record.stages[-1].status == LoopStageStatus.FAILED
+    assert "política quebrada" in record.stages[-1].error
+
+    # run() nunca levanta mesmo quando a própria política falha.
     assert record.total_duration_seconds is not None
