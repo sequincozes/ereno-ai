@@ -122,3 +122,19 @@ def _default_generator_mode() -> str:
 
 
 GENERATOR_MODE = os.getenv("GENERATOR_MODE", _default_generator_mode()).strip().lower()
+
+# ============================================================
+# Pipeline intent-driven (E3/E4) — Orchestrator v2
+# ============================================================
+
+# LoopRecord (INTENT→...→FEEDBACK), persistido append-only por execução.
+LOOP_RECORDS_PATH = OUTPUTS_DIR / "loop_records.json"
+
+# Artefatos de cada execução (intent.json, attack_candidate.json, datasets,
+# dataset_bundle.json, detection_report.json), isolados por run_id.
+INTENT_LOOP_OUTPUT_DIR = OUTPUTS_DIR / "intent_loop"
+
+# Piso de volume do gate de integração do ERENO (E4): abaixo disso o trace é
+# rejeitado antes de alimentar o detector (ver core/dataset_bundle_builder.py).
+INTENT_LOOP_MIN_ATTACK_ROWS = 5
+INTENT_LOOP_MIN_NORMAL_ROWS = 5
