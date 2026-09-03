@@ -8,11 +8,15 @@ from __future__ import annotations
 
 from io import StringIO
 
+from adversarial_ids.config.settings import INTENT_LOOP_DEFAULT_ROUNDS
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.interfaces.cli import run_cli
 
 
-def _record(*, run_id: str = "run-1", failed: bool = False) -> LoopRecord:
+def _record(
+    *, run_id: str = "run-1", failed: bool = False, round: int = 1,
+    parent_run_id: str | None = None,
+) -> LoopRecord:
     stages = [
         LoopStage(
             name="intent",
@@ -30,7 +34,26 @@ def _record(*, run_id: str = "run-1", failed: bool = False) -> LoopRecord:
         source_prompt="Reduza o recall.",
         seed=42,
         stages=tuple(stages),
+        round=round,
+        parent_run_id=parent_run_id,
     )
+
+
+def _records(*, count: int = 1, failed: bool = False) -> tuple[LoopRecord, ...]:
+    records: list[LoopRecord] = []
+    parent_run_id: str | None = None
+    for index in range(1, count + 1):
+        run_id = f"run-{index}"
+        records.append(
+            _record(
+                run_id=run_id,
+                failed=failed and index == count,
+                round=index,
+                parent_run_id=parent_run_id,
+            )
+        )
+        parent_run_id = run_id
+    return tuple(records)
 
 
 def test_intent_engine_requires_prompt():
@@ -47,7 +70,7 @@ def test_intent_engine_forwards_arguments_and_reports_success():
 
     def fake_run_intent_loop(**kwargs):
         received.update(kwargs)
-        return _record()
+        return _records()
 
     stdout = StringIO()
     exit_code = run_cli(
@@ -68,11 +91,75 @@ def test_intent_engine_forwards_arguments_and_reports_success():
         "prompt": "Reduza o recall.",
         "model_id": "modelo-teste",
         "generator_mode": "cached",
+        "rounds": INTENT_LOOP_DEFAULT_ROUNDS,
     }
     output = stdout.getvalue()
     assert "run_id=run-1" in output
     assert "[OK] intent" in output
     assert "intent.json" in output
+
+
+def test_intent_engine_forwards_the_round_count_from_the_flag():
+    received = {}
+
+    def fake_run_intent_loop(**kwargs):
+        received.update(kwargs)
+        return _records(count=3)
+
+    exit_code = run_cli(
+        argv=["--engine", "intent", "--prompt", "x", "--rounds", "3"],
+        stdout=StringIO(),
+        run_intent_loop=fake_run_intent_loop,
+    )
+
+    assert exit_code == 0
+    assert received["rounds"] == 3
+
+
+def test_intent_engine_rejects_a_non_positive_round_count():
+    stderr = StringIO()
+
+    exit_code = run_cli(
+        argv=["--engine", "intent", "--prompt", "x", "--rounds", "0"],
+        stderr=stderr,
+    )
+
+    assert exit_code == 2
+    assert "--rounds" in stderr.getvalue()
+
+
+def test_intent_engine_ignores_the_legacy_iterations_flag():
+    received = {}
+
+    def fake_run_intent_loop(**kwargs):
+        received.update(kwargs)
+        return _records()
+
+    exit_code = run_cli(
+        argv=["--engine", "intent", "--prompt", "x", "--iterations", "30"],
+        stdout=StringIO(),
+        run_intent_loop=fake_run_intent_loop,
+    )
+
+    assert exit_code == 0
+    assert "iterations" not in received
+
+
+def test_intent_engine_prints_one_summary_per_round():
+    stdout = StringIO()
+
+    exit_code = run_cli(
+        argv=["--engine", "intent", "--prompt", "x"],
+        stdout=stdout,
+        run_intent_loop=lambda **_: _records(count=2),
+    )
+
+    assert exit_code == 0
+    output = stdout.getvalue()
+    assert "run_id=run-1" in output
+    assert "run_id=run-2" in output
+    assert "Rodada 1/2" in output
+    assert "Rodada 2/2" in output
 
 
 def test_intent_engine_reports_nonzero_exit_when_a_stage_failed():
@@ -81,12 +168,24 @@ def test_intent_engine_reports_nonzero_exit_when_a_stage_failed():
     exit_code = run_cli(
         argv=["--engine", "intent", "--prompt", "x"],
         stdout=stdout,
-        run_intent_loop=lambda **_: _record(failed=True),
+        run_intent_loop=lambda **_: _records(failed=True),
     )
 
     assert exit_code == 1
     assert "[FALHOU] generator" in stdout.getvalue()
     assert "falha controlada" in stdout.getvalue()
+
+
+def test_intent_engine_reports_nonzero_exit_when_any_round_has_a_failed_stage():
+    stdout = StringIO()
+
+    exit_code = run_cli(
+        argv=["--engine", "intent", "--prompt", "x"],
+        stdout=stdout,
+        run_intent_loop=lambda **_: _records(count=2, failed=True),
+    )
+
+    assert exit_code == 1
 
 
 def test_intent_engine_turns_exception_into_nonzero_exit_code():
