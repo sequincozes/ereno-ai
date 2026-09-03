@@ -62,9 +62,13 @@ alargar":
 
 1. `intensity`: `low` → `medium` → `high`.
 2. `restrictions.max_fields_changed`: `+1` por rodada, até o número de
-   campos candidatos do efeito (12 em `masquerade_fault`, teto do contrato
-   também 12) — reaproveita `resolve_candidate_paths` para calcular o teto,
-   o mesmo portão que o compilador e o `IntentAgent` usam.
+   campos candidatos do efeito **naquele ataque** — reaproveita
+   `resolve_candidate_paths` para calcular o teto, o mesmo portão que o
+   compilador e o `IntentAgent` usam. Varia por catálogo: 12 em
+   `masquerade_fault`/`lower_recall`, 15 em `random_replay`, só 2 em
+   `injection` (ver `docs/attack_capabilities.md`). O teto do contrato
+   (`domain.intent_spec.MAX_FIELDS_CHANGED_CEILING`, hoje 16) é só uma trava
+   de sanidade acima desse número — nunca o número em si.
 
 A `seed` não é alavanca: `intent_compiler._select_field_paths` embaralha os
 candidatos com `random.Random(intent.seed)` e corta em `[:limite]`, então
@@ -153,6 +157,14 @@ para exercitar mais rodadas sem depender de medição real). Use
   tanto mensagens de falha quanto a mensagem "intenção herdada" — renomear
   para algo como `detail` é uma quebra de contrato sem ganho funcional por
   si só.
+- **Métrica de pressão de recurso**: `increase_resource_pressure` não tem
+  entrada em `_OBJECTIVE_METRIC_BY_EFFECT` e nenhum `AttackCapability` o
+  anuncia (ver `docs/attack_capabilities.md`) — `DetectionReport` não carrega
+  nada que meça pressão de recurso sem inventar uma medição arbitrária
+  (`latency_ms` mede o processo Python local, não o barramento GOOSE). Uma
+  métrica honesta viria de `DatasetBundle` (volume/taxa de linhas de ataque),
+  não de `DetectionReport` — exigiria uma segunda fonte na assinatura de
+  `decide_feedback`, mudança de contrato fora do escopo deste épico.
 
 ## Testes
 
