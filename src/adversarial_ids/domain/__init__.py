@@ -27,6 +27,13 @@ from adversarial_ids.domain.attack_config import (
     TrapAreaConfig,
 )
 from adversarial_ids.domain.iteration_record import IterationRecord
+from adversarial_ids.domain.intent_spec import (
+    DesiredEffect,
+    IntentIntensity,
+    IntentObjective,
+    IntentRestrictions,
+    IntentSpec,
+)
 from adversarial_ids.domain.metrics import FeatureImportance, Metrics
 
 from adversarial_ids.domain.strategist_output import (  # M1 · issue #4
@@ -50,4 +57,9 @@ __all__ = [
     "Metrics",
     "FeatureImportance",
     "IterationRecord",
+    "IntentSpec",
+    "IntentRestrictions",
+    "IntentObjective",
+    "DesiredEffect",
+    "IntentIntensity",
 ]
