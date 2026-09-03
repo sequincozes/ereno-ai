@@ -52,7 +52,9 @@ def submit_intent_spec(
     Args:
         objective: Objetivo de alto nível ("assess_ids_robustness" ou
             "evade_detection").
-        base_attack: Chave do ataque ERENO a customizar (ex.: "masquerade_fault").
+        base_attack: Chave do ataque ERENO a customizar. Use uma das chaves
+            listadas na seção "Catálogo de capacidades" das instruções (ex.:
+            "masquerade_fault", "flooding", "grayhole").
         desired_effect: Efeito mensurável desejado (ex.: "lower_recall").
         intensity: Intensidade da alteração ("low", "medium" ou "high").
         allowed_fields: Se o prompt restringir explicitamente quais campos
@@ -60,7 +62,8 @@ def submit_intent_spec(
             o prompt não impuser essa restrição.
         forbidden_fields: Caminhos dot que o prompt proíbe alterar.
         max_fields_changed: Máximo de campos que o compilador pode alterar
-            (1 a 12).
+            (1 a 16; o teto efetivo é o número de campos do ataque escolhido
+            capazes do efeito pedido, que pode ser bem menor).
         seed: Semente determinística para reprodutibilidade (0 a 4294967295).
     """
     errors: list[str] = []
