@@ -1,9 +1,9 @@
 """orchestrator/intent_loop.py — Orchestrator v2 do pipeline intent-driven (E3).
 
-Encadeia INTENT → GENERATOR → ERENO → PREPROCESS → DETECTOR sobre peças já
-existentes — nenhuma lógica de geração, compilação ou detecção nova aqui,
-só o controlador que amarra os estágios e registra cada um como um
-``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
+Encadeia INTENT → GENERATOR → ERENO → PREPROCESS → DETECTOR → DEFENDER sobre
+peças já existentes — nenhuma lógica de geração, compilação, detecção ou
+defesa nova aqui, só o controlador que amarra os estágios e registra cada um
+como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
 
 - INTENT      — ``IntentLike.interpret(prompt)`` (o ``IntentAgent`` real ou
   um stub de teste), já validado pelos dois portões de ``compile_intent``.
@@ -15,10 +15,15 @@ só o controlador que amarra os estágios e registra cada um como um
 - DETECTOR    — ``IdsEvaluator`` (Random Forest já existente) treinado no
   baseline do ataque e avaliado sobre o ``DatasetBundle`` aprovado,
   empacotado como ``DetectionReport`` (``core.detection_reporter``).
+- DEFENDER    — ``DefenderLike.defend(report, report_ref=...)`` (E5, o
+  ``DefenderAgent`` real ou um stub de teste), já validado por
+  ``agents.defender.tools.validate_plan_against_report`` contra o
+  ``DetectionReport`` da mesma execução — toda evidência do ``DefensePlan``
+  precisa bater com um valor real do relatório.
 
-DEFENDER (E5, ``DefensePlan``) e FEEDBACK (E10, política de retroalimentação)
-não têm lógica própria nesta entrega — entram no ``LoopRecord`` como
-estágios ``skipped`` com o motivo, nunca fabricados como se tivessem rodado.
+FEEDBACK (E10, política de retroalimentação) não tem lógica própria nesta
+entrega — entra no ``LoopRecord`` como estágio ``skipped`` com o motivo,
+nunca fabricado como se tivesse rodado.
 
 Diferente do ``AdversarialWorkflow`` (loop legado Strategist↔Analyst, N
 iterações de uma ``AttackConfig`` ajustada por tool calling livre), este
@@ -66,6 +71,7 @@ from adversarial_ids.core.generator_runner import GeneratorRunner
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
 from adversarial_ids.core.intent_compiler import compile_attack_candidate
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
+from adversarial_ids.domain.defense_plan import DefensePlan
 from adversarial_ids.domain.detection_report import DetectionReport
 from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
@@ -83,6 +89,21 @@ class IntentLike(Protocol):
     def interpret(self, prompt: str) -> IntentSpec: ...
 
 
+@runtime_checkable
+class DefenderLike(Protocol):
+    """Qualquer gerador de DefensePlan (``DefenderAgent`` real ou stub de teste).
+
+    Mais largo que ``IntentLike`` por um kwarg: ``report_ref`` é o caminho
+    determinístico do ``detection_report.json`` desta execução, repassado
+    para que ``Evidence.detection_report_ref`` também seja validável contra
+    a execução real, não apenas contra os valores das métricas.
+    """
+
+    def defend(
+        self, report: DetectionReport, *, report_ref: str | None = None
+    ) -> DefensePlan: ...
+
+
 class IntentLoopOrchestrator:
     """Controlador do pipeline intent-driven (E3), uma intenção por execução."""
 
@@ -90,6 +111,7 @@ class IntentLoopOrchestrator:
         self,
         *,
         intent_agent: IntentLike,
+        defender_agent: DefenderLike,
         generator_mode: str = "cached",
         output_dir: Path | str = INTENT_LOOP_OUTPUT_DIR,
         save_path: Path | str | None = LOOP_RECORDS_PATH,
@@ -103,6 +125,7 @@ class IntentLoopOrchestrator:
                 f"Use um de {_VALID_GENERATOR_MODES}."
             )
         self.intent_agent = intent_agent
+        self.defender_agent = defender_agent
         self.generator_mode = generator_mode
         self.output_dir = Path(output_dir)
         self.save_path = Path(save_path) if save_path is not None else None
@@ -179,10 +202,19 @@ class IntentLoopOrchestrator:
                 persist_as="dataset_bundle.json",
             )
 
-            self._stage(
+            detection_report = self._stage(
                 stages, run_dir, "detector",
                 lambda: self._run_detector(generator, spec, dataset_bundle),
                 persist_as="detection_report.json",
+            )
+
+            report_ref = str(run_dir / "detection_report.json")
+            self._stage(
+                stages, run_dir, "defender",
+                lambda: self.defender_agent.defend(
+                    detection_report, report_ref=report_ref
+                ),
+                persist_as="defense_plan.json",
             )
         except Exception:
             # A causa já foi anexada ao LoopStage correspondente por
@@ -191,13 +223,6 @@ class IntentLoopOrchestrator:
             # abaixo do mesmo jeito.
             pass
         else:
-            stages.append(
-                LoopStage(
-                    name="defender",
-                    status=LoopStageStatus.SKIPPED,
-                    error="DefensePlan (E5) ainda não implementado nesta entrega.",
-                )
-            )
             stages.append(
                 LoopStage(
                     name="feedback",
