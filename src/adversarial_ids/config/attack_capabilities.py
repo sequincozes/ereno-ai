@@ -114,6 +114,10 @@ MASQUERADE_FAULT_CAPABILITY = AttackCapability(
             value_type="string",
             description="Estratégia de evolução do sqNum durante o ataque.",
             effects=_DETECTION_EFFECTS,
+            # O gerador ERENO só distingue "fast" (branch equalsIgnoreCase) de
+            # qualquer outro valor — confirmado no bytecode do JAR
+            # (MasqueradeFakeFaultCreatorC). "normal" é o alternante estável.
+            choices=("fast", "normal"),
         ),
         FieldCapability(
             path="ttlMsValues",
@@ -184,8 +188,13 @@ def get_attack_capability(attack_key: str) -> AttackCapability:
         ) from None
 
 
-def validate_intent_capability(intent: IntentSpec) -> AttackCapability:
-    """Valida se a intenção pode ser compilada usando somente a allowlist."""
+def resolve_candidate_paths(intent: IntentSpec) -> tuple[AttackCapability, frozenset[str]]:
+    """Valida a allowlist e devolve os campos editáveis capazes do efeito.
+
+    Compartilhado entre ``validate_intent_capability`` (portão do IntentAgent)
+    e o compilador spec→AttackConfig (épico E2) — ambos precisam do mesmo
+    conjunto de campos candidatos, calculado uma única vez.
+    """
 
     capability = get_attack_capability(intent.base_attack)
     if intent.objective not in capability.supported_objectives:
@@ -220,4 +229,11 @@ def validate_intent_capability(intent: IntentSpec) -> AttackCapability:
             "As restrições removem todos os campos capazes de produzir o efeito "
             f"{intent.desired_effect.value!r}."
         )
+    return capability, frozenset(candidates)
+
+
+def validate_intent_capability(intent: IntentSpec) -> AttackCapability:
+    """Valida se a intenção pode ser compilada usando somente a allowlist."""
+
+    capability, _ = resolve_candidate_paths(intent)
     return capability
