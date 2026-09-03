@@ -31,7 +31,7 @@ from adversarial_ids.config.settings import (  # noqa: E402
 )
 from adversarial_ids.core.generator_runner import GeneratorRunner  # noqa: E402
 from adversarial_ids.core.ids_evaluator import IdsEvaluator  # noqa: E402
-from adversarial_ids.domain import AttackConfig, IterationRecord, Metrics, StrategistOutput  # noqa: E402
+from adversarial_ids.domain import IterationRecord, Metrics, MasqueradeFaultConfig, StrategistOutput  # noqa: E402
 from adversarial_ids.shared.json_io import load_json, save_json  # noqa: E402
 from adversarial_ids.shared.json_patch import apply_patch_to_json  # noqa: E402
 from adversarial_ids.shared.validator import validate_and_clamp_attack_config  # noqa: E402
@@ -52,7 +52,7 @@ def _record(
     """Valida via schemas de domain/ (#2) e devolve o dict do IterationRecord."""
     record = IterationRecord(
         iteration=iteration,
-        attack_config=AttackConfig.model_validate(attack_config),
+        attack_config=MasqueradeFaultConfig.model_validate(attack_config),
         strategist_output=strategist_output,
         metrics=Metrics.model_validate(metrics),
         analyst_output=analyst_output,

@@ -2,7 +2,8 @@
 
 Define o formato que o agente Estrategista deve produzir a cada iteração:
 reasoning (texto livre), persona (conservative/aggressive) e lista de alterações
-(``Change``) a aplicar no ``AttackConfig``.
+(``Change``) a aplicar na configuração do ataque (schema variável — o loop
+legado aceita qualquer um dos ataques registrados, não só o masquerade_fault).
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 
 
 class Change(BaseModel):
-    """Uma alteração atómica em um campo editável do ``AttackConfig``."""
+    """Uma alteração atómica em um campo editável da config do ataque."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -24,6 +24,8 @@ from adversarial_ids.agents.orchestrator.intent_loop import (
     IntentLike,
     IntentLoopOrchestrator,
 )
+from adversarial_ids.config.attack_capabilities import get_attack_capability
+from adversarial_ids.config.attacks_registry import get_attack_spec, list_attack_keys
 from adversarial_ids.domain.defense_plan import DefensePlan
 from adversarial_ids.domain.detection_report import DetectionReport
 from adversarial_ids.domain.intent_spec import (
@@ -39,20 +41,30 @@ from adversarial_ids.shared.loop_record_store import load_loop_records
 ATTACK_LABEL = "masquerade_fake_fault"
 
 
-def _tiny_seed(path: Path, *, attack_rows: int = 10, normal_rows: int = 10) -> Path:
+def _tiny_seed(
+    path: Path,
+    *,
+    attack_rows: int = 10,
+    normal_rows: int = 10,
+    attack_label: str = ATTACK_LABEL,
+) -> Path:
     """Espelha ``_tiny_labeled_seed`` de ``test_orchestrator_workflow.py``.
 
     Colunas nomeadas ``feat1``/``feat2`` (não ``f1``/``f2``) de propósito: o
     portão do Defensor (E5) reserva a chave ``f1`` para o F1-score do
     ``DetectionReport`` — um nome de feature real do ERENO nunca colide (são
     CamelCase, ex. ``TrapAreaSum``), mas o fixture sintético colidiria.
+
+    ``attack_label`` é parametrizável para que o mesmo helper sirva qualquer
+    ataque registrado — o gate E4 (``build_dataset_bundle``) exige que o
+    rótulo do trace bata com ``AttackSpec.label`` do ataque da rodada.
     """
 
     rows = ["feat1,feat2,class"]
     for i in range(normal_rows):
         rows.append(f"{i % 5},{i % 3},normal")
     for i in range(attack_rows):
-        rows.append(f"{100 + i % 5},{10 + i % 3},{ATTACK_LABEL}")
+        rows.append(f"{100 + i % 5},{10 + i % 3},{attack_label}")
     path.write_text("\n".join(rows) + "\n", encoding="utf-8")
     return path
 
@@ -251,6 +263,53 @@ def test_run_completes_all_seven_stages_including_feedback(tmp_path):
     assert defender.received_reports[0].model_name == "random_forest"
     assert defender.received_refs[0] is not None
     assert defender.received_refs[0].endswith("detection_report.json")
+
+
+@pytest.mark.parametrize("attack_key", list_attack_keys())
+def test_every_catalogued_attack_runs_the_seven_stages_in_cached_mode(tmp_path, attack_key):
+    """Prova que os 10 ataques novos rodam o pipeline ponta a ponta sem Java
+    nem Groq — mesmo que, na prática, só sejam fisicamente mensuráveis em
+    ``--generator-mode jar`` (ver README, limitação conhecida do modo cached)."""
+    spec = get_attack_spec(attack_key)
+    capability = get_attack_capability(attack_key)
+    field = capability.fields[0]
+    effect = next(iter(field.effects))
+
+    intent = IntentSpec.model_validate(
+        {
+            "source_prompt": f"teste ponta a ponta: {attack_key}",
+            "objective": IntentObjective.EVADE_DETECTION.value
+            if effect != DesiredEffect.INCREASE_ATTACK_ACTIVITY
+            else IntentObjective.ASSESS_IDS_ROBUSTNESS.value,
+            "base_attack": attack_key,
+            "desired_effect": effect.value,
+            "restrictions": {"allowed_fields": [field.path], "max_fields_changed": 1},
+        }
+    )
+    seed = _tiny_seed(tmp_path / "seed.csv", attack_label=spec.label)
+    orchestrator = _orchestrator(tmp_path, _StubIntentAgent(intent), cached_dataset_path=seed)
+
+    record = orchestrator.run(f"teste ponta a ponta: {attack_key}")
+
+    statuses = {stage.name: stage.status for stage in record.stages}
+    assert statuses == {
+        name: LoopStageStatus.SUCCEEDED
+        for name in (
+            "intent", "generator", "ereno", "preprocess", "detector", "defender",
+            "feedback",
+        )
+    }
+
+
+def test_the_four_delayed_replay_variants_share_one_dataset_label():
+    """Documenta em código o caveat do README: o gate E4 ancora a classe de
+    ataque em ``AttackSpec.label``, e as 4 variantes uc10 compartilham o mesmo
+    rótulo — uma campanha em ``delayed_replay_double_drop`` produz um
+    ``DetectionReport`` indistinguível do ``delayed_replay`` base."""
+    variants = [k for k in list_attack_keys() if k.startswith("delayed_replay")]
+    labels = {get_attack_spec(k).label for k in variants}
+    assert len(variants) == 4
+    assert labels == {"delayed_replay"}
 
 
 def test_run_uses_the_compiled_intents_seed_not_the_default_argument(tmp_path):

@@ -1,0 +1,216 @@
+[
+  {
+    "id": "valid-random-replay",
+    "category": "valid",
+    "prompt": "Reduza o recall do replay aleatório apertando o gap entre mensagens da rajada.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "random_replay",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["burst.gapMs.min", "burst.gapMs.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-inverse-replay",
+    "category": "valid",
+    "prompt": "Avalie a robustez do IDS aumentando a taxa de reenvio invertido.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "inverse_replay",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "allowed_fields": ["count.lambda"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-injection",
+    "category": "valid",
+    "prompt": "Reduza o F1 da injeção variando o número de mensagens injetadas.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "injection",
+      "desired_effect": "lower_f1",
+      "intensity": "low",
+      "allowed_fields": ["numInjectedMessages"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-high-stnum",
+    "category": "valid",
+    "prompt": "Diminua o salto de stNum do ataque high_stnum para mimetizar tráfego normal.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "high_stnum",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "medium",
+      "allowed_fields": ["jump.min", "jump.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-flooding",
+    "category": "valid",
+    "prompt": "Reduza a detecção do flooding desligando o avanço de stNum a cada pacote.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "flooding",
+      "desired_effect": "lower_f1",
+      "intensity": "high",
+      "allowed_fields": ["stnumEveryPacket"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-grayhole",
+    "category": "valid",
+    "prompt": "Reduza o recall do grayhole diminuindo a taxa de descarte de mensagens.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "grayhole",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["dropRate.min", "dropRate.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-delayed-replay",
+    "category": "valid",
+    "prompt": "Torne o replay atrasado mais furtivo aumentando o intervalo entre rajadas.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "delayed_replay",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["burstInterval.min", "burstInterval.max"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-delayed-replay-backoff",
+    "category": "valid",
+    "prompt": "Aumente o multiplicador de taxa do backoff do replay atrasado.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "delayed_replay_backoff",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "allowed_fields": ["rateMultiplier"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "valid-delayed-replay-batch-dump",
+    "category": "valid",
+    "prompt": "Reduza o micro-gap do despejo em lote do replay atrasado.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "delayed_replay_batch_dump",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "high",
+      "allowed_fields": ["microGapMs"],
+      "seed": 42
+    }
+  },
+  {
+    "id": "invalid-order-by-has-no-known-enum",
+    "category": "invalid",
+    "prompt": "Mude o critério de ordenação do replay atrasado.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "delayed_replay",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["orderBy"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-random-seed-is-not-a-lever",
+    "category": "invalid",
+    "prompt": "Mude a semente aleatória da injeção.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "injection",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "allowed_fields": ["randomSeed"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-synthetic-range-is-dead-at-baseline",
+    "category": "invalid",
+    "prompt": "Mude o intervalo de stNum sintético da injeção.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "injection",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "allowed_fields": ["stNum.min"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-protect-status-changes-gate-excluded",
+    "category": "invalid",
+    "prompt": "Ligue a proteção de mudança de estado do grayhole.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "grayhole",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["protectStatusChanges"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  },
+  {
+    "id": "invalid-resource-pressure-on-flooding",
+    "category": "invalid",
+    "prompt": "Sature os recursos do sistema com flooding.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "flooding",
+      "desired_effect": "increase_resource_pressure",
+      "intensity": "medium",
+      "seed": 42
+    },
+    "expected_error": "não é suportado"
+  },
+  {
+    "id": "invalid-narrow-catalog-exhausted",
+    "category": "invalid",
+    "prompt": "Aumente a atividade da injeção sem mexer no número de mensagens.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "injection",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "forbidden_fields": ["numInjectedMessages"],
+      "seed": 42
+    },
+    "expected_error": "removem todos os campos"
+  },
+  {
+    "id": "invalid-cross-attack-path-leakage",
+    "category": "invalid",
+    "prompt": "Reduza o recall do flooding mexendo no dropRate do grayhole.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "flooding",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "allowed_fields": ["dropRate.min"],
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist"
+  }
+]

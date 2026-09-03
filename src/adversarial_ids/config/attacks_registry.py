@@ -69,6 +69,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay aleatório (uc01): recaptura e reenvia mensagens legítimas com "
             "janelas, atrasos e rajadas variáveis."
         ),
+        intent_capability_id="random_replay.v1",
     ),
     AttackSpec(
         key="inverse_replay",
@@ -80,6 +81,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay invertido (uc02): reenvia blocos de mensagens em ordem invertida, "
             "com atrasos e rajadas."
         ),
+        intent_capability_id="inverse_replay.v1",
     ),
     AttackSpec(
         key="injection",
@@ -91,6 +93,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Injeção (uc05): insere mensagens (clonadas ou sintéticas) segundo um "
             "padrão (random/uniform/burst/synthetic)."
         ),
+        intent_capability_id="injection.v1",
     ),
     AttackSpec(
         key="high_stnum",
@@ -102,6 +105,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Injeção com stNum elevado (uc06): força saltos anômalos de stNum "
             "simulando transições de estado inexistentes."
         ),
+        intent_capability_id="high_stnum.v1",
     ),
     AttackSpec(
         key="flooding",
@@ -113,6 +117,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Flooding / alta taxa (uc07): rajadas de mensagens com stNum a cada pacote "
             "e gaps mínimos, saturando o barramento."
         ),
+        intent_capability_id="flooding.v1",
     ),
     AttackSpec(
         key="grayhole",
@@ -124,6 +129,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Grayhole (uc08): descarte seletivo de mensagens em rajadas, com atrasos "
             "para mascarar o ataque."
         ),
+        intent_capability_id="grayhole.v1",
     ),
     AttackSpec(
         key="delayed_replay",
@@ -135,6 +141,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay atrasado (uc10): retém mensagens e as reenvia mais tarde, "
             "controlando intervalo de rajada e atraso de rede."
         ),
+        intent_capability_id="delayed_replay.v1",
     ),
     AttackSpec(
         key="delayed_replay_backoff",
@@ -146,6 +153,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay atrasado com backoff (uc10): variante que reenvia com "
             "multiplicador de taxa (rateMultiplier)."
         ),
+        intent_capability_id="delayed_replay_backoff.v1",
     ),
     AttackSpec(
         key="delayed_replay_batch_dump",
@@ -157,6 +165,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay atrasado em lote (uc10): despeja as mensagens retidas em bloco, "
             "com micro-gaps entre elas."
         ),
+        intent_capability_id="delayed_replay_batch_dump.v1",
     ),
     AttackSpec(
         key="delayed_replay_double_drop",
@@ -168,6 +177,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay atrasado com duplo descarte (uc10): variante que descarta e "
             "reenvia mensagens forjadas."
         ),
+        intent_capability_id="delayed_replay_double_drop.v1",
     ),
 )
 

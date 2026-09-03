@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from adversarial_ids.core.experiment_memory import ExperimentMemory
-from adversarial_ids.domain import AttackConfig, IterationRecord, Metrics
+from adversarial_ids.domain import IterationRecord, Metrics, MasqueradeFaultConfig
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 BASELINE_ATTACK_JSON = BASE_DIR / "inputs" / "uc03_masquerade_fault.json"
@@ -71,7 +71,7 @@ def test_add_record_accepts_prebuilt_typed_record():
 
     record = IterationRecord(
         iteration=0,
-        attack_config=AttackConfig.model_validate(_attack_json()),
+        attack_config=MasqueradeFaultConfig.model_validate(_attack_json()),
         metrics=Metrics.model_validate(_variant_metrics()),
     )
     memory.add_record(record)

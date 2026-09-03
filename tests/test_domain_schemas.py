@@ -10,14 +10,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from adversarial_ids.domain import AttackConfig, IterationRecord, Metrics, StrategistOutput
+from adversarial_ids.domain import IterationRecord, Metrics, MasqueradeFaultConfig, StrategistOutput
 
 BASE_DIR = Path(__file__).resolve().parents[1]
 BASELINE_ATTACK_JSON = BASE_DIR / "inputs" / "uc03_masquerade_fault.json"
 
 
 # --------------------------------------------------------------------------- #
-# AttackConfig                                                                 #
+# MasqueradeFaultConfig                                                                 #
 # --------------------------------------------------------------------------- #
 def test_attack_config_round_trips_baseline_json():
     """O JSON baseline valida e ``model_dump`` reproduz o arquivo idêntico.
@@ -27,7 +27,7 @@ def test_attack_config_round_trips_baseline_json():
     """
     raw = json.loads(BASELINE_ATTACK_JSON.read_text(encoding="utf-8"))
 
-    config = AttackConfig.model_validate(raw)
+    config = MasqueradeFaultConfig.model_validate(raw)
     dumped = config.model_dump()
 
     assert dumped == raw
@@ -35,7 +35,7 @@ def test_attack_config_round_trips_baseline_json():
 
 def test_attack_config_has_twelve_editable_fields_intact():
     raw = json.loads(BASELINE_ATTACK_JSON.read_text(encoding="utf-8"))
-    config = AttackConfig.model_validate(raw)
+    config = MasqueradeFaultConfig.model_validate(raw)
 
     assert config.fault.prob == 0.6
     assert config.fault.durationMs.min == 50
@@ -56,7 +56,7 @@ def test_attack_config_rejects_unknown_field():
     raw["campoInexistente"] = 123
 
     with pytest.raises(ValidationError):
-        AttackConfig.model_validate(raw)
+        MasqueradeFaultConfig.model_validate(raw)
 
 
 def test_attack_config_rejects_out_of_range_probability():
@@ -64,7 +64,7 @@ def test_attack_config_rejects_out_of_range_probability():
     raw["fault"]["prob"] = 1.5
 
     with pytest.raises(ValidationError):
-        AttackConfig.model_validate(raw)
+        MasqueradeFaultConfig.model_validate(raw)
 
 
 def test_attack_config_rejects_min_greater_than_max():
@@ -72,7 +72,7 @@ def test_attack_config_rejects_min_greater_than_max():
     raw["analog"]["deltaAbs"]["min"] = 0.9  # max é 0.8
 
     with pytest.raises(ValidationError):
-        AttackConfig.model_validate(raw)
+        MasqueradeFaultConfig.model_validate(raw)
 
 
 def test_attack_config_rejects_invalid_cb_status():
@@ -80,7 +80,7 @@ def test_attack_config_rejects_invalid_cb_status():
     raw["cbStatus"] = 2
 
     with pytest.raises(ValidationError):
-        AttackConfig.model_validate(raw)
+        MasqueradeFaultConfig.model_validate(raw)
 
 
 # --------------------------------------------------------------------------- #
@@ -175,7 +175,7 @@ def test_iteration_record_stitches_schemas():
 
     record = IterationRecord(
         iteration=1,
-        attack_config=AttackConfig.model_validate(raw_attack),
+        attack_config=MasqueradeFaultConfig.model_validate(raw_attack),
         strategist_output=StrategistOutput(
             persona="aggressive",
             changes=[],
@@ -199,7 +199,7 @@ def test_iteration_record_rejects_negative_iteration():
     with pytest.raises(ValidationError):
         IterationRecord(
             iteration=-1,
-            attack_config=AttackConfig.model_validate(
+            attack_config=MasqueradeFaultConfig.model_validate(
                 json.loads(BASELINE_ATTACK_JSON.read_text(encoding="utf-8"))
             ),
             metrics=Metrics(),

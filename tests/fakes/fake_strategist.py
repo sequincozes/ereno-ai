@@ -14,7 +14,7 @@ from typing import Any
 
 from adversarial_ids.domain.strategist_output import Change, StrategistOutput
 
-# Sequência fixa de jogadas do "Red Team", sobre campos editáveis do AttackConfig.
+# Sequência fixa de jogadas do "Red Team", sobre campos editáveis da config do ataque.
 _SCRIPTED_MOVES: list[dict[str, Any]] = [
     {"persona": "aggressive", "field": "fault.prob", "value": 0.75},
     {"persona": "conservative", "field": "trapArea.spikeProb", "value": 0.6},

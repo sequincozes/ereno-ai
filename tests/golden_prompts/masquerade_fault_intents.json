@@ -192,15 +192,16 @@
   {
     "id": "invalid-01",
     "category": "invalid",
-    "prompt": "Aplique essa evasão no ataque random_replay.",
+    "prompt": "Reduza o recall do masquerade_fault mexendo no dropRate do grayhole.",
     "payload": {
       "objective": "evade_detection",
-      "base_attack": "random_replay",
+      "base_attack": "masquerade_fault",
       "desired_effect": "lower_recall",
       "intensity": "medium",
+      "allowed_fields": ["dropRate.min"],
       "seed": 42
     },
-    "expected_error": "ainda não possui capacidade intent-driven"
+    "expected_error": "fora da allowlist"
   },
   {
     "id": "invalid-02",

@@ -1,7 +1,7 @@
 """AttackCandidate — proposta de configuração compilada a partir de uma intenção.
 
 Contrato congelado (ação 72h #2). Materializa o resultado do compilador
-spec→AttackConfig (épico E2): a intenção de origem, a configuração completa
+spec→config compilada (épico E2): a intenção de origem, a configuração completa
 resultante, o diff explícito em relação à baseline e a justificativa. A
 allowlist de campos e as regras do registry são validadas por
 ``validate_intent_capability`` antes de um ``AttackCandidate`` existir — este

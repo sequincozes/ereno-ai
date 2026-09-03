@@ -1,4 +1,4 @@
-"""Compilador spec→AttackConfig (épico E2, ação 72h #5 do plano de 60 dias).
+"""Compilador spec→AttackCandidate (épico E2, ação 72h #5 do plano de 60 dias).
 
 Cobre o caminho ``IntentSpec`` → ``AttackCandidate`` para ``masquerade_fault``:
 seleção determinística de campos, direção do efeito, clamps de pares
@@ -19,7 +19,7 @@ from adversarial_ids.core.intent_compiler import (
     compile_attack_candidate,
 )
 from adversarial_ids.domain.attack_candidate import AttackCandidate
-from adversarial_ids.domain.attack_config import AttackConfig
+from adversarial_ids.domain.attack_configs import MasqueradeFaultConfig
 from adversarial_ids.domain.intent_spec import (
     DesiredEffect,
     IntentIntensity,
@@ -57,7 +57,7 @@ def test_valid_and_ambiguous_intents_compile_to_a_consistent_candidate(entry):
     assert isinstance(candidate, AttackCandidate)
     assert candidate.attack_key == intent.base_attack
     assert candidate.source_intent == intent
-    AttackConfig.model_validate(candidate.config)
+    MasqueradeFaultConfig.model_validate(candidate.config)
 
     changed_paths = {change.path for change in candidate.diff}
     assert len(changed_paths) == len(candidate.diff)
@@ -151,7 +151,7 @@ def test_analog_delta_max_alone_is_clamped_to_the_unchanged_min_floor():
     Em intensidade alta, decrescer ``analog.deltaAbs.max`` sozinho levaria o
     valor abaixo do ``analog.deltaAbs.min`` (0.2) da baseline, que não foi
     selecionado. ``_clamp_paired`` trava o teto no piso ainda vigente em vez
-    de deixar o ``AttackConfig`` rejeitar a config compilada.
+    de deixar o schema por ataque rejeitar a config compilada.
     """
     intent = _intent(
         desired_effect=DesiredEffect.MIMIC_NORMAL_TRAFFIC,
@@ -199,4 +199,30 @@ def test_compiled_config_round_trips_through_json_like_the_baseline_file():
 
     reloaded = json.loads(json.dumps(candidate.config))
     assert reloaded == candidate.config
-    AttackConfig.model_validate(reloaded)
+    MasqueradeFaultConfig.model_validate(reloaded)
+
+
+def test_clamp_pairs_a_range_the_old_hardcoded_map_never_listed():
+    """``_paired_sibling_path`` é estrutural — detecta qualquer objeto
+    ``{min, max}``, não só os 3 pares do ``masquerade_fault`` que o antigo
+    ``_PAIRED_SIBLING`` listava à mão. ``random_replay.burst`` tem ``min``/
+    ``max`` convivendo com ``prob`` e ``gapMs`` no mesmo objeto — um caso que
+    uma lista de 6 caminhos nunca cobriria.
+    """
+    intent = IntentSpec.model_validate(
+        {
+            "source_prompt": "Reduza a atividade do replay aleatório mexendo só no teto da rajada.",
+            "objective": IntentObjective.EVADE_DETECTION,
+            "base_attack": "random_replay",
+            "desired_effect": DesiredEffect.MIMIC_NORMAL_TRAFFIC,
+            "intensity": IntentIntensity.HIGH,
+            "restrictions": IntentRestrictions(allowed_fields=("burst.max",)),
+        }
+    )
+    candidate = compile_attack_candidate(intent)
+
+    change = candidate.diff[0]
+    assert change.path == "burst.max"
+    # baseline: burst.min=2, burst.max=5 — decrescer só o teto não pode
+    # deixá-lo abaixo do piso ainda vigente.
+    assert change.new_value >= candidate.config["burst"]["min"]
