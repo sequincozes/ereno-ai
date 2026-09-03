@@ -16,6 +16,7 @@ from adversarial_ids.config.attacks_registry import (
 )
 from adversarial_ids.config.settings import (
     GENERATOR_MODE,
+    INTENT_LOOP_DEFAULT_ROUNDS,
     ITERATION_HISTORY_PATH,
     LOOP_RECORDS_PATH,
     MODEL_ID,
@@ -27,7 +28,7 @@ from adversarial_ids.interfaces.experiment_runner import (
     create_default_runner,
 )
 
-RunIntentLoop = Callable[..., LoopRecord]
+RunIntentLoop = Callable[..., tuple[LoopRecord, ...]]
 
 
 def _dashboard_app_path() -> Path:
@@ -108,6 +109,17 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--rounds",
+        type=int,
+        default=INTENT_LOOP_DEFAULT_ROUNDS,
+        help=(
+            "Apenas com --engine intent: rodadas encadeadas pela política de "
+            "feedback (E10). Da segunda em diante a intenção vem da política, "
+            "não de uma nova chamada de LLM. Distinto de --iterations, que "
+            "pertence ao loop legado (--engine live/demo)."
+        ),
+    )
+    parser.add_argument(
         "--orchestration",
         choices=("team", "direct"),
         default="team",
@@ -153,8 +165,13 @@ def _stage_marker(status: LoopStageStatus) -> str:
     }.get(status, status.value)
 
 
-def _print_loop_record_summary(record: LoopRecord, *, stdout: TextIO) -> None:
-    print(f"\nLoop intent-driven concluído: run_id={record.run_id}", file=stdout)
+def _print_loop_record_summary(
+    record: LoopRecord, *, stdout: TextIO, round_label: str | None = None
+) -> None:
+    header = f"\nLoop intent-driven concluído: run_id={record.run_id}"
+    if round_label:
+        header += f" ({round_label})"
+    print(header, file=stdout)
     for stage in record.stages:
         line = f"  [{_stage_marker(stage.status)}] {stage.name}"
         if stage.artifact_ref:
@@ -162,6 +179,13 @@ def _print_loop_record_summary(record: LoopRecord, *, stdout: TextIO) -> None:
         if stage.error:
             line += f" ({stage.error})"
         print(line, file=stdout)
+
+
+def _print_campaign_summary(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> None:
+    total = len(records)
+    for index, record in enumerate(records, start=1):
+        round_label = f"Rodada {index}/{total}" if total > 1 else None
+        _print_loop_record_summary(record, stdout=stdout, round_label=round_label)
     print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
 
 
@@ -179,16 +203,21 @@ def _run_intent_engine(
         )
         return 2
 
+    if args.rounds < 1:
+        print(f"Erro: --rounds precisa ser >= 1 (veio {args.rounds}).", file=stderr)
+        return 2
+
     if run_intent_loop is None:
         from adversarial_ids.agents.orchestrator.intent_live import (
             run_intent_loop as run_intent_loop,
         )
 
     try:
-        record = run_intent_loop(
+        records = run_intent_loop(
             prompt=args.prompt,
             model_id=args.model_id,
             generator_mode=args.generator_mode,
+            rounds=args.rounds,
         )
     except KeyboardInterrupt:
         print("Execução interrompida pelo usuário.", file=stderr)
@@ -197,9 +226,11 @@ def _run_intent_engine(
         print(f"Erro ao executar o loop intent-driven: {error}", file=stderr)
         return 1
 
-    _print_loop_record_summary(record, stdout=stdout)
+    _print_campaign_summary(records, stdout=stdout)
     has_failed_stage = any(
-        stage.status == LoopStageStatus.FAILED for stage in record.stages
+        stage.status == LoopStageStatus.FAILED
+        for record in records
+        for stage in record.stages
     )
     return 1 if has_failed_stage else 0
 
