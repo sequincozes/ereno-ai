@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 def _now_iso() -> str:
@@ -63,3 +63,19 @@ class LoopRecord(BaseModel):
     cost_usd: float | None = Field(default=None, ge=0.0)
     total_duration_seconds: float | None = Field(default=None, ge=0.0)
     created_at: str = Field(default_factory=_now_iso)
+
+    # Linhagem da campanha multi-rodada (E10). Campos aditivos com default:
+    # ``schema_version`` continua 1 porque um registro gravado antes do E10
+    # carrega normalmente (round=1, sem pai) e o formato em disco
+    # ({"loop_records": [...]}) não muda.
+    round: int = Field(default=1, ge=1)
+    parent_run_id: str | None = None
+
+    @model_validator(mode="after")
+    def _first_round_has_no_parent(self) -> "LoopRecord":
+        if (self.round == 1) != (self.parent_run_id is None):
+            raise ValueError(
+                "A rodada 1 é a única sem parent_run_id "
+                f"(round={self.round}, parent_run_id={self.parent_run_id!r})."
+            )
+        return self
