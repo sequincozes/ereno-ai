@@ -138,3 +138,13 @@ INTENT_LOOP_OUTPUT_DIR = OUTPUTS_DIR / "intent_loop"
 # rejeitado antes de alimentar o detector (ver core/dataset_bundle_builder.py).
 INTENT_LOOP_MIN_ATTACK_ROWS = 5
 INTENT_LOOP_MIN_NORMAL_ROWS = 5
+
+# Campanha multi-rodada do estágio FEEDBACK (E10). O default é 1 rodada — o
+# mesmo comportamento de antes do E10 — porque cada rodada extra paga um ciclo
+# completo de ERENO + treino/avaliação do detector.
+INTENT_LOOP_DEFAULT_ROUNDS = 1
+
+# Ganho mínimo na métrica-objetivo para a campanha considerar que a rodada
+# progrediu; abaixo disso a política para com 'no_improvement' em vez de
+# queimar rodadas num platô (ver core/feedback_policy.py).
+FEEDBACK_MIN_DELTA = 0.01
