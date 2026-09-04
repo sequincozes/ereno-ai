@@ -162,3 +162,15 @@ INTENT_LOOP_DEFAULT_ROUNDS = 1
 # progrediu; abaixo disso a política para com 'no_improvement' em vez de
 # queimar rodadas num platô (ver core/feedback_policy.py).
 FEEDBACK_MIN_DELTA = 0.01
+
+# ------------------------------------------------------------
+# Preprocessador de features (E6): "modular" ajusta o
+# FeaturePreprocessor (core/preprocessor.py) só na partição de treino —
+# sem leakage. "legacy" mantém o comportamento anterior ao E6
+# (core/ids_evaluator.py ajustava colunas constantes e vocabulário
+# categórico sobre o dataset inteiro, antes do train_test_split), só para
+# comparar métricas antes/depois da correção. Sobrescreva com a env var
+# PREPROCESSOR_MODE=legacy; "modular" é o default e o caminho recomendado.
+# ------------------------------------------------------------
+
+PREPROCESSOR_MODE = os.getenv("PREPROCESSOR_MODE", "modular").strip().lower()
