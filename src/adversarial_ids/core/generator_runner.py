@@ -1,6 +1,7 @@
 import csv
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +28,17 @@ class GeneratorRunner:
     segmento aponta. O rótulo da classe sai correto porque o JAR o deriva do
     prefixo ``ucXX`` do nome do segmento. Sem ``segment_name`` mantém-se o
     comportamento histórico (uc03 já habilitado no action config).
+
+    Robustez do subprocesso (modo ``jar``)
+    ---------------------------------------
+    ``timeout_seconds``/``max_retries``/``retry_backoff_seconds`` cobrem os
+    dois pontos em que este runner chama o JAR (dataset do ataque e, quando
+    ``CREATE_BENIGN`` precisa rodar, o dataset benigno): um travamento vira
+    ``TimeoutExpired`` em vez de pendurar o loop indefinidamente, e uma falha
+    pontual do processo (timeout ou ``returncode != 0``) ganha novas
+    tentativas com backoff antes de desistir. Defaults (``timeout_seconds=None``,
+    ``max_retries=0``) preservam o comportamento anterior a essa robustez —
+    uma tentativa, sem prazo — para quem constrói o runner sem passá-los.
     """
 
     def __init__(
@@ -41,6 +53,9 @@ class GeneratorRunner:
         benign_seed_path: Path | str | None = None,
         segment_name: str | None = None,
         cached_dataset_path: Path | str | None = None,
+        timeout_seconds: float | None = None,
+        max_retries: int = 0,
+        retry_backoff_seconds: float = 2.0,
     ) -> None:
         self.runtime_dir = Path(runtime_dir)
         self.output_dataset_path = Path(output_dataset_path)
@@ -56,6 +71,11 @@ class GeneratorRunner:
         self.cached_dataset_path = (
             Path(cached_dataset_path) if cached_dataset_path is not None else None
         )
+        if max_retries < 0:
+            raise ValueError(f"max_retries precisa ser >= 0 (veio {max_retries}).")
+        self.timeout_seconds = timeout_seconds
+        self.max_retries = max_retries
+        self.retry_backoff_seconds = retry_backoff_seconds
 
     @property
     def is_cached(self) -> bool:
@@ -162,21 +182,9 @@ class GeneratorRunner:
 
         self._ensure_benign_dataset()
 
-        result = subprocess.run(
-            self.run_command,
-            cwd=str(self.runtime_dir),
-            capture_output=True,
-            text=True,
-            check=False,
+        self._run_generator_command(
+            self.run_command, label="Geração do dataset sintético"
         )
-
-        if result.returncode != 0:
-            raise RuntimeError(
-                "Synthetic generator execution failed.\n"
-                f"Command: {' '.join(self.run_command)}\n"
-                f"STDOUT:\n{result.stdout}\n"
-                f"STDERR:\n{result.stderr}"
-            )
 
         if not self.output_dataset_path.exists():
             raise FileNotFoundError(
@@ -186,6 +194,72 @@ class GeneratorRunner:
         shutil.copyfile(self.output_dataset_path, iteration_dataset_path)
 
         return str(iteration_dataset_path)
+
+    # ------------------------------------------------------------------ #
+    # Subprocesso do JAR — timeout + retries com backoff                 #
+    # ------------------------------------------------------------------ #
+    def _run_generator_command(
+        self, command: list[str], *, label: str
+    ) -> subprocess.CompletedProcess[str]:
+        """Executa um comando do gerador ERENO até ter sucesso ou esgotar
+        ``max_retries`` tentativas extras (``max_retries + 1`` no total).
+
+        Timeout (``subprocess.TimeoutExpired``) e falha do processo
+        (``returncode != 0``) entram no mesmo orçamento de tentativas — os
+        dois são o mesmo sintoma de instabilidade do JAR que o roadmap
+        (janela D15-24, "loop confiável e multi-ataque") pede para
+        endurecer. Levanta ``TimeoutError``/``RuntimeError`` com o comando e
+        a saída da última tentativa quando todas falham.
+        """
+
+        attempts = self.max_retries + 1
+        last_result: subprocess.CompletedProcess[str] | None = None
+        last_timeout: subprocess.TimeoutExpired | None = None
+
+        for attempt in range(1, attempts + 1):
+            try:
+                result = subprocess.run(
+                    command,
+                    cwd=str(self.runtime_dir),
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                    timeout=self.timeout_seconds,
+                )
+            except subprocess.TimeoutExpired as exc:
+                last_timeout = exc
+                last_result = None
+                print(
+                    f"[GEN:RETRY] {label} — tentativa {attempt}/{attempts} "
+                    f"expirou após {self.timeout_seconds}s: {' '.join(command)}"
+                )
+            else:
+                if result.returncode == 0:
+                    return result
+                last_result = result
+                last_timeout = None
+                print(
+                    f"[GEN:RETRY] {label} — tentativa {attempt}/{attempts} "
+                    f"falhou (returncode={result.returncode}): {' '.join(command)}"
+                )
+
+            if attempt < attempts:
+                time.sleep(self.retry_backoff_seconds * attempt)
+
+        if last_timeout is not None:
+            raise TimeoutError(
+                f"{label} expirou em todas as {attempts} tentativa(s) "
+                f"({self.timeout_seconds}s cada).\n"
+                f"Command: {' '.join(command)}"
+            ) from last_timeout
+
+        assert last_result is not None  # o loop sempre popula um dos dois
+        raise RuntimeError(
+            f"{label} falhou em todas as {attempts} tentativa(s).\n"
+            f"Command: {' '.join(command)}\n"
+            f"STDOUT:\n{last_result.stdout}\n"
+            f"STDERR:\n{last_result.stderr}"
+        )
 
     def _ensure_benign_dataset(self) -> None:
         """Gera e conecta o dataset benigno quando o action config aponta
@@ -247,20 +321,9 @@ class GeneratorRunner:
             *self.run_command[:-1],
             self.benign_action_config_relative_path,
         ]
-        result = subprocess.run(
-            benign_command,
-            cwd=str(self.runtime_dir),
-            capture_output=True,
-            text=True,
-            check=False,
+        self._run_generator_command(
+            benign_command, label="Geração automática do dataset benigno"
         )
-        if result.returncode != 0:
-            raise RuntimeError(
-                "A geração automática do dataset benigno falhou.\n"
-                f"Command: {' '.join(benign_command)}\n"
-                f"STDOUT:\n{result.stdout}\n"
-                f"STDERR:\n{result.stderr}"
-            )
 
         generated = [
             path

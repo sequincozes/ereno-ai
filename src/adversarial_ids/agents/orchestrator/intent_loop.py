@@ -70,9 +70,12 @@ from adversarial_ids.config.settings import (
     FEEDBACK_MIN_DELTA,
     GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH,
+    GENERATOR_MAX_RETRIES,
     GENERATOR_OUTPUT_DATASET_PATH,
+    GENERATOR_RETRY_BACKOFF_SECONDS,
     GENERATOR_RUN_COMMAND,
     GENERATOR_RUNTIME_DIR,
+    GENERATOR_TIMEOUT_SECONDS,
     INTENT_LOOP_DEFAULT_ROUNDS,
     INTENT_LOOP_MIN_ATTACK_ROWS,
     INTENT_LOOP_MIN_NORMAL_ROWS,
@@ -445,6 +448,9 @@ class IntentLoopOrchestrator:
             benign_seed_path=BASELINE_DATASET_PATH,
             segment_name=spec.segment_name,
             cached_dataset_path=cached_dataset,
+            timeout_seconds=GENERATOR_TIMEOUT_SECONDS,
+            max_retries=GENERATOR_MAX_RETRIES,
+            retry_backoff_seconds=GENERATOR_RETRY_BACKOFF_SECONDS,
         )
 
     # ------------------------------------------------------------------ #
