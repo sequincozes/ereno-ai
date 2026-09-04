@@ -123,6 +123,20 @@ def _default_generator_mode() -> str:
 
 GENERATOR_MODE = os.getenv("GENERATOR_MODE", _default_generator_mode()).strip().lower()
 
+# ------------------------------------------------------------
+# Robustez do subprocesso do JAR (janela D15-24 do roadmap: "loop
+# confiável e multi-ataque" — quality gates já cobertos por E4, isto cobre
+# retries/timeout). Só se aplica ao modo "jar"; o modo "cached" nunca chama
+# subprocess. Sobrescreva via env var quando o JAR local for sabidamente
+# mais lento/instável do que o default.
+# ------------------------------------------------------------
+
+GENERATOR_TIMEOUT_SECONDS = float(os.getenv("GENERATOR_TIMEOUT_SECONDS", "300"))
+GENERATOR_MAX_RETRIES = int(os.getenv("GENERATOR_MAX_RETRIES", "1"))
+GENERATOR_RETRY_BACKOFF_SECONDS = float(
+    os.getenv("GENERATOR_RETRY_BACKOFF_SECONDS", "2")
+)
+
 # ============================================================
 # Pipeline intent-driven (E3/E4) — Orchestrator v2
 # ============================================================
