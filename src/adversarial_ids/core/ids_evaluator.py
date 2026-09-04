@@ -10,6 +10,10 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
+from adversarial_ids.config.settings import PREPROCESSOR_MODE
+from adversarial_ids.core.preprocessor import FeaturePreprocessor
+from adversarial_ids.domain.feature_manifest import FeatureManifest
+
 
 class IdsEvaluator:
     """
@@ -17,46 +21,31 @@ class IdsEvaluator:
 
     Treina o Random Forest apenas no baseline e testa cada variante
     sem retreinar o modelo.
+
+    Preprocessamento de features (épico E6): o preparo de features (colunas
+    descartadas, imputação, encoding categórico) não vive mais aqui — foi
+    extraído para ``core.preprocessor.FeaturePreprocessor``, reaproveitável
+    por qualquer detector (E8) sob o mesmo protocolo. O que muda entre os dois
+    ``preprocessor_mode`` é só **quando** o ``fit`` acontece em relação ao
+    ``train_test_split``, não a lógica de preprocessamento em si — as duas
+    variantes chamam o mesmo ``FeaturePreprocessor``:
+
+    - ``"modular"`` (default, ``config.settings.PREPROCESSOR_MODE``): o split
+      acontece sobre o X **cru**, e o ``fit`` só depois, exclusivamente na
+      partição de treino — nenhuma decisão de coluna constante ou vocabulário
+      categórico vê as linhas de teste. Sem leakage.
+    - ``"legacy"``: ajusta o ``FeaturePreprocessor`` sobre o dataset **inteiro**
+      antes do split — reproduz o comportamento anterior ao E6, só para
+      comparar métricas antes/depois da correção (ver ``docs/preprocessing.md``).
+
+    O `LabelEncoder` do rótulo fica de fora do preprocessador de propósito: um
+    espaço de rótulos não é uma estatística ajustada sobre features, é a
+    definição das classes que o modelo aprende a prever — ajustá-lo no
+    dataset inteiro (treino+teste) não vaza informação de features para o
+    treino, só fixa o vocabulário de classes que já é conhecido de antemão.
     """
 
-    COLUMNS_TO_ALWAYS_DROP = [
-        # Temporais / sequência / derivados fortes
-        "Time",
-        "t",
-        "GooseTimestamp",
-        "receivedTimestamp",
-        "timestampDiff",
-        "tDiff",
-        "timeFromLastChange",
-        "delay",
-        "SqNum",
-        "StNum",
-        "sqDiff",
-        "stDiff",
-
-        # Metadados/constantes comuns do protocolo
-        "frameLen",
-        "ethDst",
-        "ethSrc",
-        "ethType",
-        "gooseTimeAllowedtoLive",
-        "gooseAppid",
-        "gooseLen",
-        "TPID",
-        "gocbRef",
-        "datSet",
-        "goID",
-        "test",
-        "confRev",
-        "ndsCom",
-        "numDatSetEntries",
-        "APDUSize",
-        "protocol",
-        "gooseLengthDiff",
-        "apduSizeDiff",
-        "frameLengthDiff",
-        "e2eLatency",
-    ]
+    _VALID_PREPROCESSOR_MODES = ("modular", "legacy")
 
     def __init__(
         self,
@@ -65,7 +54,14 @@ class IdsEvaluator:
         n_estimators: int = 100,
         drop_cb_status: bool = False,
         target_attack_label: str | None = None,
+        preprocessor_mode: str = PREPROCESSOR_MODE,
     ) -> None:
+        if preprocessor_mode not in self._VALID_PREPROCESSOR_MODES:
+            raise ValueError(
+                f"preprocessor_mode inválido: {preprocessor_mode!r}. "
+                f"Use um de {self._VALID_PREPROCESSOR_MODES}."
+            )
+
         self.test_size = test_size
         self.random_state = random_state
         self.n_estimators = n_estimators
@@ -75,17 +71,32 @@ class IdsEvaluator:
         # de heurística por substring — essencial para ataques cujo rótulo não
         # contém "attack"/"masquerade".
         self.target_attack_label = target_attack_label
+        self.preprocessor_mode = preprocessor_mode
 
         self.model: RandomForestClassifier | None = None
         self.label_column: str | None = None
-        self.feature_columns: list[str] | None = None
-        self.feature_encoders: dict[str, dict[str, int]] = {}
+        self.preprocessor: FeaturePreprocessor | None = None
 
         self.label_encoder: LabelEncoder | None = None
         self.class_mapping: dict[int, str] = {}
         self.attack_label: int | None = None
 
-        self.removed_columns: list[str] = []
+    @property
+    def feature_columns(self) -> list[str] | None:
+        return self.preprocessor.feature_columns if self.preprocessor is not None else None
+
+    @property
+    def removed_columns(self) -> list[str]:
+        return self.preprocessor.removed_columns if self.preprocessor is not None else []
+
+    @property
+    def feature_manifest(self) -> FeatureManifest | None:
+        """Manifest do ``FeaturePreprocessor`` ajustado (E6).
+
+        ``None`` antes de ``train_baseline`` — não há estado ajustado para
+        empacotar ainda.
+        """
+        return self.preprocessor.manifest() if self.preprocessor is not None else None
 
     def train_baseline(self, dataset_path: str) -> dict[str, Any]:
         print(f"[IDS] Treinando modelo baseline com: {dataset_path}")
@@ -100,17 +111,35 @@ class IdsEvaluator:
 
         X = df.drop(columns=[self.label_column])
         y = df[self.label_column]
-
-        X_prepared = self._fit_transform_features(X)
         y_encoded = self._fit_transform_labels(y)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X_prepared,
-            y_encoded,
-            test_size=self.test_size,
-            random_state=self.random_state,
-            stratify=y_encoded if len(set(y_encoded)) > 1 else None,
-        )
+        self.preprocessor = FeaturePreprocessor(drop_cb_status=self.drop_cb_status)
+
+        if self.preprocessor_mode == "legacy":
+            # Ajusta sobre o dataset INTEIRO antes do split — reproduz de
+            # propósito o leakage que o modo "modular" (default) elimina; só
+            # para comparação (ver docstring da classe).
+            X_prepared = self.preprocessor.fit_transform(X, label_column=self.label_column)
+            X_train, X_test, y_train, y_test = train_test_split(
+                X_prepared,
+                y_encoded,
+                test_size=self.test_size,
+                random_state=self.random_state,
+                stratify=y_encoded if len(set(y_encoded)) > 1 else None,
+            )
+        else:
+            X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+                X,
+                y_encoded,
+                test_size=self.test_size,
+                random_state=self.random_state,
+                stratify=y_encoded if len(set(y_encoded)) > 1 else None,
+            )
+            X_train = self.preprocessor.fit_transform(X_train_raw, label_column=self.label_column)
+            X_test = self.preprocessor.transform(X_test_raw)
+
+        print(f"[IDS] Colunas removidas: {self.removed_columns}")
+        print(f"[IDS] Features usadas no modelo: {self.feature_columns}")
 
         self.model = RandomForestClassifier(
             n_estimators=self.n_estimators,
@@ -139,7 +168,7 @@ class IdsEvaluator:
         if self.model is None:
             raise RuntimeError("Modelo ainda não treinado. Execute train_baseline() primeiro.")
 
-        if self.label_column is None:
+        if self.label_column is None or self.preprocessor is None:
             raise RuntimeError("Coluna de classe ainda não definida.")
 
         print(f"[IDS] Testando variante com modelo baseline: {dataset_path}")
@@ -155,7 +184,7 @@ class IdsEvaluator:
         X = df.drop(columns=[self.label_column])
         y = df[self.label_column]
 
-        X_prepared = self._transform_features(X)
+        X_prepared = self.preprocessor.transform(X)
         y_encoded = self._transform_labels(y)
 
         y_pred = self.model.predict(X_prepared)
@@ -193,71 +222,6 @@ class IdsEvaluator:
                 return lower_columns[name.lower()]
 
         return df.columns[-1]
-
-    def _fit_transform_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        X = X.copy()
-
-        constant_cols = [
-            col for col in X.columns
-            if X[col].nunique(dropna=False) <= 1
-        ]
-
-        drop_cols = set(self.COLUMNS_TO_ALWAYS_DROP + constant_cols)
-
-        if self.drop_cb_status:
-            drop_cols.update(["cbStatus", "cbStatusDiff"])
-
-        self.removed_columns = sorted([col for col in drop_cols if col in X.columns])
-
-        print(f"[IDS] Colunas removidas: {self.removed_columns}")
-
-        X = X.drop(columns=self.removed_columns, errors="ignore")
-        X = X.dropna(axis=1, how="all")
-
-        self.feature_columns = list(X.columns)
-
-        for column in X.columns:
-            if pd.api.types.is_numeric_dtype(X[column]):
-                X[column] = pd.to_numeric(X[column], errors="coerce").fillna(0)
-            else:
-                X[column] = X[column].fillna("missing").astype(str)
-                unique_values = sorted(X[column].unique())
-                mapping = {value: index for index, value in enumerate(unique_values)}
-                self.feature_encoders[column] = mapping
-                X[column] = X[column].map(mapping).fillna(-1).astype(int)
-
-        print(f"[IDS] Features usadas no modelo: {self.feature_columns}")
-
-        return X
-
-    def _transform_features(self, X: pd.DataFrame) -> pd.DataFrame:
-        if self.feature_columns is None:
-            raise RuntimeError("Features do baseline ainda não foram definidas.")
-
-        X = X.copy()
-        X = X.drop(columns=self.removed_columns, errors="ignore")
-
-        for column in self.feature_columns:
-            if column not in X.columns:
-                X[column] = 0
-
-        X = X[self.feature_columns]
-
-        for column in X.columns:
-            if column in self.feature_encoders:
-                mapping = self.feature_encoders[column]
-                X[column] = (
-                    X[column]
-                    .fillna("missing")
-                    .astype(str)
-                    .map(mapping)
-                    .fillna(-1)
-                    .astype(int)
-                )
-            else:
-                X[column] = pd.to_numeric(X[column], errors="coerce").fillna(0)
-
-        return X
 
     def _fit_transform_labels(self, y: pd.Series) -> pd.Series:
         self.label_encoder = LabelEncoder()
@@ -368,7 +332,7 @@ class IdsEvaluator:
         Mesmo formato de item de ``get_feature_importances`` para consumo
         uniforme pelo M2 (#12).
         """
-        if self.model is None or self.feature_columns is None:
+        if self.model is None or self.feature_columns is None or self.preprocessor is None:
             return []
 
         try:
@@ -384,7 +348,7 @@ class IdsEvaluator:
             if self.label_column and self.label_column in df.columns:
                 df = df.drop(columns=[self.label_column])
 
-            X = self._transform_features(df)
+            X = self.preprocessor.transform(df)
 
             if len(X) > max_samples:
                 X = X.sample(n=max_samples, random_state=self.random_state)
