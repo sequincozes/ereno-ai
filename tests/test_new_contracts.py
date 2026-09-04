@@ -22,7 +22,9 @@ from adversarial_ids.domain import (
     DefensePlan,
     DesiredEffect,
     DetectionReport,
+    DroppedColumn,
     Evidence,
+    FeatureManifest,
     FeedbackDecision,
     FeedbackStopReason,
     FieldChange,
@@ -31,6 +33,7 @@ from adversarial_ids.domain import (
     LoopRecord,
     LoopStage,
     LoopStageStatus,
+    ScalerStat,
 )
 
 _SHA256_ZEROS = "0" * 64
@@ -60,6 +63,22 @@ def _candidate(**overrides: object) -> AttackCandidate:
     }
     data.update(overrides)
     return AttackCandidate.model_validate(data)
+
+
+def _feature_manifest(**overrides: object) -> FeatureManifest:
+    data: dict[str, object] = {
+        "label_column": "class",
+        "feature_columns": ("num", "cat"),
+        "dropped_columns": (DroppedColumn(name="Time", reason="always_drop"),),
+        "numeric_features": ("num",),
+        "categorical_features": ("cat",),
+        "numeric_fill_values": {"num": 0.0},
+        "categorical_codes": {"cat": {"a": 0, "b": 1}},
+        "fitted_rows": 70,
+        "fitted_content_hash": _SHA256_ZEROS,
+    }
+    data.update(overrides)
+    return FeatureManifest.model_validate(data)
 
 
 @pytest.mark.parametrize(
@@ -105,8 +124,16 @@ def _candidate(**overrides: object) -> AttackCandidate:
                 LoopStage(name="generator", status=LoopStageStatus.PENDING),
             ),
         ),
+        lambda: _feature_manifest(),
     ],
-    ids=["AttackCandidate", "DatasetBundle", "DetectionReport", "DefensePlan", "LoopRecord"],
+    ids=[
+        "AttackCandidate",
+        "DatasetBundle",
+        "DetectionReport",
+        "DefensePlan",
+        "LoopRecord",
+        "FeatureManifest",
+    ],
 )
 def test_contract_is_versioned_frozen_and_json_stable(build):
     instance = build()
@@ -241,6 +268,98 @@ def test_loop_record_rejects_round_one_with_a_parent_run_id():
 def test_loop_record_rejects_a_later_round_without_a_parent_run_id():
     with pytest.raises(ValidationError, match="parent_run_id"):
         _loop_record(round=2, parent_run_id=None)
+
+
+# --------------------------------------------------------------------------- #
+# FeatureManifest (E6)                                                        #
+# --------------------------------------------------------------------------- #
+def test_feature_manifest_rejects_numeric_categorical_overlap():
+    with pytest.raises(ValidationError, match="não podem se sobrepor"):
+        _feature_manifest(
+            feature_columns=("num",),
+            numeric_features=("num",),
+            categorical_features=("num",),
+            numeric_fill_values={"num": 0.0},
+            categorical_codes={},
+        )
+
+
+def test_feature_manifest_rejects_feature_columns_not_covered_by_numeric_or_categorical():
+    with pytest.raises(ValidationError, match="deve cobrir exatamente"):
+        _feature_manifest(feature_columns=("num", "cat", "orphan"))
+
+
+def test_feature_manifest_rejects_dropped_column_that_is_also_a_feature():
+    with pytest.raises(ValidationError, match="não podem se sobrepor"):
+        _feature_manifest(
+            dropped_columns=(DroppedColumn(name="num", reason="constant"),),
+        )
+
+
+def test_feature_manifest_rejects_fill_value_for_unknown_numeric_feature():
+    with pytest.raises(ValidationError, match="numeric_fill_values"):
+        _feature_manifest(numeric_fill_values={"num": 0.0, "ghost": 1.0})
+
+
+def test_feature_manifest_rejects_categorical_codes_for_unknown_feature():
+    with pytest.raises(ValidationError, match="categorical_codes"):
+        _feature_manifest(categorical_codes={"cat": {"a": 0}, "ghost": {"x": 0}})
+
+
+def test_feature_manifest_rejects_standard_scaler_missing_stats():
+    with pytest.raises(ValidationError, match="scaler='standard'"):
+        _feature_manifest(scaler="standard", scaler_stats={})
+
+
+def test_feature_manifest_accepts_standard_scaler_with_complete_stats():
+    manifest = _feature_manifest(
+        scaler="standard",
+        scaler_stats={"num": ScalerStat(mean=0.0, std=1.0)},
+    )
+    assert manifest.scaler_stats["num"].std == 1.0
+
+
+def test_feature_manifest_rejects_non_positive_fitted_rows():
+    with pytest.raises(ValidationError):
+        _feature_manifest(fitted_rows=0)
+
+
+def test_feature_manifest_rejects_malformed_hash():
+    with pytest.raises(ValidationError):
+        _feature_manifest(fitted_content_hash="not-a-sha256")
+
+
+def test_feature_manifest_rejects_non_exhaustive_numeric_fill_values():
+    with pytest.raises(ValidationError, match="numeric_fill_values deve cobrir"):
+        _feature_manifest(numeric_fill_values={})
+
+
+def test_feature_manifest_rejects_non_exhaustive_categorical_codes():
+    with pytest.raises(ValidationError, match="categorical_codes deve cobrir"):
+        _feature_manifest(categorical_codes={})
+
+
+def test_feature_manifest_rejects_non_finite_fill_value():
+    with pytest.raises(ValidationError, match="NaN/Infinity"):
+        _feature_manifest(numeric_fill_values={"num": float("nan")})
+
+
+def test_feature_manifest_rejects_non_finite_scaler_stat():
+    with pytest.raises(ValidationError, match="NaN/Infinity"):
+        _feature_manifest(
+            scaler="standard",
+            scaler_stats={"num": ScalerStat(mean=float("inf"), std=1.0)},
+        )
+
+
+def test_feature_manifest_rejects_duplicate_dropped_column_names():
+    with pytest.raises(ValidationError, match="não pode repetir"):
+        _feature_manifest(
+            dropped_columns=(
+                DroppedColumn(name="Time", reason="always_drop"),
+                DroppedColumn(name="Time", reason="constant"),
+            ),
+        )
 
 
 # --------------------------------------------------------------------------- #

@@ -45,6 +45,11 @@ from adversarial_ids.domain.feedback_decision import (
     FeedbackStopReason,
     RoundOutcome,
 )
+from adversarial_ids.domain.feature_manifest import (
+    DroppedColumn,
+    FeatureManifest,
+    ScalerStat,
+)
 from adversarial_ids.domain.iteration_record import IterationRecord
 from adversarial_ids.domain.intent_spec import (
     MAX_FIELDS_CHANGED_CEILING,
@@ -107,4 +112,7 @@ __all__ = [
     "FeedbackDecision",
     "FeedbackStopReason",
     "RoundOutcome",
+    "FeatureManifest",
+    "DroppedColumn",
+    "ScalerStat",
 ]
