@@ -301,7 +301,7 @@ ERENO-AI-LAB/
 │   │   ├── analyst/         # agente Blue Team (Agno) + tools de validação
 │   │   └── orchestrator/    # workflow.py (agente-agnóstico) + live.py (agentes reais + Team)
 │   ├── config/              # settings.py (caminhos e variáveis de ambiente)
-│   ├── core/                # gerador, avaliador do IDS e memória do experimento
+│   ├── core/                # gerador, avaliador do IDS, preprocessador de features (E6) e memória do experimento
 │   ├── domain/              # modelos Pydantic compartilhados
 │   ├── interfaces/          # cli.py, experiment_runner.py, dashboard/app.py
 │   ├── prompts/             # instruções versionadas dos agentes (strategist.md, analyst.md)

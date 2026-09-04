@@ -1,9 +1,10 @@
 """DatasetBundle — dataset preparado a partir de um trace do ERENO.
 
 Contrato congelado (ação 72h #2). Representa a saída da etapa PREPROCESS
-(schema, classes, contagens, hash e linhagem) — os quality gates completos
-(sem NaN inesperado, volume mínimo etc.) pertencem ao validador da etapa
-D25-35 (preprocessador modular); este contrato só garante a consistência
+(schema, classes, contagens, hash e linhagem) — o fit/transform sem leakage
+(imputação, encoding, escala) pertence ao ``FeatureManifest`` do épico E6
+(``domain/feature_manifest.py``, ``core/preprocessor.py``), que consome este
+``DatasetBundle`` já aprovado; este contrato só garante a consistência
 interna do artefato: as classes declaradas e as contagens cobrem o mesmo
 conjunto de rótulos, e nenhuma classe fica vazia.
 """

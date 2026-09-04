@@ -3,9 +3,10 @@
 Cobre o que o gate D6-14 exige antes de qualquer avaliação: "trace novo tem
 hash, classes e volume válidos" e "nenhuma avaliação ocorre sem DatasetBundle
 aprovado". Não é o preprocessador modular completo (fit/transform, NaN,
-leakage, undersampling) — isso é o épico E6/E7 (D25-35); aqui só validamos o
-que o ``DatasetBundle`` (contrato congelado) já promete: hash de conteúdo,
-classes presentes e volume mínimo por classe.
+leakage) — isso é o épico E6 (``core/preprocessor.py::FeaturePreprocessor``,
+ver ``docs/preprocessing.md``), que consome o trace já aprovado por este
+gate; aqui só validamos o que o ``DatasetBundle`` (contrato congelado) já
+promete: hash de conteúdo, classes presentes e volume mínimo por classe.
 
 Um trace que não passa neste gate nunca vira um ``DatasetBundle`` — o
 ``IntentLoopOrchestrator`` (E3) marca o estágio ``preprocess`` como falho e
