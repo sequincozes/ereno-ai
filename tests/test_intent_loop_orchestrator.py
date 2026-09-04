@@ -34,6 +34,7 @@ from adversarial_ids.domain.intent_spec import (
     IntentSpec,
 )
 from adversarial_ids.domain.feedback_decision import FeedbackDecision
+from adversarial_ids.domain.feature_manifest import FeatureManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json
 from adversarial_ids.shared.loop_record_store import load_loop_records
@@ -333,6 +334,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "attack_candidate.json",
         "dataset_bundle.json",
         "detection_report.json",
+        "feature_manifest.json",
         "defense_plan.json",
         "feedback.json",
     ):
@@ -351,6 +353,12 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
 
     # A decisão persistida é um FeedbackDecision válido.
     FeedbackDecision.model_validate(load_json(run_dir / "feedback.json"))
+
+    # O manifest (E6) é um FeatureManifest válido, e fitted_rows prova que o
+    # preprocessador viu só a partição de TREINO do baseline (14 de 20 linhas
+    # do seed cacheado, test_size=0.3 padrão do IdsEvaluator) — nunca as 20.
+    manifest = FeatureManifest.model_validate(load_json(run_dir / "feature_manifest.json"))
+    assert manifest.fitted_rows == 14
 
 
 def test_run_appends_the_record_to_the_loop_record_store(tmp_path):

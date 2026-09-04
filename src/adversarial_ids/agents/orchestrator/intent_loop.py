@@ -14,7 +14,10 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
   hash, classes e volume do trace validados antes do detector rodar.
 - DETECTOR    — ``IdsEvaluator`` (Random Forest já existente) treinado no
   baseline do ataque e avaliado sobre o ``DatasetBundle`` aprovado,
-  empacotado como ``DetectionReport`` (``core.detection_reporter``).
+  empacotado como ``DetectionReport`` (``core.detection_reporter``). O
+  ``FeatureManifest`` (E6) do preprocessador ajustado no baseline é
+  persistido como ``feature_manifest.json`` neste mesmo estágio — não é um
+  ``LoopStage`` próprio, é artefato do DETECTOR.
 - DEFENDER    — ``DefenderLike.defend(report, report_ref=...)`` (E5, o
   ``DefenderAgent`` real ou um stub de teste), já validado por
   ``agents.defender.tools.validate_plan_against_report`` contra o
@@ -319,7 +322,7 @@ class IntentLoopOrchestrator:
 
             detection_report = self._stage(
                 stages, run_dir, "detector",
-                lambda: self._run_detector(generator, spec, dataset_bundle),
+                lambda: self._run_detector(generator, spec, dataset_bundle, run_dir),
                 persist_as="detection_report.json",
             )
 
@@ -412,12 +415,22 @@ class IntentLoopOrchestrator:
         generator: GeneratorRunner,
         spec: AttackSpec,
         dataset_bundle: DatasetBundle,
+        run_dir: Path,
     ) -> DetectionReport:
         baseline_config = load_json(spec.baseline_path)
         baseline_dataset_path = generator.generate_dataset(baseline_config, iteration=0)
 
         evaluator = IdsEvaluator(drop_cb_status=False, target_attack_label=spec.label)
         evaluator.train_baseline(baseline_dataset_path)
+
+        # Manifest do preprocessador (E6), ajustado no baseline — não no
+        # ``dataset_bundle.trace_path`` (a variante é só transformada, nunca
+        # ajustada). Persistido antes de ``build_detection_report`` de
+        # propósito: se a avaliação falhar o gate binário logo abaixo, o
+        # manifest já está em disco para diagnosticar o que foi ajustado.
+        manifest = evaluator.feature_manifest
+        if manifest is not None:
+            save_json(run_dir / "feature_manifest.json", manifest.model_dump(mode="json"))
 
         split = (
             f"train_test_{int((1 - evaluator.test_size) * 100)}_"
