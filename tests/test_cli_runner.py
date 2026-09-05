@@ -2,6 +2,9 @@
 
 from io import StringIO
 
+import pytest
+
+from adversarial_ids.interfaces import cli
 from adversarial_ids.interfaces.cli import run_cli
 from adversarial_ids.interfaces.experiment_runner import (
     CachedHistoryRunner,
@@ -95,3 +98,43 @@ def test_workflow_adapter_normalizes_records_to_domain_contract():
         "generator_mode": "cached",
         "attack": "masquerade_fault",
     }
+
+
+def test_demo_engine_rejects_a_detector_choice_with_a_clean_error():
+    # Única combinação de flags inválida que o argparse não barra por choices:
+    # precisa sair com exit code 2 e mensagem, não com traceback.
+    stderr = StringIO()
+    exit_code = run_cli(argv=["--engine", "demo", "--detector", "svm_rbf"], stderr=stderr)
+
+    assert exit_code == 2
+    assert "não se aplica a --engine demo" in stderr.getvalue()
+
+
+def test_demo_rejection_does_not_depend_on_the_environment_default(monkeypatch):
+    """A rejeição é sobre "passou a flag", não sobre "divergiu de DETECTOR_MODE".
+
+    Sem a sentinela ``default=None`` os dois casos abaixo se invertem: com
+    ``DETECTOR_MODE=svm_linear``, ``--detector random_forest`` seria recusado
+    (por "divergir" do ambiente) e a omissão da flag passaria batida.
+    """
+
+    monkeypatch.setattr(cli, "DETECTOR_MODE", "svm_linear")
+
+    stderr = StringIO()
+    assert run_cli(argv=["--engine", "demo", "--detector", "random_forest"], stderr=stderr) == 2
+    assert "não se aplica a --engine demo" in stderr.getvalue()
+
+    # E omitir a flag continua sendo o caminho válido do demo.
+    assert run_cli(argv=["--iterations", "1"], stdout=StringIO()) == 0
+
+
+@pytest.mark.parametrize("engine_args", [["--engine", "live"], ["--engine", "intent", "--prompt", "p"]])
+def test_invalid_detector_env_default_fails_cleanly_for_every_engine(monkeypatch, engine_args):
+    # argparse só aplica `choices` a valores vindos de argv, nunca ao default —
+    # um erro de digitação em DETECTOR_MODE chegaria cru ao núcleo e viraria
+    # traceback (e de forma inconsistente entre live e intent).
+    monkeypatch.setattr(cli, "DETECTOR_MODE", "bogus_detector")
+
+    stderr = StringIO()
+    assert run_cli(argv=engine_args, stderr=stderr) == 2
+    assert "não é um detector conhecido" in stderr.getvalue()

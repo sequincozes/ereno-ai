@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from adversarial_ids.config.attacks_registry import DEFAULT_ATTACK_KEY
-from adversarial_ids.config.settings import GOLDEN_HISTORY_PATH
+from adversarial_ids.config.settings import DETECTOR_MODE, GOLDEN_HISTORY_PATH
 from adversarial_ids.domain import IterationRecord
 
 
@@ -107,6 +107,7 @@ def create_default_runner(
     *,
     orchestration: str = "team",
     persona: str = "conservative",
+    detector: str | None = None,
 ) -> ExperimentRunner:
     """Seleciona a implementação usada pelas interfaces.
 
@@ -121,12 +122,22 @@ def create_default_runner(
     por um ``agno.team.Team`` (route mode); ``direct`` usa o encadeamento
     determinístico como fallback. ``persona`` seleciona o perfil do Estrategista
     (``conservative`` = 1 alteração/iteração; ``aggressive`` = até 3).
+    ``detector`` (E8) também só vale para ``live``: escolhe o modelo que o
+    ``IdsEvaluator`` treina (``decision_tree``, ``svm_linear``, ``svm_rbf`` —
+    ver ``core/detectors.py``); ``None`` (default) herda
+    ``settings.DETECTOR_MODE``. A distinção entre ``None`` e uma chave
+    explícita importa: no caminho ``demo`` o histórico golden já está gravado
+    e nenhum detector é treinado, então **qualquer** escolha explícita ali é
+    erro — comparar com o default de ambiente em vez de com ``None`` faria a
+    rejeição depender de ``DETECTOR_MODE`` e recusar até
+    ``detector="random_forest"``.
     """
 
     if engine == "live":
         from functools import partial
 
         from adversarial_ids.agents.orchestrator.live import run_live_workflow
+        from adversarial_ids.core.detectors import detector_spec
 
         if orchestration not in ("team", "direct"):
             raise ValueError(
@@ -137,14 +148,27 @@ def create_default_runner(
                 f"persona inválida: {persona!r}. Use 'conservative' ou 'aggressive'."
             )
 
+        # Levanta ``DetectorError`` para uma chave desconhecida, na mesma
+        # posição em que orchestration/persona são validados — antes de
+        # qualquer trabalho caro.
+        resolved_detector = detector or DETECTOR_MODE
+        detector_spec(resolved_detector)
+
         run = partial(
             run_live_workflow,
             use_team=orchestration == "team",
             persona=persona,
+            detector=resolved_detector,
         )
         return WorkflowAdapter(run)
 
     if engine != "demo":
         raise ValueError(f"engine inválido: {engine!r}. Use 'demo' ou 'live'.")
+
+    if detector is not None:
+        raise ValueError(
+            f"detector={detector!r} não se aplica ao engine 'demo': o histórico "
+            "golden é um replay já gravado, nenhum detector é treinado."
+        )
 
     return CachedHistoryRunner()
