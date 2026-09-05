@@ -12,14 +12,16 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
   ``AttackCandidate.config`` compilado.
 - PREPROCESS  — ``core.dataset_bundle_builder.build_dataset_bundle`` (E4):
   hash, classes e volume do trace validados antes do detector rodar.
-- DETECTOR    — ``IdsEvaluator`` (Random Forest já existente) treinado no
-  baseline do ataque e avaliado sobre o ``DatasetBundle`` aprovado,
-  empacotado como ``DetectionReport`` (``core.detection_reporter``). O
-  ``FeatureManifest`` (E6) do preprocessador ajustado no baseline é
-  persistido como ``feature_manifest.json``, e o ``SelectionManifest`` (E7,
-  undersampling + seleção de features) como ``selection_manifest.json`` —
-  neste mesmo estágio, para ambos; nenhum dos dois é um ``LoopStage``
-  próprio, são artefatos do DETECTOR.
+- DETECTOR    — ``IdsEvaluator`` treinado no baseline do ataque e avaliado
+  sobre o ``DatasetBundle`` aprovado, empacotado como ``DetectionReport``
+  (``core.detection_reporter``). Qual modelo treina vem do parâmetro
+  ``detector`` (E8: ``random_forest`` default, ``decision_tree``,
+  ``svm_linear``, ``svm_rbf`` — ver ``core/detectors.py``). Os três manifests
+  do preparo/treino são persistidos neste mesmo estágio:
+  ``feature_manifest.json`` (E6, preprocessador ajustado no baseline),
+  ``selection_manifest.json`` (E7, seleção de features + undersampling) e
+  ``detector_manifest.json`` (E8, detector treinado + escala aplicada).
+  Nenhum dos três é um ``LoopStage`` próprio — são artefatos do DETECTOR.
 - DEFENDER    — ``DefenderLike.defend(report, report_ref=...)`` (E5, o
   ``DefenderAgent`` real ou um stub de teste), já validado por
   ``agents.defender.tools.validate_plan_against_report`` contra o
@@ -72,6 +74,7 @@ from typing import Any, Protocol, runtime_checkable
 from adversarial_ids.config.attacks_registry import AttackSpec, get_attack_spec
 from adversarial_ids.config.settings import (
     BASELINE_DATASET_PATH,
+    DETECTOR_MODE,
     FEEDBACK_MIN_DELTA,
     GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH,
@@ -89,6 +92,7 @@ from adversarial_ids.config.settings import (
 )
 from adversarial_ids.core.dataset_bundle_builder import build_dataset_bundle
 from adversarial_ids.core.detection_reporter import build_detection_report
+from adversarial_ids.core.detectors import detector_spec
 from adversarial_ids.core.feedback_policy import decide_feedback
 from adversarial_ids.core.generator_runner import GeneratorRunner
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
@@ -143,12 +147,18 @@ class IntentLoopOrchestrator:
         min_normal_rows: int = INTENT_LOOP_MIN_NORMAL_ROWS,
         cached_dataset_path: Path | str | None = None,
         feedback_min_delta: float = FEEDBACK_MIN_DELTA,
+        detector: str = DETECTOR_MODE,
     ) -> None:
         if generator_mode not in _VALID_GENERATOR_MODES:
             raise ValueError(
                 f"generator_mode inválido: {generator_mode!r}. "
                 f"Use um de {_VALID_GENERATOR_MODES}."
             )
+        # Valida a chave já na construção (levanta ``DetectorError``), não no
+        # estágio DETECTOR: uma chave inválida é erro de configuração do
+        # chamador, não uma falha de estágio a registrar no ``LoopRecord``.
+        detector_spec(detector)
+        self.detector = detector
         self.intent_agent = intent_agent
         self.defender_agent = defender_agent
         self.generator_mode = generator_mode
@@ -422,7 +432,11 @@ class IntentLoopOrchestrator:
         baseline_config = load_json(spec.baseline_path)
         baseline_dataset_path = generator.generate_dataset(baseline_config, iteration=0)
 
-        evaluator = IdsEvaluator(drop_cb_status=False, target_attack_label=spec.label)
+        evaluator = IdsEvaluator(
+            drop_cb_status=False,
+            target_attack_label=spec.label,
+            detector=self.detector,
+        )
         evaluator.train_baseline(baseline_dataset_path)
 
         # Manifest do preprocessador (E6), ajustado no baseline — não no
@@ -441,6 +455,15 @@ class IntentLoopOrchestrator:
         if selection_manifest is not None:
             save_json(
                 run_dir / "selection_manifest.json", selection_manifest.model_dump(mode="json")
+            )
+
+        # Manifest do detector (E8) — terceiro artefato do mesmo estágio, pelo
+        # mesmo motivo de precedência: se o gate binário abaixo derrubar a
+        # avaliação, já está em disco qual detector treinou e sob que escala.
+        detector_manifest = evaluator.detector_manifest
+        if detector_manifest is not None:
+            save_json(
+                run_dir / "detector_manifest.json", detector_manifest.model_dump(mode="json")
             )
 
         split = (

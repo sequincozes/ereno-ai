@@ -32,6 +32,7 @@ from adversarial_ids.config.attacks_registry import (
 )
 from adversarial_ids.config.settings import (
     BASELINE_DATASET_PATH,
+    DETECTOR_MODE,
     GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH,
     GENERATOR_MAX_RETRIES,
@@ -313,6 +314,7 @@ def build_live_workflow(
     use_team: bool = True,
     save_path: str | Path | None = ITERATION_HISTORY_PATH,
     attack: str = DEFAULT_ATTACK_KEY,
+    detector: str = DETECTOR_MODE,
 ) -> AdversarialWorkflow:
     """Monta o ``AdversarialWorkflow`` com os agentes reais + núcleo real.
 
@@ -324,6 +326,10 @@ def build_live_workflow(
     Estrategista e, depois do núcleo determinístico, ao Analista. ``use_team=False``
     mantém o encadeamento direto (``StrategistAdapter``/``AnalystAdapter``), útil
     como fallback determinístico e para diagnóstico.
+
+    ``detector`` (E8) escolhe o modelo que o ``IdsEvaluator`` treina —
+    ``random_forest`` (default, comportamento anterior), ``decision_tree``,
+    ``svm_linear`` ou ``svm_rbf``. Ver ``docs/detectors.md``.
     """
 
     spec = get_attack_spec(attack)
@@ -345,7 +351,9 @@ def build_live_workflow(
         strategist=strategist,
         analyst=analyst,
         generator=_build_generator(generator_mode, spec),
-        evaluator=IdsEvaluator(drop_cb_status=False, target_attack_label=spec.label),
+        evaluator=IdsEvaluator(
+            drop_cb_status=False, target_attack_label=spec.label, detector=detector
+        ),
         baseline_attack_config=baseline_attack_config,
         save_path=save_path,
     )
@@ -359,6 +367,7 @@ def run_live_workflow(
     use_team: bool = True,
     persona: str = "conservative",
     attack: str = DEFAULT_ATTACK_KEY,
+    detector: str = DETECTOR_MODE,
 ) -> list[IterationRecord]:
     """Roda o loop real e devolve os ``IterationRecord`` (baseline + iterações).
 
@@ -372,6 +381,7 @@ def run_live_workflow(
         use_team=use_team,
         persona=persona,
         attack=attack,
+        detector=detector,
     )
     memory = workflow.run(iterations)
     return memory.get_records()
