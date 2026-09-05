@@ -15,6 +15,7 @@ from adversarial_ids.config.attacks_registry import (
     list_attack_keys,
 )
 from adversarial_ids.config.settings import (
+    DETECTOR_MODE,
     GENERATOR_MODE,
     INTENT_LOOP_DEFAULT_ROUNDS,
     ITERATION_HISTORY_PATH,
@@ -22,6 +23,7 @@ from adversarial_ids.config.settings import (
     MODEL_ID,
     TOTAL_ITERATIONS,
 )
+from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.interfaces.experiment_runner import (
     ExperimentRunner,
@@ -148,6 +150,24 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--detector",
+        choices=list(DETECTOR_KEYS),
+        # default=None (e NÃO DETECTOR_MODE) para distinguir "o usuário passou
+        # a flag" de "herdou o default do ambiente" — sem a sentinela, o teste
+        # de rejeição do engine demo abaixo viraria "você divergiu de
+        # DETECTOR_MODE", que rejeita `--detector random_forest` e libera a
+        # omissão da flag quando DETECTOR_MODE está definido: exatamente o
+        # inverso do pretendido. O default efetivo é resolvido em _detector().
+        default=None,
+        metavar="MODELO",
+        help=(
+            "Apenas com --engine live/intent: modelo que o IDS treina (épico E8). "
+            "Opções: " + ", ".join(DETECTOR_KEYS) + ". Os dois SVMs pedem escala "
+            "padronizada automaticamente; 'svm_rbf' não produz importância de "
+            "feature e custa O(n^2) no volume de treino."
+        ),
+    )
+    parser.add_argument(
         "--open-dashboard",
         action="store_true",
         help="Ao terminar, abre o dashboard Streamlit com o panorama dos resultados.",
@@ -195,6 +215,7 @@ def _run_intent_engine(
     stdout: TextIO,
     stderr: TextIO,
     run_intent_loop: RunIntentLoop | None,
+    detector: str,
 ) -> int:
     if not args.prompt:
         print(
@@ -218,6 +239,7 @@ def _run_intent_engine(
             model_id=args.model_id,
             generator_mode=args.generator_mode,
             rounds=args.rounds,
+            detector=detector,
         )
     except KeyboardInterrupt:
         print("Execução interrompida pelo usuário.", file=stderr)
@@ -235,6 +257,27 @@ def _run_intent_engine(
     return 1 if has_failed_stage else 0
 
 
+def _resolve_detector(detector: str | None, *, stderr: TextIO) -> str | None:
+    """Resolve ``--detector`` (ou o default de ambiente) e valida a chave.
+
+    ``argparse`` só aplica ``choices`` a valores vindos de ``argv``, nunca ao
+    ``default`` — então um ``DETECTOR_MODE`` com erro de digitação no ``.env``
+    passaria por aqui cru e só estouraria lá no núcleo, como traceback. Devolve
+    ``None`` (e já imprime a causa) quando a chave não existe.
+    """
+
+    resolved = detector or DETECTOR_MODE
+    if resolved not in DETECTOR_KEYS:
+        origin = "--detector" if detector is not None else "DETECTOR_MODE"
+        print(
+            f"Erro: {origin}={resolved!r} não é um detector conhecido. "
+            f"Opções: {', '.join(DETECTOR_KEYS)}.",
+            file=stderr,
+        )
+        return None
+    return resolved
+
+
 def run_cli(
     runner: ExperimentRunner | None = None,
     argv: Sequence[str] | None = None,
@@ -245,15 +288,42 @@ def run_cli(
 ) -> int:
     args = create_parser().parse_args(argv)
 
+    if args.engine == "demo" and args.detector is not None:
+        # Checado aqui, e não só em create_default_runner: esta é a única
+        # combinação de flags inválida que o usuário consegue digitar (as
+        # demais o argparse barra por `choices`), então merece a mesma
+        # mensagem limpa + exit code 2 que --prompt ausente recebe, em vez de
+        # um traceback vazando da camada de baixo.
+        print(
+            f"Erro: --detector {args.detector} não se aplica a --engine demo "
+            "(o histórico golden é um replay já gravado; nenhum detector é treinado). "
+            "Use --engine live ou --engine intent.",
+            file=stderr,
+        )
+        return 2
+
+    detector = _resolve_detector(args.detector, stderr=stderr)
+    if detector is None:
+        return 2
+
     if args.engine == "intent":
         return _run_intent_engine(
-            args, stdout=stdout, stderr=stderr, run_intent_loop=run_intent_loop
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            run_intent_loop=run_intent_loop,
+            detector=detector,
         )
 
     generator_mode = args.generator_mode
     if runner is None:
         runner = create_default_runner(
             args.engine,
+            # A sentinela crua, não o valor já resolvido: `create_default_runner`
+            # também precisa distinguir "escolha explícita" (que o engine demo
+            # recusa) de "herdou o default". A validação da chave já aconteceu
+            # em _resolve_detector acima.
+            detector=args.detector,
             orchestration=args.orchestration,
             persona=args.persona,
         )

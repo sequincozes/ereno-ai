@@ -117,20 +117,35 @@ def test_create_default_runner_demo_is_cached_history():
 def test_create_default_runner_live_defaults_to_team():
     runner = create_default_runner("live")
     assert isinstance(runner, WorkflowAdapter)
-    # run_workflow é um partial(run_live_workflow, use_team=True, persona=...) por default.
+    # run_workflow é um partial(run_live_workflow, use_team=True, persona=...,
+    # detector=...) por default. O detector (E8) entra aqui em vez de no
+    # protocolo ExperimentRunner.run pelo mesmo motivo de persona/orchestration:
+    # é uma escolha de montagem do loop, não um parâmetro de cada execução.
     assert runner.run_workflow.func is run_live_workflow
-    assert runner.run_workflow.keywords == {"use_team": True, "persona": "conservative"}
+    assert runner.run_workflow.keywords == {
+        "use_team": True,
+        "persona": "conservative",
+        "detector": "random_forest",
+    }
 
 
 def test_create_default_runner_live_direct_disables_team():
     runner = create_default_runner("live", orchestration="direct")
     assert isinstance(runner, WorkflowAdapter)
-    assert runner.run_workflow.keywords == {"use_team": False, "persona": "conservative"}
+    assert runner.run_workflow.keywords == {
+        "use_team": False,
+        "persona": "conservative",
+        "detector": "random_forest",
+    }
 
 
 def test_create_default_runner_live_forwards_persona():
     runner = create_default_runner("live", persona="aggressive")
-    assert runner.run_workflow.keywords == {"use_team": True, "persona": "aggressive"}
+    assert runner.run_workflow.keywords == {
+        "use_team": True,
+        "persona": "aggressive",
+        "detector": "random_forest",
+    }
 
 
 def test_create_default_runner_rejects_unknown_persona():
@@ -146,3 +161,26 @@ def test_create_default_runner_rejects_unknown_engine():
 def test_create_default_runner_rejects_unknown_orchestration():
     with pytest.raises(ValueError):
         create_default_runner("live", orchestration="bogus")
+
+
+# --------------------------------------------------------------------------- #
+# Detector plugável (épico E8)                                                 #
+# --------------------------------------------------------------------------- #
+def test_create_default_runner_live_forwards_the_detector():
+    runner = create_default_runner("live", detector="svm_rbf")
+    assert runner.run_workflow.keywords["detector"] == "svm_rbf"
+
+
+def test_create_default_runner_rejects_an_unknown_detector():
+    from adversarial_ids.core.detectors import DetectorError
+
+    with pytest.raises(DetectorError, match="Detector desconhecido"):
+        create_default_runner("live", detector="xgboost")
+
+
+def test_create_default_runner_demo_rejects_a_detector_choice():
+    # No caminho demo o histórico golden já está gravado: nenhum detector é
+    # treinado, então aceitar a escolha em silêncio seria mentir sobre o que
+    # a execução faz.
+    with pytest.raises(ValueError, match="não se aplica ao engine 'demo'"):
+        create_default_runner("demo", detector="svm_linear")

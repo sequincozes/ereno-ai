@@ -92,6 +92,9 @@ def test_intent_engine_forwards_arguments_and_reports_success():
         "model_id": "modelo-teste",
         "generator_mode": "cached",
         "rounds": INTENT_LOOP_DEFAULT_ROUNDS,
+        # E8: o detector default vai junto, para que a campanha registre qual
+        # modelo rodou sem depender de uma env var lida lá dentro.
+        "detector": "random_forest",
     }
     output = stdout.getvalue()
     assert "run_id=run-1" in output
@@ -227,3 +230,24 @@ def test_demo_engine_is_unaffected_by_the_new_flag():
 
     assert exit_code == 0
     assert "registro(s)" in stdout.getvalue()
+
+
+def test_intent_engine_forwards_the_chosen_detector():
+    received = {}
+
+    def fake_run_intent_loop(**kwargs):
+        received.update(kwargs)
+        return _records()
+
+    exit_code = run_cli(
+        argv=[
+            "--engine", "intent",
+            "--prompt", "Reduza o recall.",
+            "--detector", "svm_linear",
+        ],
+        stdout=StringIO(),
+        run_intent_loop=fake_run_intent_loop,
+    )
+
+    assert exit_code == 0
+    assert received["detector"] == "svm_linear"
