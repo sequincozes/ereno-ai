@@ -1,7 +1,6 @@
-from typing import Any
+from typing import Any, Mapping
 
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import (
     accuracy_score,
     confusion_matrix,
@@ -11,15 +10,19 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
 from adversarial_ids.config.settings import (
+    DETECTOR_MODE,
+    DETECTOR_SCALER,
     FEATURE_SELECTION_MIN_SCORE,
     FEATURE_SELECTION_MODE,
     FEATURE_SELECTION_TOP_K,
     PREPROCESSOR_MODE,
     UNDERSAMPLING_MODE,
 )
+from adversarial_ids.core.detectors import Detector, recommended_scaler
 from adversarial_ids.core.feature_selector import FeatureSelector
 from adversarial_ids.core.preprocessor import FeaturePreprocessor
 from adversarial_ids.core.undersampler import RandomUndersampler
+from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
 from adversarial_ids.domain.selection_manifest import SelectionManifest
 
@@ -28,8 +31,26 @@ class IdsEvaluator:
     """
     Avaliador do IDS.
 
-    Treina o Random Forest apenas no baseline e testa cada variante
+    Treina o detector apenas no baseline e testa cada variante
     sem retreinar o modelo.
+
+    Detector plugável (épico E8): o modelo não é mais um
+    ``RandomForestClassifier`` embutido — é um ``core.detectors.Detector``
+    resolvido por chave (``"random_forest"`` default, mais ``"decision_tree"``,
+    ``"svm_linear"`` e ``"svm_rbf"``). Todos entram no **mesmo ponto** do
+    pipeline, depois do mesmo split e do mesmo preparo, o que é o que torna a
+    comparação entre eles honesta (etapa D36-46: "mesmo split/protocolo para
+    todos os detectores"). O default reproduz o comportamento anterior ao E8 —
+    mesmos hiperparâmetros, mesma ordem de fit, mesmas importâncias Gini.
+    Ver ``docs/detectors.md``.
+
+    Ressalva de comparabilidade: "mesmo preparo" é literal enquanto
+    ``feature_selection="none"`` (o default). Com ``"mutual_info"`` a seleção
+    é ajustada sobre o X **já escalado**, e ``mutual_info_classif`` não é
+    estritamente invariante a escala — dois detectores com recomendações de
+    escala diferentes podem, em princípio, receber conjuntos de features
+    diferentes. Numa comparação com seleção ligada, passe ``scaler=``
+    explicitamente para forçar os dois lados à mesma escala.
 
     Preprocessamento de features (épico E6): o preparo de features (colunas
     descartadas, imputação, encoding categórico) não vive mais aqui — foi
@@ -56,6 +77,13 @@ class IdsEvaluator:
     idêntico a antes do E7 até alguém optar explicitamente por uma
     estratégia (ver ``docs/feature_selection.md``).
 
+    Escala (E6 × E8): ``scaler=None`` (default) delega ao detector — os SVMs
+    pedem ``"standard"``, as árvores ``"none"``. Passar ``scaler="none"`` ou
+    ``"standard"`` explicitamente força os dois lados a usarem a mesma escala,
+    que é o que uma ablação controlada entre detectores precisa; o
+    ``DetectorManifest`` registra a recomendação e o valor aplicado lado a
+    lado, então um SVM rodado sem escala fica visível no artefato.
+
     O `LabelEncoder` do rótulo fica de fora do preprocessador de propósito: um
     espaço de rótulos não é uma estatística ajustada sobre features, é a
     definição das classes que o modelo aprende a prever — ajustá-lo no
@@ -64,12 +92,13 @@ class IdsEvaluator:
     """
 
     _VALID_PREPROCESSOR_MODES = ("modular", "legacy")
+    _VALID_SCALERS = ("none", "standard")
 
     def __init__(
         self,
         test_size: float = 0.3,
         random_state: int = 42,
-        n_estimators: int = 100,
+        n_estimators: int | None = None,
         drop_cb_status: bool = False,
         target_attack_label: str | None = None,
         preprocessor_mode: str = PREPROCESSOR_MODE,
@@ -77,16 +106,28 @@ class IdsEvaluator:
         feature_selection_top_k: int | None = FEATURE_SELECTION_TOP_K,
         feature_selection_min_score: float | None = FEATURE_SELECTION_MIN_SCORE,
         undersampling: str = UNDERSAMPLING_MODE,
+        detector: str = DETECTOR_MODE,
+        detector_hyperparameters: Mapping[str, Any] | None = None,
+        scaler: str | None = DETECTOR_SCALER,
     ) -> None:
         if preprocessor_mode not in self._VALID_PREPROCESSOR_MODES:
             raise ValueError(
                 f"preprocessor_mode inválido: {preprocessor_mode!r}. "
                 f"Use um de {self._VALID_PREPROCESSOR_MODES}."
             )
+        if scaler is not None and scaler not in self._VALID_SCALERS:
+            raise ValueError(
+                f"scaler inválido: {scaler!r}. Use um de {self._VALID_SCALERS} "
+                "ou None para delegar ao detector."
+            )
 
         self.test_size = test_size
         self.random_state = random_state
-        self.n_estimators = n_estimators
+        # ``None`` = "não informado". A sentinela existe para distinguir isso
+        # de "informado com o valor default", que é o que permite recusar
+        # `n_estimators` num detector que não é Random Forest (ver abaixo)
+        # em vez de descartá-lo em silêncio. ``self.n_estimators`` é
+        # reatribuído depois da resolução, para nunca contradizer o modelo.
         self.drop_cb_status = drop_cb_status
         # Rótulo da classe de ataque esperado (ex.: "random_replay", "grayhole").
         # Quando definido, ancora a detecção da classe de ataque em vez de depender
@@ -100,7 +141,38 @@ class IdsEvaluator:
         self.feature_selection_min_score = feature_selection_min_score
         self.undersampling = undersampling
 
-        self.model: RandomForestClassifier | None = None
+        # Épico E8 — detector plugável. ``n_estimators`` é um hiperparâmetro
+        # exclusivo do Random Forest: continua aceito na assinatura (é anterior
+        # ao E8 e há chamadores usando), mas informá-lo para outro detector, ou
+        # informá-lo duas vezes, é erro em vez de silêncio — o mesmo rigor com
+        # que ``Detector`` recusa hiperparâmetro não suportado.
+        overrides: dict[str, Any] = dict(detector_hyperparameters or {})
+        if n_estimators is not None:
+            if detector != "random_forest":
+                raise ValueError(
+                    f"n_estimators={n_estimators!r} só se aplica a "
+                    f"detector='random_forest' (recebido {detector!r}). Use "
+                    "detector_hyperparameters para os demais detectores."
+                )
+            if "n_estimators" in overrides:
+                raise ValueError(
+                    "n_estimators informado duas vezes (argumento direto="
+                    f"{n_estimators!r} e detector_hyperparameters="
+                    f"{overrides['n_estimators']!r}) — escolha uma das duas fontes."
+                )
+            overrides["n_estimators"] = n_estimators
+
+        self.detector = Detector(
+            detector, random_state=self.random_state, hyperparameters=overrides
+        )
+        # Espelha o que o estimador realmente recebeu (``None`` para detectores
+        # que não têm o conceito) — nunca um valor que o modelo não usa.
+        self.n_estimators = self.detector.hyperparameters.get("n_estimators")
+        # ``None`` = delegar ao detector; um valor explícito vence a
+        # recomendação (ver docstring da classe).
+        self.scaler = scaler if scaler is not None else recommended_scaler(detector)
+
+        self.model: Any | None = None
         self.label_column: str | None = None
         self.preprocessor: FeaturePreprocessor | None = None
         self.feature_selector: FeatureSelector | None = None
@@ -172,6 +244,20 @@ class IdsEvaluator:
             fitted_rows_after_undersampling=self._fitted_rows_after_undersampling,
         )
 
+    @property
+    def detector_manifest(self) -> DetectorManifest | None:
+        """Manifest do detector treinado (E8).
+
+        ``None`` antes de ``train_baseline``, mesma semântica de
+        ``feature_manifest``/``selection_manifest``. Carrega a escala
+        efetivamente aplicada pelo preprocessador, não só a que o detector
+        recomenda — é o que fecha a prova de "mesmo protocolo" entre dois
+        detectores comparados.
+        """
+        if not self.detector.is_fitted:
+            return None
+        return self.detector.manifest(resolved_scaler=self.scaler)
+
     def train_baseline(self, dataset_path: str) -> dict[str, Any]:
         print(f"[IDS] Treinando modelo baseline com: {dataset_path}")
 
@@ -187,7 +273,13 @@ class IdsEvaluator:
         y = df[self.label_column]
         y_encoded = self._fit_transform_labels(y)
 
-        self.preprocessor = FeaturePreprocessor(drop_cb_status=self.drop_cb_status)
+        # ``scaler`` já vem resolvido do __init__ (recomendação do detector ou
+        # override explícito do chamador) — é o único ponto do E8 que toca o
+        # preparo de features do E6.
+        self.preprocessor = FeaturePreprocessor(
+            drop_cb_status=self.drop_cb_status,
+            scaler=self.scaler,  # type: ignore[arg-type]  # validado no __init__
+        )
 
         if self.preprocessor_mode == "legacy":
             # Ajusta sobre o dataset INTEIRO antes do split — reproduz de
@@ -247,15 +339,20 @@ class IdsEvaluator:
             f"{self._fitted_rows_after_undersampling} linhas após undersampling "
             f"({self.undersampling})"
         )
+        print(f"[IDS] Detector: {self.detector.key} (escala: {self.scaler})")
 
-        self.model = RandomForestClassifier(
-            n_estimators=self.n_estimators,
-            random_state=self.random_state,
-            n_jobs=-1,
-        )
-
-        self.model.fit(X_train, y_train)
-        y_pred = self.model.predict(X_test)
+        # Épico E8 — o detector é resolvido no __init__ e treinado aqui, no
+        # mesmo ponto do pipeline em que o Random Forest era construído antes:
+        # depois de preprocessar (E6), selecionar features e reamostrar (E7).
+        # ``self.model`` continua existindo apontando para o estimador do
+        # sklearn: é o que ``get_shap_importances`` lê e o que chamadores
+        # anteriores ao E8 inspecionam. Só a *leitura* é compatível — atribuir
+        # ``evaluator.model = clf`` por fora virou no-op, porque as predições
+        # passam por ``self.detector``. Nenhum chamador deste repositório faz
+        # isso; se algum passar a fazer, o caminho é reconstruir o Detector.
+        self.detector.fit(X_train, y_train)
+        self.model = self.detector.estimator
+        y_pred = self.detector.predict(X_test)
 
         metrics = self._compute_metrics(
             y_true=y_test,
@@ -296,7 +393,7 @@ class IdsEvaluator:
             X_prepared = self.feature_selector.transform(X_prepared)
         y_encoded = self._transform_labels(y)
 
-        y_pred = self.model.predict(X_prepared)
+        y_pred = self.detector.predict(X_prepared)
 
         metrics = self._compute_metrics(
             y_true=y_encoded,
@@ -403,26 +500,16 @@ class IdsEvaluator:
     # compatível com ``domain.metrics.FeatureImportance`` (extra=forbid).#
     # ------------------------------------------------------------------ #
     def get_feature_importances(self, top_n: int = 15) -> list[dict[str, Any]]:
-        """Importâncias Gini do Random Forest, em ordem decrescente.
+        """Importâncias do detector treinado, em ordem decrescente.
 
-        Sempre disponível após ``train_baseline``. Retorna ``[]`` se o modelo
-        ainda não foi treinado.
+        Disponível após ``train_baseline``; ``[]`` se o modelo ainda não foi
+        treinado **ou** se o detector não expõe importância nenhuma
+        (``svm_rbf``). A assinatura e o formato de item seguem congelados
+        (issue #15); o que o E8 acrescenta é que o *significado* do número
+        varia por detector — Gini para RF/DT, ``|coef_|`` para o SVM linear.
+        ``DetectorManifest.importance_kind`` é quem diz qual dos dois é.
         """
-        if self.model is None or self.feature_columns is None:
-            return []
-
-        importances = self.model.feature_importances_
-
-        ranking = sorted(
-            (
-                {"feature": feature, "importance": float(importance)}
-                for feature, importance in zip(self.feature_columns, importances)
-            ),
-            key=lambda item: item["importance"],
-            reverse=True,
-        )
-
-        return ranking[:top_n]
+        return self.detector.feature_importances(self.feature_columns, top_n=top_n)
 
     def get_shap_importances(
         self,
@@ -440,8 +527,21 @@ class IdsEvaluator:
 
         Mesmo formato de item de ``get_feature_importances`` para consumo
         uniforme pelo M2 (#12).
+
+        Épico E8: ``shap.TreeExplainer`` só explica modelo baseado em árvore,
+        então detectores com ``supports_shap=False`` (os dois SVMs) retornam
+        ``[]`` aqui pelo mesmo caminho best-effort de quando o pacote ``shap``
+        está ausente — nunca um explicador errado aplicado a um modelo que ele
+        não sabe ler.
         """
         if self.model is None or self.feature_columns is None or self.preprocessor is None:
+            return []
+
+        if not self.detector.supports_shap:
+            print(
+                f"[IDS] SHAP indisponível para o detector '{self.detector.key}' "
+                "(TreeExplainer só cobre modelos de árvore)."
+            )
             return []
 
         try:
