@@ -14,6 +14,9 @@ deixar de ser um `RandomForestClassifier` embutido em `core/ids_evaluator.py`.
   registra qual detector treinou e sob que preparo de dados, persistido como
   `detector_manifest.json` no pipeline intent-driven (mesmo estágio DETECTOR
   que já persiste `feature_manifest.json` e `selection_manifest.json`).
+- `core/detector_comparison.py::compare_detectors` + `domain/detector_comparison.py::DetectorComparison`
+  — o **relatório comparativo** que o gate da janela exige, produzido por
+  `scripts/compare_detectors.py`.
 - `config.settings.DETECTOR_MODE` / `DETECTOR_SCALER` — os dois knobs de
   ambiente. O default é `random_forest` sem escala: **comportamento idêntico
   ao de antes do E8**, e o histórico golden segue byte-estável.
@@ -72,6 +75,47 @@ recomendação) e `resolved_scaler` (o que foi aplicado) lado a lado, então um
 SVM que rodou sem escala explica sozinho uma métrica ruim, sem precisar
 reexecutar nada.
 
+## Relatório comparativo
+
+O registro de detectores torna RF/DT/SVM intercambiáveis, mas cada execução do
+loop treina **um**. O gate de saída da janela pede mais que isso — "mesmo
+split/protocolo; **relatório comparativo**; fallback RF preservado", com
+"ranking por F1/recall/latência". É o que `scripts/compare_detectors.py`
+produz:
+
+```bash
+uv run python scripts/compare_detectors.py                    # todos, ranking por F1
+uv run python scripts/compare_detectors.py --rank-by latency_ms
+uv run python scripts/compare_detectors.py --detector random_forest decision_tree
+```
+
+```
+ #  detector            F1  recall    prec    latência   escala    importância
+-----------------------------------------------------------------------------
+ 1  decision_tree   1.0000  1.0000  1.0000      85.3ms  none      gini
+ 2  random_forest   1.0000  1.0000  1.0000     151.6ms  none      gini
+ 3  svm_rbf         0.9913  1.0000  0.9828     103.8ms  standard  none
+ 4  svm_linear      0.9313  0.9825  0.8851      93.7ms  standard  linear_coef
+```
+
+Grava `outputs/detector_comparison.json` (um `DetectorComparison` válido) e sai
+com código 1 quando o comparativo **não** serve como evidência do gate: algum
+detector falhou, ou o protocolo não foi uniforme.
+
+Três propriedades que o contrato garante, e que a tabela sozinha não garantiria:
+
+- **O ranking é recomputável.** Um validador do `DetectorComparison` reordena
+  os `runs` a partir da `ranking_metric` e recusa o artefato se a ordem
+  declarada não bater. A métrica escolhida manda; as outras duas desempatam
+  (F1 → recall → latência, e por fim o nome do detector, para que um empate
+  exato não dependa da ordem em que a lista foi construída). No exemplo acima
+  é exatamente o que separa `decision_tree` de `random_forest`.
+- **Falha isolada não derruba os demais.** Cada detector roda no seu próprio
+  try/except: um SVM que estoure memória vira uma linha `failed` com a causa,
+  fica fora do ranking, e os outros continuam medidos. Exigência literal da
+  tabela de aceite da camada Detecção.
+- **"Mesmo protocolo" é verificado, não prometido.** Ver a seção seguinte.
+
 ## Limite da garantia de "mesmo protocolo"
 
 A comparabilidade do E8 é literal enquanto `FEATURE_SELECTION_MODE="none"`
@@ -100,6 +144,13 @@ uv run adversarial-ids --engine live --detector random_forest
 
 `tests/test_ids_evaluator_detectors.py::test_forcing_the_same_scaler_pins_the_selected_features_across_detectors`
 fixa esse remédio como garantia.
+
+E o relatório comparativo **detecta** a divergência em vez de deixá-la como
+nota de rodapé: `DetectorComparison.protocol_consistent` compara o espaço de
+features que cada detector realmente treinou, e `protocol_notes` diz quais
+divergiram, por quê e qual é o remédio. Um comparativo com protocolo não
+uniforme sai com aviso na tabela e exit code 1 — ele continua sendo um
+resultado válido de investigar, mas não é "comparação justa" concluída.
 
 ## Importâncias: mesmo formato, significados diferentes
 
@@ -210,10 +261,11 @@ run dirs byte a byte, este é o campo a excluir.
 
 ## Fora de escopo e trabalho futuro
 
-- **Seleção automática de detector**: nada aqui escolhe o melhor detector
-  sozinho, nem roda os quatro numa varredura. Cada execução treina um. Uma
-  campanha comparativa é hoje N execuções com `--detector` diferente, cujos
-  manifests provam que rodaram sob o mesmo protocolo.
+- **Seleção automática de detector**: `compare_detectors` ranqueia, mas nada
+  *age* sobre o ranking — o loop adversarial continua treinando o detector que
+  a configuração mandou, não o vencedor do último comparativo. Promover o
+  vencedor automaticamente exigiria decidir com que frequência recomparar, e
+  isso é política, não medição.
 - **Balanceamento por `class_weight`**: exposto como hiperparâmetro
   sobrescrevível nos quatro registros, mas `None` por default — mexer no
   default mudaria o caminho `random_forest`, que precisa continuar idêntico
