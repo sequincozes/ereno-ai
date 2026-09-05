@@ -35,3 +35,6 @@ generator_runtime/config/attacks/*
 
 .claude/
 CLAUDE.md
+# Documentos de planejamento na raiz (ex.: o plano de 60 dias em PDF).
+# Ficam locais de propósito: são material de trabalho, não artefato do repo.
+/*.pdf
