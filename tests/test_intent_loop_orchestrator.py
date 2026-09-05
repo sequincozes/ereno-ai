@@ -126,6 +126,7 @@ class _StubDefenderAgent:
                 "detection_actions": [
                     {
                         "description": "Revisar o limiar de decisão do classificador.",
+                        "technique": "detector_threshold_tuning",
                         "evidence": [
                             {
                                 "metric_or_feature": "recall",
@@ -133,7 +134,12 @@ class _StubDefenderAgent:
                                 "detection_report_ref": report_ref,
                             }
                         ],
-                        "validation_method": "Reavaliar o recall no mesmo split de teste.",
+                        "validation_test": {
+                            "metric": "recall",
+                            "direction": "increase",
+                            "target": 0.85,
+                            "procedure": "Reavaliar o recall no mesmo split de teste.",
+                        },
                     }
                 ],
             }
@@ -159,6 +165,7 @@ class _UngroundedDefenderAgent:
                 "detection_actions": [
                     {
                         "description": "Ação sem lastro no relatório.",
+                        "technique": "detector_threshold_tuning",
                         "evidence": [
                             {
                                 "metric_or_feature": "feature_inventada",
@@ -166,7 +173,12 @@ class _UngroundedDefenderAgent:
                                 "detection_report_ref": None,
                             }
                         ],
-                        "validation_method": "Não verificável.",
+                        "validation_test": {
+                            "metric": "recall",
+                            "direction": "increase",
+                            "target": 0.85,
+                            "procedure": "Não verificável.",
+                        },
                     }
                 ],
             }

@@ -38,7 +38,20 @@ from adversarial_ids.domain.attack_configs import (
     config_model_for,
 )
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
-from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
+from adversarial_ids.domain.defense_plan import (
+    DEFENSE_BUCKETS,
+    DEFENSE_TECHNIQUES,
+    VALIDATION_METRICS,
+    DefenseAction,
+    DefenseBucket,
+    DefensePlan,
+    DefenseTechnique,
+    Evidence,
+    ValidationDirection,
+    ValidationMetric,
+    ValidationTest,
+    techniques_for_bucket,
+)
 from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
 from adversarial_ids.domain.detector_comparison import (
     DetectorComparison,
@@ -118,7 +131,16 @@ __all__ = [
     "ConfusionMatrix",
     "DefensePlan",
     "DefenseAction",
+    "DefenseBucket",
+    "DefenseTechnique",
+    "DEFENSE_BUCKETS",
+    "DEFENSE_TECHNIQUES",
+    "techniques_for_bucket",
     "Evidence",
+    "ValidationTest",
+    "ValidationDirection",
+    "ValidationMetric",
+    "VALIDATION_METRICS",
     "LoopRecord",
     "LoopStage",
     "LoopStageStatus",

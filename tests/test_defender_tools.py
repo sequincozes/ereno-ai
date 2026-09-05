@@ -11,7 +11,11 @@ from adversarial_ids.agents.defender.tools import (
     select_evidence_candidates,
     validate_plan_against_report,
 )
-from adversarial_ids.domain import DetectionReport
+from adversarial_ids.domain import (
+    VALIDATION_METRICS,
+    DetectionReport,
+    techniques_for_bucket,
+)
 
 
 def build_report(
@@ -48,13 +52,14 @@ def build_plan(
     metric_or_feature: str = "recall",
     value: float | int | str = 0.60,
     detection_report_ref: str | None = None,
-    validation_method: str = "Reavaliar recall no mesmo split.",
+    technique: str = "detector_threshold_tuning",
 ) -> dict:
     return {
         "priority": priority,
         "detection_actions": [
             {
                 "description": "Revisar o limiar de decisão do classificador.",
+                "technique": technique,
                 "evidence": [
                     {
                         "metric_or_feature": metric_or_feature,
@@ -62,7 +67,12 @@ def build_plan(
                         "detection_report_ref": detection_report_ref,
                     }
                 ],
-                "validation_method": validation_method,
+                "validation_test": {
+                    "metric": "recall",
+                    "direction": "increase",
+                    "target": 0.80,
+                    "procedure": "Reavaliar recall no mesmo split.",
+                },
             }
         ],
     }
@@ -301,6 +311,9 @@ def test_validate_gates_all_three_buckets(bucket: str):
         bucket: [
             {
                 "description": "Ação de teste.",
+                # Nenhuma técnica é legal nos três baldes, então a do balde sob
+                # teste vem do mesmo mapa que o contrato usa para recusar.
+                "technique": techniques_for_bucket(bucket)[0],
                 "evidence": [
                     {
                         "metric_or_feature": "feature_inventada",
@@ -308,7 +321,12 @@ def test_validate_gates_all_three_buckets(bucket: str):
                         "detection_report_ref": None,
                     }
                 ],
-                "validation_method": "Reavaliar.",
+                "validation_test": {
+                    "metric": "recall",
+                    "direction": "increase",
+                    "target": 0.80,
+                    "procedure": "Reavaliar.",
+                },
             }
         ],
     }
@@ -358,3 +376,34 @@ def test_validate_rejects_mismatched_detection_report_ref():
             report,
             expected_report_ref="outputs/intent_loop/run-1/detection_report.json",
         )
+
+
+# --------------------------------------------------------------------------- #
+# Sincronia entre o contrato e a allowlist                                    #
+# --------------------------------------------------------------------------- #
+def test_every_validation_metric_exists_in_the_evidence_allowlist():
+    """``ValidationMetric`` é um subconjunto de ``select_evidence_candidates``.
+
+    As duas listas nascem em módulos diferentes (o contrato em ``domain``, a
+    allowlist aqui) porque o domínio não importa nada de ``agents``. Se um dia
+    o ``DetectionReport`` renomear uma métrica e só um dos lados acompanhar, um
+    plano poderia prometer remedir algo que o relatório não publica — este
+    teste é a costura entre os dois, no mesmo espírito da checagem de registro
+    de ``core/detectors.py`` contra ``DETECTOR_KEYS``.
+    """
+
+    allowlist = select_evidence_candidates(build_report())
+
+    assert set(VALIDATION_METRICS) <= set(allowlist)
+
+
+def test_the_allowlist_keys_left_out_of_validation_metrics_are_not_measurable():
+    """O que sobra da allowlist é texto ou importância — nada que se "remeça"."""
+
+    report = build_report()
+    allowlist = select_evidence_candidates(report)
+    features = {feature.feature for feature in report.top_features}
+
+    left_out = set(allowlist) - set(VALIDATION_METRICS)
+
+    assert left_out == {"model_name", "split"} | features

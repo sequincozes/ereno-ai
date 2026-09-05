@@ -10,6 +10,7 @@ regras de consistência interna específicas do contrato.
 from __future__ import annotations
 
 import json
+from typing import get_args
 
 import pytest
 from pydantic import ValidationError
@@ -36,6 +37,7 @@ from adversarial_ids.domain import (
     LoopStageStatus,
     ScalerStat,
     SelectionManifest,
+    ValidationTest,
 )
 
 _SHA256_ZEROS = "0" * 64
@@ -135,10 +137,16 @@ def _selection_manifest(**overrides: object) -> SelectionManifest:
             detection_actions=(
                 DefenseAction(
                     description="Monitorar variação de stNum acima do limiar.",
+                    technique="goose_sequence_validation",
                     evidence=(
                         Evidence(metric_or_feature="recall_attack", value=0.42),
                     ),
-                    validation_method="Reexecutar detector com regra ativa e medir recall.",
+                    validation_test=ValidationTest(
+                        metric="recall",
+                        direction="increase",
+                        target=0.7,
+                        procedure="Reexecutar detector com regra ativa e medir recall.",
+                    ),
                 ),
             ),
         ),
@@ -169,7 +177,14 @@ def _selection_manifest(**overrides: object) -> SelectionManifest:
 def test_contract_is_versioned_frozen_and_json_stable(build):
     instance = build()
 
-    assert instance.schema_version == 1
+    # A versão é fixada por um ``Literal`` de um único valor, não escolhida pelo
+    # chamador. Comparar contra o próprio Literal (em vez de contra ``1``) mantém
+    # a invariante quando um contrato evolui — o ``DefensePlan`` foi para 2 na
+    # janela D47-54 — sem afrouxar o que está sendo verificado.
+    pinned = get_args(type(instance).model_fields["schema_version"].annotation)
+    assert len(pinned) == 1, "schema_version deve fixar exatamente uma versão."
+    assert instance.schema_version == pinned[0]
+
     dumped = instance.model_dump(mode="json")
     assert type(instance).model_validate_json(json.dumps(dumped)) == instance
 
@@ -243,8 +258,14 @@ def test_defense_action_rejects_evidence_free_claims():
     with pytest.raises(ValidationError):
         DefenseAction(
             description="Bloquear tudo.",
+            technique="network_segmentation",
             evidence=(),
-            validation_method="N/A",
+            validation_test=ValidationTest(
+                metric="recall",
+                direction="increase",
+                target=0.7,
+                procedure="N/A",
+            ),
         )
 
 
