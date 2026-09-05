@@ -35,6 +35,7 @@ from adversarial_ids.domain.intent_spec import (
 )
 from adversarial_ids.domain.feedback_decision import FeedbackDecision
 from adversarial_ids.domain.feature_manifest import FeatureManifest
+from adversarial_ids.domain.selection_manifest import SelectionManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json
 from adversarial_ids.shared.loop_record_store import load_loop_records
@@ -335,6 +336,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "dataset_bundle.json",
         "detection_report.json",
         "feature_manifest.json",
+        "selection_manifest.json",
         "defense_plan.json",
         "feedback.json",
     ):
@@ -359,6 +361,16 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
     # do seed cacheado, test_size=0.3 padrão do IdsEvaluator) — nunca as 20.
     manifest = FeatureManifest.model_validate(load_json(run_dir / "feature_manifest.json"))
     assert manifest.fitted_rows == 14
+
+    # O manifest de seleção (E7) é um SelectionManifest válido; estratégias
+    # default "none" não alteram nem colunas nem linhas de treino — as duas
+    # contagens batem com o mesmo fitted_rows do FeatureManifest acima.
+    selection = SelectionManifest.model_validate(load_json(run_dir / "selection_manifest.json"))
+    assert selection.feature_selection == "none"
+    assert selection.undersampling == "none"
+    assert selection.selected_features == selection.candidate_features
+    assert selection.fitted_rows_before_undersampling == 14
+    assert selection.fitted_rows_after_undersampling == 14
 
 
 def test_run_appends_the_record_to_the_loop_record_store(tmp_path):

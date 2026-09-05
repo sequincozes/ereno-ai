@@ -12,7 +12,8 @@ torna o manifest "reproduzível" no sentido do critério de pronto do E6
 ``fitted_rows`` é a prova, no próprio artefato, de que o ajuste não vazou:
 sempre o tamanho da partição de treino, nunca o total do dataset. Undersampling
 e seleção de features (mutual information) não pertencem a este contrato —
-são o épico E7, que consome ``feature_columns`` como ponto de partida.
+são o épico E7 (``domain/selection_manifest.py::SelectionManifest``), que
+consome ``feature_columns`` como ponto de partida.
 
 Precedência de motivo em ``dropped_columns``: uma coluna pode se qualificar
 para mais de um motivo ao mesmo tempo (no dataset real do ERENO, 21 das 33
