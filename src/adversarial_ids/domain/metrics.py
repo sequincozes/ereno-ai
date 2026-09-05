@@ -4,10 +4,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class FeatureImportance(BaseModel):
-    """Uma feature e sua importância no Random Forest.
+    """Uma feature e sua importância para o detector treinado.
 
-    Espelha ``ids_evaluator._get_feature_importances`` — lista de dicts
+    Espelha ``ids_evaluator.get_feature_importances`` — lista de dicts
     ``{"feature": str, "importance": float}``.
+
+    O formato é fixo, o *significado* não: desde o épico E8 o detector é
+    plugável, então isto é importância Gini para ``random_forest``/
+    ``decision_tree`` e ``|coef_|`` (no espaço padronizado) para
+    ``svm_linear``; ``svm_rbf`` não produz nenhuma. Sem faixa de valor
+    declarada de propósito — Gini fica em [0, 1], um coeficiente linear não.
+    ``DetectorManifest.importance_kind`` diz qual dos casos está em jogo; ver
+    ``docs/detectors.md``.
     """
 
     model_config = ConfigDict(extra="forbid")
