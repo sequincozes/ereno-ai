@@ -34,6 +34,8 @@ from adversarial_ids.domain.intent_spec import (
     IntentSpec,
 )
 from adversarial_ids.domain.feedback_decision import FeedbackDecision
+from adversarial_ids.core.detectors import DetectorError
+from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
 from adversarial_ids.domain.selection_manifest import SelectionManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
@@ -190,6 +192,7 @@ def _orchestrator(
     min_attack_rows: int = 5,
     min_normal_rows: int = 5,
     feedback_min_delta: float = 0.01,
+    detector: str = "random_forest",
 ) -> IntentLoopOrchestrator:
     return IntentLoopOrchestrator(
         intent_agent=intent_agent,
@@ -201,6 +204,7 @@ def _orchestrator(
         min_attack_rows=min_attack_rows,
         min_normal_rows=min_normal_rows,
         feedback_min_delta=feedback_min_delta,
+        detector=detector,
     )
 
 
@@ -337,6 +341,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "detection_report.json",
         "feature_manifest.json",
         "selection_manifest.json",
+        "detector_manifest.json",
         "defense_plan.json",
         "feedback.json",
     ):
@@ -371,6 +376,15 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
     assert selection.selected_features == selection.candidate_features
     assert selection.fitted_rows_before_undersampling == 14
     assert selection.fitted_rows_after_undersampling == 14
+
+    # O manifest do detector (E8) é um DetectorManifest válido e descreve o
+    # detector default. trained_rows tem que bater com o que o E7 entregou ao
+    # fit — é o elo que prova que os três manifests falam da mesma execução.
+    detector = DetectorManifest.model_validate(load_json(run_dir / "detector_manifest.json"))
+    assert detector.detector == "random_forest"
+    assert detector.resolved_scaler == "none"
+    assert detector.trained_rows == selection.fitted_rows_after_undersampling
+    assert detector.trained_features == selection.selected_features
 
 
 def test_run_appends_the_record_to_the_loop_record_store(tmp_path):
@@ -610,3 +624,56 @@ def test_run_marks_feedback_failed_when_the_policy_raises(tmp_path, monkeypatch)
 
     # run() nunca levanta mesmo quando a própria política falha.
     assert record.total_duration_seconds is not None
+
+
+# --------------------------------------------------------------------------- #
+# Detector plugável no estágio DETECTOR (épico E8)                             #
+# --------------------------------------------------------------------------- #
+def test_detector_choice_reaches_the_report_the_manifest_and_the_defender(tmp_path):
+    """Sem isto o loop rodaria um SVM e continuaria anunciando 'random_forest'.
+
+    Os três lugares onde o nome do detector aparece precisam concordar: o
+    ``DetectionReport`` que o Defensor recebe, o ``detector_manifest.json``
+    em disco, e o ``detection_report.json`` persistido.
+    """
+
+    defender = _StubDefenderAgent()
+    orchestrator = _orchestrator(
+        tmp_path, _StubIntentAgent(_intent()), defender_agent=defender, detector="decision_tree"
+    )
+
+    record = orchestrator.run("Reduza o recall.")
+    run_dir = tmp_path / "artifacts" / record.run_id
+
+    assert defender.received_reports[0].model_name == "decision_tree"
+    assert load_json(run_dir / "detection_report.json")["model_name"] == "decision_tree"
+
+    manifest = DetectorManifest.model_validate(load_json(run_dir / "detector_manifest.json"))
+    assert manifest.detector == "decision_tree"
+    assert manifest.model_name == "decision_tree"
+
+
+def test_svm_detector_resolves_standard_scaling_through_the_whole_stage(tmp_path):
+    # O E8 encosta no E6 exatamente aqui: a escala que o SVM pede tem que
+    # chegar ao FeaturePreprocessor, e os dois manifests têm que concordar.
+    orchestrator = _orchestrator(
+        tmp_path, _StubIntentAgent(_intent()), detector="svm_linear"
+    )
+
+    record = orchestrator.run("Reduza o recall.")
+    run_dir = tmp_path / "artifacts" / record.run_id
+
+    detector = DetectorManifest.model_validate(load_json(run_dir / "detector_manifest.json"))
+    feature = FeatureManifest.model_validate(load_json(run_dir / "feature_manifest.json"))
+
+    assert detector.requires_scaling is True
+    assert detector.resolved_scaler == "standard"
+    assert feature.scaler == "standard"
+    assert feature.scaler_stats  # estatísticas de fato ajustadas no treino
+
+
+def test_unknown_detector_is_rejected_when_the_orchestrator_is_built(tmp_path):
+    # Erro de configuração do chamador, não falha de estágio: tem que estourar
+    # na construção, antes de qualquer geração de dataset.
+    with pytest.raises(DetectorError, match="Detector desconhecido"):
+        _orchestrator(tmp_path, _StubIntentAgent(_intent()), detector="xgboost")

@@ -21,7 +21,11 @@ from __future__ import annotations
 from adversarial_ids.agents.defender.agent import DefenderAgent
 from adversarial_ids.agents.intent.agent import IntentAgent
 from adversarial_ids.agents.orchestrator.intent_loop import IntentLoopOrchestrator
-from adversarial_ids.config.settings import INTENT_LOOP_DEFAULT_ROUNDS, MODEL_ID
+from adversarial_ids.config.settings import (
+    DETECTOR_MODE,
+    INTENT_LOOP_DEFAULT_ROUNDS,
+    MODEL_ID,
+)
 from adversarial_ids.domain.loop_record import LoopRecord
 
 
@@ -29,6 +33,7 @@ def build_intent_loop(
     *,
     model_id: str = MODEL_ID,
     generator_mode: str = "cached",
+    detector: str = DETECTOR_MODE,
 ) -> IntentLoopOrchestrator:
     """Monta o orquestrador v2 com o ``IntentAgent`` e o ``DefenderAgent`` reais."""
 
@@ -36,6 +41,7 @@ def build_intent_loop(
         intent_agent=IntentAgent(model_id=model_id),
         defender_agent=DefenderAgent(model_id=model_id),
         generator_mode=generator_mode,
+        detector=detector,
     )
 
 
@@ -45,6 +51,7 @@ def run_intent_loop(
     model_id: str = MODEL_ID,
     generator_mode: str = "cached",
     rounds: int = INTENT_LOOP_DEFAULT_ROUNDS,
+    detector: str = DETECTOR_MODE,
 ) -> tuple[LoopRecord, ...]:
     """Roda a campanha intent-driven ponta a ponta e devolve um ``LoopRecord``
     por rodada.
@@ -54,7 +61,12 @@ def run_intent_loop(
     que o ``IntentAgent`` extrai de ``prompt`` na primeira rodada (ver
     ``IntentLoopOrchestrator.run_campaign``). ``rounds=1`` (default) resolve
     uma única rodada — o mesmo comportamento de antes do E10.
+
+    ``detector`` (E8) escolhe qual modelo o estágio DETECTOR treina; o default
+    ``random_forest`` mantém o comportamento anterior. Ver ``docs/detectors.md``.
     """
 
-    orchestrator = build_intent_loop(model_id=model_id, generator_mode=generator_mode)
+    orchestrator = build_intent_loop(
+        model_id=model_id, generator_mode=generator_mode, detector=detector
+    )
     return orchestrator.run_campaign(prompt, rounds=rounds)
