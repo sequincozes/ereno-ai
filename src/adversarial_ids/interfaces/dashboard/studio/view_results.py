@@ -114,7 +114,8 @@ def _confusion(records: list[IterationRecord]) -> None:
 
 def _features(records: list[IterationRecord]) -> None:
     ui.section("Explicabilidade", "Features mais determinantes",
-               "Importâncias do Random Forest — quais campos do tráfego pesaram na decisão.")
+               "Importâncias do detector treinado — quais campos do tráfego pesaram na decisão. "
+               "A escala varia por detector: Gini para as árvores, |coef_| para o SVM linear.")
     by_it = {r.iteration: r for r in records}
     selected = st.selectbox("Iteração", options=sorted(by_it), key="feat_it")
     feats = [f.model_dump() if hasattr(f, "model_dump") else f
