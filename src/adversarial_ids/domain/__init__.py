@@ -5,7 +5,7 @@ Contratos de I/O congelados na Fase 0 — a fronteira exata entre os membros.
 Schemas base (issue #2, M3):
   - attack_configs/*  — um schema por ataque ERENO registrado (ver
                         ``domain/attack_configs/__init__.py``)
-  - Metrics           — saída da avaliação do IDS (Random Forest)
+  - Metrics           — saída da avaliação do IDS (detector plugável, ver E8)
   - IterationRecord   — unidade do histórico; costura os 4 schemas
 
 Schemas dos agentes (co-definidos pelos donos):
@@ -40,6 +40,12 @@ from adversarial_ids.domain.attack_configs import (
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
 from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
 from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
+from adversarial_ids.domain.detector_manifest import (
+    DETECTOR_KEYS,
+    DetectorKey,
+    DetectorManifest,
+    ImportanceKind,
+)
 from adversarial_ids.domain.feedback_decision import (
     FeedbackDecision,
     FeedbackStopReason,
@@ -117,4 +123,8 @@ __all__ = [
     "DroppedColumn",
     "ScalerStat",
     "SelectionManifest",
+    "DetectorManifest",
+    "DetectorKey",
+    "DETECTOR_KEYS",
+    "ImportanceKind",
 ]

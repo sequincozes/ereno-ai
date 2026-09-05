@@ -12,7 +12,7 @@ MitigationType = Literal["threshold", "feature", "retrain"]
 
 
 class DeceptiveFeature(BaseModel):
-    """Feature relevante para a decisão do Random Forest."""
+    """Feature relevante para a decisão do detector treinado (RF/DT/SVM, ver E8)."""
 
     model_config = ConfigDict(extra="forbid")
 

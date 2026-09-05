@@ -22,6 +22,7 @@ from adversarial_ids.domain import (
     DefensePlan,
     DesiredEffect,
     DetectionReport,
+    DetectorManifest,
     DroppedColumn,
     Evidence,
     FeatureManifest,
@@ -82,6 +83,20 @@ def _feature_manifest(**overrides: object) -> FeatureManifest:
     return FeatureManifest.model_validate(data)
 
 
+def _detector_manifest(**overrides: object) -> DetectorManifest:
+    data: dict[str, object] = {
+        "detector": "random_forest",
+        "model_name": "random_forest",
+        "importance_kind": "gini",
+        "supports_shap": True,
+        "trained_rows": 70,
+        "trained_features": ("num", "cat"),
+        "train_duration_seconds": 0.5,
+    }
+    data.update(overrides)
+    return DetectorManifest.model_validate(data)
+
+
 def _selection_manifest(**overrides: object) -> SelectionManifest:
     data: dict[str, object] = {
         "candidate_features": ("num", "cat"),
@@ -138,6 +153,7 @@ def _selection_manifest(**overrides: object) -> SelectionManifest:
         ),
         lambda: _feature_manifest(),
         lambda: _selection_manifest(),
+        lambda: _detector_manifest(),
     ],
     ids=[
         "AttackCandidate",
@@ -147,6 +163,7 @@ def _selection_manifest(**overrides: object) -> SelectionManifest:
         "LoopRecord",
         "FeatureManifest",
         "SelectionManifest",
+        "DetectorManifest",
     ],
 )
 def test_contract_is_versioned_frozen_and_json_stable(build):
@@ -506,3 +523,65 @@ def test_feedback_decision_rejects_round_one_with_a_parent_run_id():
 def test_feedback_decision_rejects_a_later_round_without_a_parent_run_id():
     with pytest.raises(ValidationError, match="parent_run_id"):
         _decision(round=2, parent_run_id=None)
+
+
+# --------------------------------------------------------------------------- #
+# DetectorManifest (E8)                                                       #
+# --------------------------------------------------------------------------- #
+def test_detector_manifest_rejects_importance_kind_that_the_detector_cannot_produce():
+    # Um SVM RBF não expõe importância nenhuma; anunciar "gini" faria o
+    # consumidor comparar um ranking que não existe.
+    with pytest.raises(ValidationError, match="produz importance_kind"):
+        _detector_manifest(detector="svm_rbf", model_name="svm_rbf", importance_kind="gini")
+
+
+def test_detector_manifest_rejects_shap_support_on_a_non_tree_detector():
+    with pytest.raises(ValidationError, match="só vale para detectores de árvore"):
+        _detector_manifest(
+            detector="svm_linear",
+            model_name="svm_linear",
+            importance_kind="linear_coef",
+            supports_shap=True,
+        )
+
+
+def test_detector_manifest_accepts_the_svm_linear_combination():
+    manifest = _detector_manifest(
+        detector="svm_linear",
+        model_name="svm_linear",
+        importance_kind="linear_coef",
+        supports_shap=False,
+        requires_scaling=True,
+        resolved_scaler="standard",
+    )
+    assert manifest.importance_kind == "linear_coef"
+    assert manifest.resolved_scaler == "standard"
+
+
+def test_detector_manifest_records_a_scaler_disagreeing_with_the_recommendation():
+    # Legítimo (ablação controlada), por isso não é erro — mas fica registrado.
+    manifest = _detector_manifest(
+        detector="svm_rbf",
+        model_name="svm_rbf",
+        importance_kind="none",
+        supports_shap=False,
+        requires_scaling=True,
+        resolved_scaler="none",
+    )
+    assert manifest.requires_scaling is True
+    assert manifest.resolved_scaler == "none"
+
+
+def test_detector_manifest_rejects_an_unregistered_detector_key():
+    with pytest.raises(ValidationError):
+        _detector_manifest(detector="xgboost", model_name="xgboost")
+
+
+def test_detector_manifest_requires_a_non_empty_trained_feature_space():
+    with pytest.raises(ValidationError):
+        _detector_manifest(trained_features=())
+
+
+def test_detector_manifest_requires_positive_trained_rows():
+    with pytest.raises(ValidationError):
+        _detector_manifest(trained_rows=0)
