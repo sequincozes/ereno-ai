@@ -12,7 +12,8 @@ constante e o vocabulário categórico viam as linhas de teste.
 
 O E6 extrai esse preparo para `core/preprocessor.py::FeaturePreprocessor`, um
 componente independente com contrato `fit`/`transform`, reaproveitável por
-qualquer detector sob o mesmo protocolo (pré-requisito do E8 — RF/DT/SVM). O
+qualquer detector sob o mesmo protocolo (consumido pelo E8 — RF/DT/SVM, ver
+`docs/detectors.md`). O
 `IdsEvaluator` agora faz o `train_test_split` sobre o X **cru** e só então
 chama `fit` — exclusivamente na partição de treino.
 
@@ -117,9 +118,10 @@ baseline já está em disco para diagnóstico.
   `FeatureManifest.feature_columns` como ponto de partida; não implementados
   aqui — ver `core/feature_selector.py`, `core/undersampler.py` e
   `docs/feature_selection.md`.
-- **Detector interface RF/DT/SVM (E8)**: depende deste componente para que os
-  três detectores comparem sob o mesmo preparo de dados; SVM é sensível a
-  escala, por isso `scaler="standard"` já existe (desligado por default).
+- **Detector interface RF/DT/SVM (E8)**: ~~fora de escopo~~ — **entregue**.
+  `scaler="standard"` deixou de ser só uma preparação para o futuro: os dois
+  SVMs registrados em `core/detectors.py` o pedem, e `IdsEvaluator` resolve a
+  escala a partir do detector escolhido. Ver `docs/detectors.md`.
 - **Mapeamento feature → técnica defensiva**: mencionado como extensão
   natural em `docs/feedback_policy.md`; não é este épico.
 

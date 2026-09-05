@@ -53,7 +53,7 @@ def render() -> None:
     ui.steps([
         {"num": "0", "title": "Baseline",
          "body": "O núcleo gera/serve o dataset de ataque inicial, treina o IDS "
-                 "(Random Forest) e mede as métricas de referência."},
+                 "(Random Forest por default; ver DETECTOR_MODE) e mede as métricas de referência."},
         {"num": "1", "title": "Estrategista propõe (Red Team)", "team": "red",
          "body": "Recebe a configuração atual, as métricas e o histórico e propõe, via "
                  "tool calling estruturado, uma nova configuração de ataque — "

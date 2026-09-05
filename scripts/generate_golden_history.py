@@ -73,7 +73,11 @@ def main() -> None:
         suggested_config_path=str(OUTPUTS_DIR / "suggested_attack_config.json"),
         cached_dataset_path=BASELINE_DATASET_PATH,  # força modo cacheado
     )
-    evaluator = IdsEvaluator(drop_cb_status=False)
+    # Detector e escala fixados explicitamente (E8): o histórico golden precisa
+    # ser byte-estável, e ``DETECTOR_MODE``/``DETECTOR_SCALER`` são env vars —
+    # herdar o default deixaria o shell de quem regenera decidir qual modelo
+    # entra na fixture versionada.
+    evaluator = IdsEvaluator(drop_cb_status=False, detector="random_forest", scaler="none")
     strategist = FakeStrategist()
     analyst = FakeAnalyst()
 

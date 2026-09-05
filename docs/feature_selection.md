@@ -137,9 +137,12 @@ validador de consistência interna do `SelectionManifest`;
 
 ## Fora de escopo e trabalho futuro
 
-- **Detector interface RF/DT/SVM (E8)**: depende deste componente e do E6
-  para que os três detectores comparem sob o mesmo preparo/seleção de
-  dados.
+- **Detector interface RF/DT/SVM (E8)**: ~~fora de escopo~~ — **entregue**.
+  Os quatro detectores registrados treinam sobre o espaço de features que
+  este componente selecionou e sobre as linhas que o undersampling deixou;
+  `DetectorManifest.trained_features`/`trained_rows` batem com
+  `SelectionManifest.selected_features`/`fitted_rows_after_undersampling`.
+  Ver `docs/detectors.md`.
 - **Estratégias de undersampling mais ricas** (ex.: NearMiss, Tomek links) e
   **outros critérios de seleção** (ex.: RFE, importância do próprio modelo)
   não são deste épico — `strategy` nos dois componentes já é um `Literal`
