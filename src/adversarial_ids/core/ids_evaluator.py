@@ -10,9 +10,18 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 
-from adversarial_ids.config.settings import PREPROCESSOR_MODE
+from adversarial_ids.config.settings import (
+    FEATURE_SELECTION_MIN_SCORE,
+    FEATURE_SELECTION_MODE,
+    FEATURE_SELECTION_TOP_K,
+    PREPROCESSOR_MODE,
+    UNDERSAMPLING_MODE,
+)
+from adversarial_ids.core.feature_selector import FeatureSelector
 from adversarial_ids.core.preprocessor import FeaturePreprocessor
+from adversarial_ids.core.undersampler import RandomUndersampler
 from adversarial_ids.domain.feature_manifest import FeatureManifest
+from adversarial_ids.domain.selection_manifest import SelectionManifest
 
 
 class IdsEvaluator:
@@ -38,6 +47,15 @@ class IdsEvaluator:
       antes do split — reproduz o comportamento anterior ao E6, só para
       comparar métricas antes/depois da correção (ver ``docs/preprocessing.md``).
 
+    Undersampling e seleção de features (épico E7, ``core/undersampler.py`` e
+    ``core/feature_selector.py``): rodam **depois** do preprocessador, só
+    sobre a partição de treino já transformada — nesta ordem: seleção de
+    features primeiro (mutual information é mais estável com mais linhas, e
+    a classe minoritária de ataque ainda não perdeu peso), undersampling só
+    depois, no espaço já reduzido. Ambos default ``"none"`` — comportamento
+    idêntico a antes do E7 até alguém optar explicitamente por uma
+    estratégia (ver ``docs/feature_selection.md``).
+
     O `LabelEncoder` do rótulo fica de fora do preprocessador de propósito: um
     espaço de rótulos não é uma estatística ajustada sobre features, é a
     definição das classes que o modelo aprende a prever — ajustá-lo no
@@ -55,6 +73,10 @@ class IdsEvaluator:
         drop_cb_status: bool = False,
         target_attack_label: str | None = None,
         preprocessor_mode: str = PREPROCESSOR_MODE,
+        feature_selection: str = FEATURE_SELECTION_MODE,
+        feature_selection_top_k: int | None = FEATURE_SELECTION_TOP_K,
+        feature_selection_min_score: float | None = FEATURE_SELECTION_MIN_SCORE,
+        undersampling: str = UNDERSAMPLING_MODE,
     ) -> None:
         if preprocessor_mode not in self._VALID_PREPROCESSOR_MODES:
             raise ValueError(
@@ -72,10 +94,21 @@ class IdsEvaluator:
         # contém "attack"/"masquerade".
         self.target_attack_label = target_attack_label
         self.preprocessor_mode = preprocessor_mode
+        # Épico E7 — ver docstring da classe para a ordem seleção→undersampling.
+        self.feature_selection = feature_selection
+        self.feature_selection_top_k = feature_selection_top_k
+        self.feature_selection_min_score = feature_selection_min_score
+        self.undersampling = undersampling
 
         self.model: RandomForestClassifier | None = None
         self.label_column: str | None = None
         self.preprocessor: FeaturePreprocessor | None = None
+        self.feature_selector: FeatureSelector | None = None
+        self.undersampler: RandomUndersampler | None = None
+        self._class_counts_before_undersampling: dict[str, int] | None = None
+        self._class_counts_after_undersampling: dict[str, int] | None = None
+        self._fitted_rows_before_undersampling: int | None = None
+        self._fitted_rows_after_undersampling: int | None = None
 
         self.label_encoder: LabelEncoder | None = None
         self.class_mapping: dict[int, str] = {}
@@ -83,6 +116,16 @@ class IdsEvaluator:
 
     @property
     def feature_columns(self) -> list[str] | None:
+        """Features que o modelo realmente treinou — depois da seleção (E7).
+
+        ``feature_selector`` está sempre ajustado depois de ``train_baseline``
+        (mesmo com ``strategy="none"``, onde ``selected_features`` é igual às
+        candidatas do preprocessador) — por isso este é o espaço certo para
+        zipar com ``model.feature_importances_``, nunca
+        ``self.preprocessor.feature_columns`` diretamente.
+        """
+        if self.feature_selector is not None:
+            return self.feature_selector.selected_features
         return self.preprocessor.feature_columns if self.preprocessor is not None else None
 
     @property
@@ -97,6 +140,37 @@ class IdsEvaluator:
         empacotar ainda.
         """
         return self.preprocessor.manifest() if self.preprocessor is not None else None
+
+    @property
+    def selection_manifest(self) -> SelectionManifest | None:
+        """Manifest de seleção de features + undersampling ajustado (E7).
+
+        ``None`` antes de ``train_baseline``, mesma semântica de
+        ``feature_manifest``. Presente mesmo quando as duas estratégias são
+        ``"none"`` — o manifest também documenta que nada foi filtrado/
+        reamostrado, não só quando algo foi.
+        """
+        if (
+            self.feature_selector is None
+            or self._fitted_rows_before_undersampling is None
+            or self._fitted_rows_after_undersampling is None
+        ):
+            return None
+
+        return SelectionManifest(
+            feature_selection=self.feature_selection,
+            feature_selection_top_k=self.feature_selection_top_k,
+            feature_selection_min_score=self.feature_selection_min_score,
+            candidate_features=tuple(self.feature_selector.candidate_features),
+            selected_features=tuple(self.feature_selector.selected_features),
+            feature_scores=self.feature_selector.scores,
+            undersampling=self.undersampling,
+            undersampling_random_state=self.random_state,
+            class_counts_before=self._class_counts_before_undersampling or {},
+            class_counts_after=self._class_counts_after_undersampling or {},
+            fitted_rows_before_undersampling=self._fitted_rows_before_undersampling,
+            fitted_rows_after_undersampling=self._fitted_rows_after_undersampling,
+        )
 
     def train_baseline(self, dataset_path: str) -> dict[str, Any]:
         print(f"[IDS] Treinando modelo baseline com: {dataset_path}")
@@ -138,8 +212,41 @@ class IdsEvaluator:
             X_train = self.preprocessor.fit_transform(X_train_raw, label_column=self.label_column)
             X_test = self.preprocessor.transform(X_test_raw)
 
+        # Épico E7 — seleção de features primeiro (ajustada sobre TODO o
+        # treino, antes de qualquer undersampling), undersampling depois, só
+        # no espaço já reduzido. Nunca sobre X_test/y_test: ver docstring da
+        # classe e de core/undersampler.py.
+        self.feature_selector = FeatureSelector(
+            strategy=self.feature_selection,
+            top_k=self.feature_selection_top_k,
+            min_score=self.feature_selection_min_score,
+            random_state=self.random_state,
+        )
+        X_train = self.feature_selector.fit_transform(X_train, y_train)
+        X_test = self.feature_selector.transform(X_test)
+
+        self.undersampler = RandomUndersampler(
+            strategy=self.undersampling, random_state=self.random_state
+        )
+        self._fitted_rows_before_undersampling = len(X_train)
+        self._class_counts_before_undersampling = {
+            self.class_mapping.get(int(label), str(label)): count
+            for label, count in RandomUndersampler.class_counts(y_train).items()
+        }
+        X_train, y_train = self.undersampler.fit_resample(X_train, y_train)
+        self._fitted_rows_after_undersampling = len(X_train)
+        self._class_counts_after_undersampling = {
+            self.class_mapping.get(int(label), str(label)): count
+            for label, count in RandomUndersampler.class_counts(y_train).items()
+        }
+
         print(f"[IDS] Colunas removidas: {self.removed_columns}")
         print(f"[IDS] Features usadas no modelo: {self.feature_columns}")
+        print(
+            f"[IDS] Treino: {self._fitted_rows_before_undersampling} -> "
+            f"{self._fitted_rows_after_undersampling} linhas após undersampling "
+            f"({self.undersampling})"
+        )
 
         self.model = RandomForestClassifier(
             n_estimators=self.n_estimators,
@@ -185,6 +292,8 @@ class IdsEvaluator:
         y = df[self.label_column]
 
         X_prepared = self.preprocessor.transform(X)
+        if self.feature_selector is not None:
+            X_prepared = self.feature_selector.transform(X_prepared)
         y_encoded = self._transform_labels(y)
 
         y_pred = self.model.predict(X_prepared)
@@ -349,6 +458,8 @@ class IdsEvaluator:
                 df = df.drop(columns=[self.label_column])
 
             X = self.preprocessor.transform(df)
+            if self.feature_selector is not None:
+                X = self.feature_selector.transform(X)
 
             if len(X) > max_samples:
                 X = X.sample(n=max_samples, random_state=self.random_state)
