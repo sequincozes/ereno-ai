@@ -50,6 +50,7 @@ from adversarial_ids.domain.feature_manifest import (
     FeatureManifest,
     ScalerStat,
 )
+from adversarial_ids.domain.selection_manifest import SelectionManifest
 from adversarial_ids.domain.iteration_record import IterationRecord
 from adversarial_ids.domain.intent_spec import (
     MAX_FIELDS_CHANGED_CEILING,
@@ -115,4 +116,5 @@ __all__ = [
     "FeatureManifest",
     "DroppedColumn",
     "ScalerStat",
+    "SelectionManifest",
 ]
