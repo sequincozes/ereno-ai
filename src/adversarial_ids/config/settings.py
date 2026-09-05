@@ -174,3 +174,24 @@ FEEDBACK_MIN_DELTA = 0.01
 # ------------------------------------------------------------
 
 PREPROCESSOR_MODE = os.getenv("PREPROCESSOR_MODE", "modular").strip().lower()
+
+# ------------------------------------------------------------
+# Undersampling + seleção de features (épico E7): consomem
+# FeatureManifest.feature_columns (E6) como ponto de partida, não fazem
+# parte do FeaturePreprocessor — ver core/feature_selector.py e
+# core/undersampler.py. Default "none" nos dois: comportamento idêntico a
+# antes do E7 existir, até alguém optar explicitamente por uma estratégia.
+# Sobrescreva com as env vars abaixo.
+# ------------------------------------------------------------
+
+FEATURE_SELECTION_MODE = os.getenv("FEATURE_SELECTION_MODE", "none").strip().lower()
+
+_feature_selection_top_k_raw = os.getenv("FEATURE_SELECTION_TOP_K", "").strip()
+FEATURE_SELECTION_TOP_K = int(_feature_selection_top_k_raw) if _feature_selection_top_k_raw else None
+
+_feature_selection_min_score_raw = os.getenv("FEATURE_SELECTION_MIN_SCORE", "").strip()
+FEATURE_SELECTION_MIN_SCORE = (
+    float(_feature_selection_min_score_raw) if _feature_selection_min_score_raw else None
+)
+
+UNDERSAMPLING_MODE = os.getenv("UNDERSAMPLING_MODE", "none").strip().lower()
