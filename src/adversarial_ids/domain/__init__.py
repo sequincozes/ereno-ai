@@ -40,6 +40,12 @@ from adversarial_ids.domain.attack_configs import (
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
 from adversarial_ids.domain.defense_plan import DefenseAction, DefensePlan, Evidence
 from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
+from adversarial_ids.domain.detector_comparison import (
+    DetectorComparison,
+    DetectorRun,
+    RankingMetric,
+    rank_runs,
+)
 from adversarial_ids.domain.detector_manifest import (
     DETECTOR_KEYS,
     DetectorKey,
@@ -127,4 +133,8 @@ __all__ = [
     "DetectorKey",
     "DETECTOR_KEYS",
     "ImportanceKind",
+    "DetectorComparison",
+    "DetectorRun",
+    "RankingMetric",
+    "rank_runs",
 ]
