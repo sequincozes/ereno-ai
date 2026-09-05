@@ -34,6 +34,7 @@ from adversarial_ids.domain import (
     LoopStage,
     LoopStageStatus,
     ScalerStat,
+    SelectionManifest,
 )
 
 _SHA256_ZEROS = "0" * 64
@@ -81,6 +82,17 @@ def _feature_manifest(**overrides: object) -> FeatureManifest:
     return FeatureManifest.model_validate(data)
 
 
+def _selection_manifest(**overrides: object) -> SelectionManifest:
+    data: dict[str, object] = {
+        "candidate_features": ("num", "cat"),
+        "selected_features": ("num", "cat"),
+        "fitted_rows_before_undersampling": 70,
+        "fitted_rows_after_undersampling": 70,
+    }
+    data.update(overrides)
+    return SelectionManifest.model_validate(data)
+
+
 @pytest.mark.parametrize(
     "build",
     [
@@ -125,6 +137,7 @@ def _feature_manifest(**overrides: object) -> FeatureManifest:
             ),
         ),
         lambda: _feature_manifest(),
+        lambda: _selection_manifest(),
     ],
     ids=[
         "AttackCandidate",
@@ -133,6 +146,7 @@ def _feature_manifest(**overrides: object) -> FeatureManifest:
         "DefensePlan",
         "LoopRecord",
         "FeatureManifest",
+        "SelectionManifest",
     ],
 )
 def test_contract_is_versioned_frozen_and_json_stable(build):
@@ -360,6 +374,77 @@ def test_feature_manifest_rejects_duplicate_dropped_column_names():
                 DroppedColumn(name="Time", reason="constant"),
             ),
         )
+
+
+# --------------------------------------------------------------------------- #
+# SelectionManifest (E7)                                                      #
+# --------------------------------------------------------------------------- #
+def test_selection_manifest_rejects_selected_feature_outside_candidates():
+    with pytest.raises(ValidationError, match="fora de candidate_features"):
+        _selection_manifest(selected_features=("num", "ghost"))
+
+
+def test_selection_manifest_rejects_feature_scores_when_strategy_is_none():
+    with pytest.raises(ValidationError, match="só é preenchido quando"):
+        _selection_manifest(feature_scores={"num": 0.1})
+
+
+def test_selection_manifest_requires_feature_scores_for_mutual_info():
+    with pytest.raises(ValidationError, match="deve cobrir exatamente candidate_features"):
+        _selection_manifest(
+            feature_selection="mutual_info",
+            feature_selection_top_k=1,
+            feature_scores={"num": 0.5},  # falta "cat"
+        )
+
+
+def test_selection_manifest_accepts_complete_feature_scores_for_mutual_info():
+    manifest = _selection_manifest(
+        feature_selection="mutual_info",
+        feature_selection_top_k=1,
+        selected_features=("num",),
+        feature_scores={"num": 0.5, "cat": 0.1},
+    )
+    assert manifest.feature_scores["num"] == 0.5
+
+
+def test_selection_manifest_rejects_mutual_info_without_a_stopping_criterion():
+    with pytest.raises(ValidationError, match="exige feature_selection_top_k"):
+        _selection_manifest(
+            feature_selection="mutual_info",
+            feature_scores={"num": 0.5, "cat": 0.1},
+        )
+
+
+def test_selection_manifest_rejects_rows_increasing_after_undersampling():
+    with pytest.raises(ValidationError, match="não pode ser maior"):
+        _selection_manifest(fitted_rows_before_undersampling=10, fitted_rows_after_undersampling=20)
+
+
+def test_selection_manifest_rejects_row_count_change_when_undersampling_is_none():
+    with pytest.raises(ValidationError, match="não pode alterar o número de linhas"):
+        _selection_manifest(fitted_rows_before_undersampling=10, fitted_rows_after_undersampling=8)
+
+
+def test_selection_manifest_accepts_row_count_drop_when_undersampling_is_random():
+    manifest = _selection_manifest(
+        undersampling="random",
+        fitted_rows_before_undersampling=10,
+        fitted_rows_after_undersampling=8,
+        class_counts_before={"normal": 6, "attack": 4},
+        class_counts_after={"normal": 4, "attack": 4},
+    )
+    assert manifest.fitted_rows_after_undersampling == 8
+
+
+def test_selection_manifest_rejects_class_counts_before_not_matching_row_total():
+    with pytest.raises(ValidationError, match="class_counts_before"):
+        _selection_manifest(class_counts_before={"normal": 1, "attack": 1})
+
+
+def test_selection_manifest_rejects_class_counts_after_not_matching_row_total():
+    with pytest.raises(ValidationError, match="class_counts_after"):
+        _selection_manifest(class_counts_after={"normal": 1, "attack": 1})
 
 
 # --------------------------------------------------------------------------- #
