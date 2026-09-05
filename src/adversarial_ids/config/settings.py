@@ -195,3 +195,27 @@ FEATURE_SELECTION_MIN_SCORE = (
 )
 
 UNDERSAMPLING_MODE = os.getenv("UNDERSAMPLING_MODE", "none").strip().lower()
+
+# ------------------------------------------------------------
+# Detector plugável (épico E8): qual modelo o IdsEvaluator treina —
+# "random_forest" (default, comportamento idêntico ao de antes do E8),
+# "decision_tree", "svm_linear" ou "svm_rbf". Ver core/detectors.py e
+# docs/detectors.md. Sobrescreva com a env var DETECTOR_MODE.
+#
+# Cuidado ao regenerar fixtures: como PREPROCESSOR_MODE/FEATURE_SELECTION_MODE,
+# esta é uma env var que muda o modelo treinado — por isso
+# scripts/generate_golden_history.py fixa o detector explicitamente em vez de
+# herdar este default, para que um DETECTOR_MODE no shell de alguém não
+# reescreva o histórico golden com outro modelo.
+# ------------------------------------------------------------
+
+DETECTOR_MODE = os.getenv("DETECTOR_MODE", "random_forest").strip().lower()
+
+# Escala aplicada pelo FeaturePreprocessor (E6). Vazio (default) = delegar ao
+# detector: "standard" para os SVMs (sensíveis a escala), "none" para as
+# árvores — ver core/detectors.py::recommended_scaler. Defina
+# DETECTOR_SCALER=none|standard para forçar os dois lados a usar a mesma
+# escala numa comparação controlada entre detectores.
+
+_detector_scaler_raw = os.getenv("DETECTOR_SCALER", "").strip().lower()
+DETECTOR_SCALER = _detector_scaler_raw or None
