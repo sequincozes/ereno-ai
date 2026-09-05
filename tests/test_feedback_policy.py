@@ -57,10 +57,16 @@ def _plan(*, priority: str = "medium") -> DefensePlan:
             "detection_actions": [
                 {
                     "description": "Revisar o limiar de decisão.",
+                    "technique": "detector_threshold_tuning",
                     "evidence": [
                         {"metric_or_feature": "recall", "value": 0.7},
                     ],
-                    "validation_method": "Reavaliar no mesmo split.",
+                    "validation_test": {
+                        "metric": "recall",
+                        "direction": "increase",
+                        "target": 0.85,
+                        "procedure": "Reavaliar no mesmo split.",
+                    },
                 }
             ],
         }
