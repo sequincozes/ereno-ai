@@ -16,8 +16,10 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
   baseline do ataque e avaliado sobre o ``DatasetBundle`` aprovado,
   empacotado como ``DetectionReport`` (``core.detection_reporter``). O
   ``FeatureManifest`` (E6) do preprocessador ajustado no baseline é
-  persistido como ``feature_manifest.json`` neste mesmo estágio — não é um
-  ``LoopStage`` próprio, é artefato do DETECTOR.
+  persistido como ``feature_manifest.json``, e o ``SelectionManifest`` (E7,
+  undersampling + seleção de features) como ``selection_manifest.json`` —
+  neste mesmo estágio, para ambos; nenhum dos dois é um ``LoopStage``
+  próprio, são artefatos do DETECTOR.
 - DEFENDER    — ``DefenderLike.defend(report, report_ref=...)`` (E5, o
   ``DefenderAgent`` real ou um stub de teste), já validado por
   ``agents.defender.tools.validate_plan_against_report`` contra o
@@ -431,6 +433,15 @@ class IntentLoopOrchestrator:
         manifest = evaluator.feature_manifest
         if manifest is not None:
             save_json(run_dir / "feature_manifest.json", manifest.model_dump(mode="json"))
+
+        # Manifest de seleção de features + undersampling (E7) — mesmo motivo
+        # de persistir antes do gate: se a avaliação falhar logo abaixo, já
+        # está em disco o que a seleção/undersampling decidiu sobre o treino.
+        selection_manifest = evaluator.selection_manifest
+        if selection_manifest is not None:
+            save_json(
+                run_dir / "selection_manifest.json", selection_manifest.model_dump(mode="json")
+            )
 
         split = (
             f"train_test_{int((1 - evaluator.test_size) * 100)}_"
