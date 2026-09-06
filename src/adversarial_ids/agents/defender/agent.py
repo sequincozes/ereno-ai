@@ -21,6 +21,7 @@ from agno.models.groq import Groq
 from dotenv import load_dotenv
 
 from adversarial_ids.agents.defender.tools import (
+    legal_techniques_by_bucket,
     parse_defense_plan,
     priority_from_report,
     select_evidence_candidates,
@@ -28,6 +29,7 @@ from adversarial_ids.agents.defender.tools import (
 )
 from adversarial_ids.config.settings import MODEL_ID, PROMPTS_DIR, TEMPERATURE
 from adversarial_ids.domain import DefensePlan
+from adversarial_ids.domain.defense_plan import VALIDATION_METRICS
 from adversarial_ids.domain.detection_report import DetectionReport
 
 DEFENDER_PROMPT_PATH = PROMPTS_DIR / "defender.md"
@@ -89,7 +91,13 @@ class DefenderAgent:
         *,
         report_ref: str | None = None,
     ) -> str:
-        """Monta um contexto compacto com a evidência citável do relatório."""
+        """Monta um contexto compacto com a evidência citável do relatório.
+
+        ``legal_techniques`` e ``validation_metrics`` vêm dos mesmos mapas que o
+        contrato e o portão usam para recusar. O prompt não repete essas listas
+        em texto: uma cópia estática envelheceria em silêncio no dia em que o
+        catálogo de técnicas crescer.
+        """
 
         report_model = DetectionReport.model_validate(report)
 
@@ -99,6 +107,8 @@ class DefenderAgent:
             "required_priority": priority_from_report(report_model),
             "detection_report_ref": report_ref,
             "citable_evidence": select_evidence_candidates(report_model, top_n=5),
+            "legal_techniques": legal_techniques_by_bucket(),
+            "validation_metrics": list(VALIDATION_METRICS),
         }
 
         context_json = json.dumps(context, ensure_ascii=False, indent=2)

@@ -12,6 +12,11 @@ import math
 from typing import Any
 
 from adversarial_ids.domain import DefenseAction, DefensePlan
+from adversarial_ids.domain.defense_plan import (
+    DEFENSE_BUCKETS,
+    VALIDATION_METRICS,
+    techniques_for_bucket,
+)
 from adversarial_ids.domain.detection_report import DetectionReport
 
 PRIORITY_ORDER = ("low", "medium", "high", "critical")
@@ -100,6 +105,17 @@ def select_evidence_candidates(
     return allowlist
 
 
+def legal_techniques_by_bucket() -> dict[str, tuple[str, ...]]:
+    """Técnicas aceitas em cada balde, para o prompt mostrar ao Defensor.
+
+    Sai do mesmo mapa que o validador do ``DefensePlan`` consulta para recusar,
+    então o que o prompt oferece e o que o portão aceita não têm como divergir
+    — mesma disciplina de ``select_evidence_candidates`` para evidência.
+    """
+
+    return {bucket: techniques_for_bucket(bucket) for bucket in DEFENSE_BUCKETS}
+
+
 def parse_defense_plan(content: Any) -> DefensePlan:
     """Converte a resposta Agno (modelo, dict ou string JSON) em ``DefensePlan``.
 
@@ -168,6 +184,53 @@ def _evidence_value_matches(cited: Any, expected: Any) -> bool:
     return cited == expected
 
 
+def _validate_validation_test(
+    action: DefenseAction,
+    *,
+    bucket: str,
+    allowed: dict[str, float | int | str],
+) -> None:
+    """O teste precisa cobrar uma mudança real em relação ao que foi medido.
+
+    O contrato já garante que a métrica é remedível e que o alvo é um número
+    finito. O que só se sabe com o relatório na mão é se o alvo significa
+    alguma coisa: "subir o recall para 0.50" quando o recall já é 0.60 é uma
+    regressão vendida como correção, e passaria em qualquer checagem de tipo.
+
+    ``at_least``/``at_most`` são pisos e tetos — legitimamente já satisfeitos
+    quando a ação existe para *proteger* uma métrica que está boa enquanto
+    outra é atacada —, então não se comparam contra o valor atual.
+    """
+
+    test = action.validation_test
+
+    if test.metric not in allowed:  # pragma: no cover - guarda contra drift
+        raise DefensePlanValidationError(
+            f"Métrica de validação ausente no relatório ({bucket}): {test.metric}"
+        )
+
+    current = allowed[test.metric]
+
+    if isinstance(current, str):  # pragma: no cover - VALIDATION_METRICS é numérico
+        raise DefensePlanValidationError(
+            f"Métrica de validação não numérica ({bucket}): {test.metric}"
+        )
+
+    if test.direction == "increase" and test.target <= current:
+        raise DefensePlanValidationError(
+            f"Teste de validação não cobra melhora ({bucket}): "
+            f"{test.metric} já vale {current}, e o alvo de 'increase' "
+            f"é {test.target}."
+        )
+
+    if test.direction == "decrease" and test.target >= current:
+        raise DefensePlanValidationError(
+            f"Teste de validação não cobra melhora ({bucket}): "
+            f"{test.metric} já vale {current}, e o alvo de 'decrease' "
+            f"é {test.target}."
+        )
+
+
 def _validate_actions(
     actions: tuple[DefenseAction, ...],
     *,
@@ -176,6 +239,8 @@ def _validate_actions(
     expected_report_ref: str | None,
 ) -> None:
     for action in actions:
+        _validate_validation_test(action, bucket=bucket, allowed=allowed)
+
         seen_keys: set[str] = set()
 
         for evidence in action.evidence:
@@ -223,8 +288,12 @@ def validate_plan_against_report(
     - evidência (métrica ou feature) que não aparece no relatório;
     - valores de evidência alterados;
     - evidência duplicada dentro da mesma ação, em qualquer um dos três baldes;
+    - teste de validação cujo alvo não cobra melhora sobre o valor medido;
     - prioridade incompatível com ``priority_from_report``;
     - ``detection_report_ref`` presente e diferente do relatório desta execução.
+
+    O que o *contrato* já garantiu antes de chegar aqui: a técnica pertence ao
+    balde que a carrega, a métrica do teste é remedível e o alvo é finito.
     """
 
     plan_model = DefensePlan.model_validate(plan)

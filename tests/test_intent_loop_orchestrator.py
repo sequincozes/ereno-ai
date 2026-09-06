@@ -134,10 +134,14 @@ class _StubDefenderAgent:
                                 "detection_report_ref": report_ref,
                             }
                         ],
+                        # `at_least` e não `increase`: em modo cached o relatório
+                        # costuma sair com recall 1.0, e um alvo de *aumento*
+                        # sobre 1.0 é impossível — o portão recusaria o plano do
+                        # stub por um motivo que não é o que estes testes medem.
                         "validation_test": {
                             "metric": "recall",
-                            "direction": "increase",
-                            "target": 0.85,
+                            "direction": "at_least",
+                            "target": report.recall,
                             "procedure": "Reavaliar o recall no mesmo split de teste.",
                         },
                     }
@@ -173,10 +177,14 @@ class _UngroundedDefenderAgent:
                                 "detection_report_ref": None,
                             }
                         ],
+                        # Coerente de propósito: o que este stub testa é a
+                        # evidência inventada, então o teste de validação não
+                        # pode ser o primeiro a falhar. Ver o comentário do
+                        # ``_StubDefenderAgent`` sobre `at_least`.
                         "validation_test": {
                             "metric": "recall",
-                            "direction": "increase",
-                            "target": 0.85,
+                            "direction": "at_least",
+                            "target": report.recall,
                             "procedure": "Não verificável.",
                         },
                     }

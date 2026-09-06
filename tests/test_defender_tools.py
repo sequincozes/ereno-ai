@@ -6,12 +6,14 @@ import pytest
 
 from adversarial_ids.agents.defender.tools import (
     DefensePlanValidationError,
+    legal_techniques_by_bucket,
     parse_defense_plan,
     priority_from_report,
     select_evidence_candidates,
     validate_plan_against_report,
 )
 from adversarial_ids.domain import (
+    DEFENSE_BUCKETS,
     VALIDATION_METRICS,
     DetectionReport,
     techniques_for_bucket,
@@ -53,6 +55,7 @@ def build_plan(
     value: float | int | str = 0.60,
     detection_report_ref: str | None = None,
     technique: str = "detector_threshold_tuning",
+    validation_test: dict | None = None,
 ) -> dict:
     return {
         "priority": priority,
@@ -67,7 +70,8 @@ def build_plan(
                         "detection_report_ref": detection_report_ref,
                     }
                 ],
-                "validation_test": {
+                "validation_test": validation_test
+                or {
                     "metric": "recall",
                     "direction": "increase",
                     "target": 0.80,
@@ -407,3 +411,94 @@ def test_the_allowlist_keys_left_out_of_validation_metrics_are_not_measurable():
     left_out = set(allowlist) - set(VALIDATION_METRICS)
 
     assert left_out == {"model_name", "split"} | features
+
+
+# --------------------------------------------------------------------------- #
+# Teste de validação: o alvo precisa cobrar melhora                           #
+# --------------------------------------------------------------------------- #
+def _with_test(**test: object) -> dict:
+    base: dict[str, object] = {
+        "metric": "recall",
+        "direction": "increase",
+        "target": 0.80,
+        "procedure": "Remedir.",
+    }
+    base.update(test)
+    report = build_report()
+    return build_plan(priority=priority_from_report(report), validation_test=base)
+
+
+def test_validate_accepts_an_increase_target_above_the_current_value():
+    report = build_report()  # recall = 0.60
+
+    validated = validate_plan_against_report(_with_test(target=0.80), report)
+
+    assert validated.detection_actions[0].validation_test.target == 0.80
+
+
+def test_validate_rejects_an_increase_target_below_the_current_value():
+    """"Subir o recall para 0.50" quando ele já é 0.60 é uma regressão."""
+
+    report = build_report()
+
+    with pytest.raises(DefensePlanValidationError, match="não cobra melhora"):
+        validate_plan_against_report(_with_test(target=0.50), report)
+
+
+def test_validate_rejects_an_increase_target_equal_to_the_current_value():
+    """Prometer o valor que já se tem não é um teste, é uma tautologia."""
+
+    report = build_report()
+
+    with pytest.raises(DefensePlanValidationError, match="não cobra melhora"):
+        validate_plan_against_report(_with_test(target=0.60), report)
+
+
+def test_validate_accepts_a_decrease_target_below_the_current_value():
+    report = build_report()  # confusion_matrix.fn = 8
+
+    plan = _with_test(metric="confusion_matrix.fn", direction="decrease", target=4.0)
+
+    assert validate_plan_against_report(plan, report).priority
+
+
+def test_validate_rejects_a_decrease_target_above_the_current_value():
+    report = build_report()
+
+    plan = _with_test(metric="confusion_matrix.fn", direction="decrease", target=12.0)
+
+    with pytest.raises(DefensePlanValidationError, match="não cobra melhora"):
+        validate_plan_against_report(plan, report)
+
+
+@pytest.mark.parametrize("direction", ["at_least", "at_most"])
+def test_floors_and_ceilings_may_already_be_satisfied(direction: str):
+    """Uma ação pode existir para *proteger* uma métrica que já está boa.
+
+    ``at_least``/``at_most`` são guardas contra regressão enquanto outra
+    métrica é atacada, então não se comparam contra o valor medido hoje.
+    """
+
+    report = build_report()  # recall = 0.60
+    plan = _with_test(direction=direction, target=0.60)
+
+    assert validate_plan_against_report(plan, report).priority
+
+
+# --------------------------------------------------------------------------- #
+# legal_techniques_by_bucket                                                  #
+# --------------------------------------------------------------------------- #
+def test_legal_techniques_covers_the_three_buckets():
+    legal = legal_techniques_by_bucket()
+
+    assert set(legal) == set(DEFENSE_BUCKETS)
+    assert all(techniques for techniques in legal.values())
+
+
+def test_legal_techniques_matches_what_the_contract_accepts():
+    """O que o prompt oferece é literalmente o que o contrato deixa passar."""
+
+    legal = legal_techniques_by_bucket()
+
+    for bucket, techniques in legal.items():
+        assert techniques == techniques_for_bucket(bucket)
