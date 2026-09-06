@@ -38,53 +38,107 @@ from typing import Literal
 
 import pandas as pd
 
+from adversarial_ids.config.settings import PROTOCOL_FEATURES_MODE
 from adversarial_ids.domain.feature_manifest import (
     DroppedColumn,
     FeatureManifest,
     ScalerStat,
 )
 
-# Mesma lista de sempre-descartar do avaliador legado (temporais/sequência,
-# metadados/constantes do protocolo) — ver core/ids_evaluator.py para o
-# histórico de cada coluna. Migrada para cá porque a decisão de descartar é
-# do preprocessador, não do detector.
-_ALWAYS_DROP: tuple[str, ...] = (
-    # Temporais / sequência / derivados fortes
+
+class PreprocessorError(ValueError):
+    """Erro acionável: o preprocessador não pôde ajustar ou transformar os dados."""
+
+
+# Identidade e valores absolutos. Descartadas em qualquer modo: são endereços,
+# referências de controle e relógios. Medidas contra a classe no dataset de
+# referência, todas dão informação mútua ~0 (Time 0.0000, StNum 0.0002,
+# GooseTimestamp/receivedTimestamp/delay ~0.0001, teto H=0.6611 nats) — não
+# carregam sinal, e num gerador sintético o que elas carregariam seria o bloco
+# de geração, não o ataque.
+_IDENTITY_DROP: tuple[str, ...] = (
+    # Relógios e contadores absolutos
     "Time",
     "t",
     "GooseTimestamp",
     "receivedTimestamp",
-    "timestampDiff",
-    "tDiff",
-    "timeFromLastChange",
     "delay",
-    "SqNum",
     "StNum",
-    "sqDiff",
-    "stDiff",
-    # Metadados/constantes comuns do protocolo
-    "frameLen",
+    # Endereçamento e identidade do publisher
     "ethDst",
     "ethSrc",
     "ethType",
-    "gooseTimeAllowedtoLive",
-    "gooseAppid",
-    "gooseLen",
     "TPID",
+    "gooseAppid",
     "gocbRef",
     "datSet",
     "goID",
+    # Metadados/constantes de configuração do protocolo
+    "gooseTimeAllowedtoLive",
     "test",
     "confRev",
     "ndsCom",
     "numDatSetEntries",
-    "APDUSize",
     "protocol",
+    # Tamanhos absolutos (os deltas correspondentes estão logo abaixo)
+    "frameLen",
+    "gooseLen",
+    "APDUSize",
+    "e2eLatency",
+)
+
+# Deltas de protocolo: a semântica de sequência e temporização do GOOSE. São o
+# oposto do grupo acima — contra a classe dão MI de 0.20 a 0.54 sobre um teto de
+# 0.6611 nats (sqDiff 81%, tDiff 81%, SqNum 79%, timeFromLastChange 66%,
+# timestampDiff 34%, stDiff 30%).
+#
+# A lista original descartava os dois grupos juntos, sob a mesma justificativa
+# de "derivados fortes", e veio inteira do commit inicial do framework — nunca
+# foi separada. Mas replay, flooding e grayhole *são* anomalias de sqDiff/tDiff:
+# sem elas o IDS não tem como enxergar nada além da falta forjada.
+#
+# ``SqNum`` bruto entra aqui e não em _IDENTITY_DROP porque em GOOSE ele zera
+# quando stNum incrementa — é semântica de estado, não índice. Ainda assim é o
+# caso menos claro do grupo: parte do seu MI pode ser artefato de como o ERENO
+# emite as rajadas, e é por isso que este modo é medível por ablação em vez de
+# ser simplesmente ligado.
+_PROTOCOL_DELTAS: tuple[str, ...] = (
+    "stDiff",
+    "sqDiff",
+    "SqNum",
+    "timestampDiff",
+    "tDiff",
+    "timeFromLastChange",
     "gooseLengthDiff",
     "apduSizeDiff",
     "frameLengthDiff",
-    "e2eLatency",
 )
+
+# Modo "drop": comportamento anterior à separação, e ainda o default.
+_ALWAYS_DROP: tuple[str, ...] = _IDENTITY_DROP + _PROTOCOL_DELTAS
+
+_PROTOCOL_FEATURES_MODES: tuple[str, ...] = ("drop", "deltas")
+
+
+def always_drop_for(protocol_features: str) -> tuple[str, ...]:
+    """Colunas sempre-descartadas sob um modo de features de protocolo.
+
+    ``drop`` descarta identidade e deltas (comportamento herdado, default);
+    ``deltas`` descarta só a identidade, deixando a semântica de sequência e
+    temporização disponível ao detector.
+    """
+
+    if protocol_features == "drop":
+        return _ALWAYS_DROP
+
+    if protocol_features == "deltas":
+        return _IDENTITY_DROP
+
+    raise PreprocessorError(
+        f"protocol_features inválido: {protocol_features!r}. "
+        f"Esperado um de {_PROTOCOL_FEATURES_MODES}."
+    )
+
 
 _MISSING_CATEGORY_SENTINEL = "missing"
 
@@ -96,10 +150,6 @@ _MISSING_CATEGORY_SENTINEL = "missing"
 # um mapa com uma entrada por valor distinto — um manifest de megabytes por
 # execução em vez de alguns KB.
 _MAX_CATEGORICAL_CARDINALITY = 1000
-
-
-class PreprocessorError(ValueError):
-    """Erro acionável: o preprocessador não pôde ajustar ou transformar os dados."""
 
 
 class FeaturePreprocessor:
@@ -122,12 +172,34 @@ class FeaturePreprocessor:
     def __init__(
         self,
         *,
-        always_drop: tuple[str, ...] = _ALWAYS_DROP,
+        always_drop: tuple[str, ...] | None = None,
+        protocol_features: str = PROTOCOL_FEATURES_MODE,
         drop_cb_status: bool = False,
         numeric_imputation: Literal["zero", "median"] = "zero",
         scaler: Literal["none", "standard"] = "none",
     ) -> None:
-        self.always_drop = always_drop
+        """``always_drop`` explícito vence ``protocol_features``.
+
+        Os dois juntos seriam ambíguos — uma lista literal e um modo que também
+        produz uma lista —, então informar ambos é erro em vez de um silenciar
+        o outro. ``protocol_features`` é validado sempre, inclusive quando vem
+        do ambiente: um ``PROTOCOL_FEATURES_MODE`` com erro de digitação não
+        pode virar um descarte silenciosamente diferente do pedido.
+        """
+
+        resolved = always_drop_for(protocol_features)
+
+        if always_drop is not None:
+            if protocol_features != PROTOCOL_FEATURES_MODE:
+                raise PreprocessorError(
+                    "always_drop e protocol_features informados juntos: "
+                    f"always_drop={always_drop!r}, "
+                    f"protocol_features={protocol_features!r}. Escolha um."
+                )
+            resolved = always_drop
+
+        self.protocol_features = protocol_features
+        self.always_drop = resolved
         self.drop_cb_status = drop_cb_status
         self.numeric_imputation = numeric_imputation
         self.scaler = scaler

@@ -95,6 +95,68 @@ constante só no dataset inteiro mas não no treino — `git diff` de
 diferença fora do caminho absoluto do dataset. A correção importa para
 datasets onde essa coincidência não se sustenta.
 
+## `PROTOCOL_FEATURES_MODE` — identidade não é o mesmo que semântica
+
+A lista de sempre-descartar veio inteira do commit inicial do framework e
+tratava dois grupos muito diferentes sob a mesma justificativa
+("temporais/sequência, derivados fortes"). Medindo cada coluna descartada
+contra a classe em `data/baseline_dataset.csv` — 21 das 33 são constantes e a
+medição só faz sentido para as outras 12, com teto **H(classe) = 0.6611 nats**
+— a separação é inequívoca:
+
+| coluna | MI | % do teto | grupo |
+|---|---|---|---|
+| `sqDiff` | 0.5367 | 81% | delta |
+| `tDiff` | 0.5335 | 81% | delta |
+| `SqNum` | 0.5192 | 79% | delta |
+| `timeFromLastChange` | 0.4343 | 66% | delta |
+| `timestampDiff` | 0.2251 | 34% | delta |
+| `stDiff` | 0.1958 | 30% | delta |
+| `Time` | 0.0000 | 0% | identidade |
+| `StNum` | 0.0002 | 0,03% | identidade |
+| `t`, `GooseTimestamp`, `receivedTimestamp`, `delay` | ~0.0001 | ~0% | identidade |
+
+Identificadores e valores absolutos não carregam sinal — e o que eles
+carregariam num gerador sintético seria o bloco de geração, não o ataque.
+Descartá-los está certo. Os deltas são o oposto: são a semântica de sequência
+e temporização do GOOSE, e replay, flooding e grayhole **são** anomalias de
+`sqDiff`/`tDiff`. Sem eles, o detector não tem como enxergar nada além da
+falta forjada.
+
+`config.settings.PROTOCOL_FEATURES_MODE` (env var) e o parâmetro homônimo de
+`IdsEvaluator`/`FeaturePreprocessor` escolhem entre os dois regimes:
+
+- `"drop"` (**default**): descarta os dois grupos, 33 colunas. Reproduz
+  exatamente o comportamento herdado — `data/iteration_history.json` continua
+  byte-estável. Sobram 20 features, 18 delas grandezas elétricas.
+- `"deltas"`: descarta só as 24 de identidade. Sobram 29; as 9 a mais são
+  `stDiff`, `sqDiff`, `SqNum`, `tDiff`, `timestampDiff`, `timeFromLastChange`,
+  `gooseLengthDiff`, `apduSizeDiff`, `frameLengthDiff`.
+
+`SqNum` bruto entra no grupo de deltas, e não no de identidade, porque em
+GOOSE ele zera quando o `stNum` incrementa — carrega estado, não índice. É o
+caso menos claro do grupo, e a assimetria com `StNum` (0,03% de MI) é
+deliberada.
+
+### Ablação
+
+Sobre 8 000 linhas balanceadas do dataset de referência, Random Forest:
+
+| modo | features | F1 | top-4 por importância |
+|---|---|---|---|
+| `drop` | 20 | 1.0000 | `vsbBTrapAreaSum` .168, `vsbCTrapAreaSum` .162, `vsbATrapAreaSum` .160, `cbStatus` .130 |
+| `deltas` | 26 | 1.0000 | `SqNum` .253, `timeFromLastChange` .117, `sqDiff` .114, `tDiff` .102 |
+
+A métrica não se move: `masquerade_fault` já era perfeitamente separável só
+pela assinatura analógica, e é o único ataque fisicamente mensurável em
+`--generator-mode cached`. **O que muda é em que o detector se apoia** — e
+isso corta nos dois sentidos. `SqNum` virar a feature dominante para detectar
+uma forma de onda forjada é plausível (o masquerade injeta quadros e perturba
+a cadência), mas é também exatamente com o que um artefato do gerador se
+pareceria. É por isso que o modo é medível por ablação em vez de estar ligado:
+o ganho real está nos ataques que precisam do jar, e a decisão é do
+experimento.
+
 ## Falha do estágio
 
 `FeaturePreprocessor.fit` levanta `PreprocessorError` (mensagem acionável)

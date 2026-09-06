@@ -1,9 +1,11 @@
 """Catálogo feature→técnica e playbooks IEC-61850 (épico E5, janela D47-54).
 
 O teste central deste módulo é o de cobertura: o catálogo precisa mapear
-exatamente as features que **sobrevivem ao preprocessador**. Uma entrada a
-menos deixa evidência real sem técnica; uma a mais é catálogo morto, porque
-aquela chave não tem como chegar a um ``DetectionReport``.
+exatamente as features que **podem sobreviver ao preprocessador sob algum
+modo**. Uma entrada a menos deixa evidência real sem técnica; uma a mais é
+catálogo morto, porque aquela chave não tem como chegar a um
+``DetectionReport``. Como ``PROTOCOL_FEATURES_MODE`` decide se os deltas de
+protocolo passam, a referência é a união dos modos.
 """
 
 from __future__ import annotations
@@ -25,49 +27,73 @@ from adversarial_ids.config.defense_techniques import (
     techniques_for_metric,
 )
 from adversarial_ids.config.settings import DATA_DIR
-from adversarial_ids.core.preprocessor import _ALWAYS_DROP
+from adversarial_ids.core.preprocessor import _PROTOCOL_DELTAS, always_drop_for
 from adversarial_ids.domain import DEFENSE_TECHNIQUES, VALIDATION_METRICS
 from adversarial_ids.domain.defense_plan import _BUCKETS_BY_TECHNIQUE
 
 
-def _usable_features() -> set[str]:
-    """As colunas do ERENO que podem aparecer em ``top_features``.
+def _usable_features(mode: str = "deltas") -> set[str]:
+    """As colunas do ERENO que podem aparecer em ``top_features`` sob ``mode``.
 
     Sai do dataset versionado, não de uma lista escrita à mão: se o schema do
-    ERENO mudar, é aqui que a divergência aparece.
+    ERENO mudar, é aqui que a divergência aparece. O default é ``deltas``
+    porque o catálogo cobre a união dos modos — ``drop`` é um subconjunto.
     """
 
     with (DATA_DIR / "baseline_dataset.csv").open(encoding="utf-8") as handle:
         header = next(csv.reader(handle))
 
-    return set(header) - set(_ALWAYS_DROP) - {"class"}
+    return set(header) - set(always_drop_for(mode)) - {"class"}
 
 
 # --------------------------------------------------------------------------- #
 # Cobertura do espaço de features                                             #
 # --------------------------------------------------------------------------- #
 def test_catalog_covers_exactly_the_features_that_survive_preprocessing():
-    """Nem uma feature utilizável sem técnica, nem uma chave inalcançável."""
+    """Nem uma feature utilizável sem técnica, nem uma chave inalcançável.
 
-    assert set(FEATURE_TECHNIQUES) == _usable_features()
-
-
-def test_the_usable_space_is_almost_entirely_analog():
-    """Fixa a premissa que molda o catálogo inteiro.
-
-    ``_ALWAYS_DROP`` remove sequência, identidade de publisher e todos os
-    deltas temporais, então não há feature de replay ou de spoofing para
-    ancorar — sobram as 18 grandezas elétricas e os dois campos do disjuntor.
-    Se um dia isso mudar, o catálogo precisa crescer junto, e este teste é o
-    aviso.
+    A união dos modos, porque o catálogo não deve depender de qual
+    PROTOCOL_FEATURES_MODE o experimento escolheu.
     """
 
-    usable = _usable_features()
+    assert set(FEATURE_TECHNIQUES) == _usable_features("deltas")
+
+
+def test_the_drop_mode_space_is_a_strict_subset_of_the_catalog():
+    """Trocar de modo nunca deixa evidência real sem técnica catalogada."""
+
+    assert _usable_features("drop") < set(FEATURE_TECHNIQUES)
+
+
+def test_the_default_mode_space_is_almost_entirely_analog():
+    """Fixa por que só a falta forjada é detectável no modo default.
+
+    Em ``drop`` sobram 20 colunas, 18 delas grandezas elétricas: não há uma
+    única feature de sequência ou temporização para ancorar replay, flooding
+    ou grayhole.
+    """
+
+    usable = _usable_features("drop")
 
     assert len(usable) == 20
     assert {"StNum", "SqNum", "stDiff", "sqDiff"} & usable == set()
-    assert {"ethSrc", "gocbRef", "goID", "datSet"} & usable == set()
     assert {"cbStatus", "cbStatusDiff"} <= usable
+
+
+def test_the_deltas_mode_adds_exactly_the_protocol_semantics():
+    usable = _usable_features("deltas")
+
+    assert len(usable) == 29
+    assert usable - _usable_features("drop") == set(_PROTOCOL_DELTAS)
+
+
+def test_publisher_identity_is_never_usable_in_either_mode():
+    """Recuperar semântica não é recuperar identificador."""
+
+    for mode in ("drop", "deltas"):
+        assert {"ethSrc", "gocbRef", "goID", "datSet", "StNum"} & _usable_features(
+            mode
+        ) == set()
 
 
 def test_feature_families_partition_the_catalog():
@@ -107,8 +133,8 @@ def test_analog_features_recommend_the_physical_check_first():
 
 
 def test_breaker_state_recommends_sequence_validation_first():
-    """``cbStatus`` é o único ponto onde a semântica de sequência ainda é
-    observável, já que stNum/sqNum foram descartados."""
+    """No modo default, ``cbStatus`` é o único ponto onde a semântica de
+    sequência do GOOSE ainda é observável — os deltas saem todos."""
 
     assert techniques_for_feature("cbStatus")[0] == "goose_sequence_validation"
 
@@ -200,17 +226,23 @@ def test_every_playbook_cites_an_iec_reference(key: str):
     assert "IEC" in PLAYBOOKS[key].reference
 
 
-def test_replay_and_flooding_have_no_signature_feature_on_purpose():
-    """A ausência é informação: esses cenários não deixam rastro utilizável.
+def test_the_protocol_scenarios_are_only_observable_under_the_deltas_mode():
+    """Replay, flooding e grayhole são invisíveis ao IDS no modo default.
 
-    stNum, sqNum e os deltas temporais estão todos em ``_ALWAYS_DROP``, então
-    replay e flooding dependem de controle de protocolo, não do IDS. Um
-    catálogo que fingisse ter feature para eles estaria mentindo.
+    As features que os denunciam existem, mas ``drop`` as descarta — então o
+    playbook continua válido e o detector é que fica cego. É a diferença entre
+    "não há defesa" e "esta execução não podia enxergar", e o catálogo precisa
+    dizer qual das duas é.
     """
 
-    assert PLAYBOOKS["replayed_goose_frames"].signature_features == ()
-    assert PLAYBOOKS["goose_flooding"].signature_features == ()
-    assert PLAYBOOKS["frame_suppression"].signature_features == ()
+    strict = _usable_features("drop")
+
+    for key in ("replayed_goose_frames", "goose_flooding", "frame_suppression"):
+        signature = set(PLAYBOOKS[key].signature_features)
+
+        assert signature, key
+        assert signature & strict == set(), key
+        assert signature <= _usable_features("deltas"), key
 
 
 def test_playbooks_for_technique_finds_the_scenarios():

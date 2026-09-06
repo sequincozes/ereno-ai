@@ -16,11 +16,12 @@ from adversarial_ids.config.settings import (
     FEATURE_SELECTION_MODE,
     FEATURE_SELECTION_TOP_K,
     PREPROCESSOR_MODE,
+    PROTOCOL_FEATURES_MODE,
     UNDERSAMPLING_MODE,
 )
 from adversarial_ids.core.detectors import Detector, recommended_scaler
 from adversarial_ids.core.feature_selector import FeatureSelector
-from adversarial_ids.core.preprocessor import FeaturePreprocessor
+from adversarial_ids.core.preprocessor import FeaturePreprocessor, always_drop_for
 from adversarial_ids.core.undersampler import RandomUndersampler
 from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
@@ -102,6 +103,7 @@ class IdsEvaluator:
         drop_cb_status: bool = False,
         target_attack_label: str | None = None,
         preprocessor_mode: str = PREPROCESSOR_MODE,
+        protocol_features: str = PROTOCOL_FEATURES_MODE,
         feature_selection: str = FEATURE_SELECTION_MODE,
         feature_selection_top_k: int | None = FEATURE_SELECTION_TOP_K,
         feature_selection_min_score: float | None = FEATURE_SELECTION_MIN_SCORE,
@@ -129,6 +131,11 @@ class IdsEvaluator:
         # em vez de descartá-lo em silêncio. ``self.n_estimators`` é
         # reatribuído depois da resolução, para nunca contradizer o modelo.
         self.drop_cb_status = drop_cb_status
+        # Validado já aqui, e não só na construção do preprocessador lá em
+        # train_baseline: um modo inválido precisa falhar quando o avaliador é
+        # criado, não no meio de um treino.
+        always_drop_for(protocol_features)
+        self.protocol_features = protocol_features
         # Rótulo da classe de ataque esperado (ex.: "random_replay", "grayhole").
         # Quando definido, ancora a detecção da classe de ataque em vez de depender
         # de heurística por substring — essencial para ataques cujo rótulo não
@@ -277,6 +284,7 @@ class IdsEvaluator:
         # override explícito do chamador) — é o único ponto do E8 que toca o
         # preparo de features do E6.
         self.preprocessor = FeaturePreprocessor(
+            protocol_features=self.protocol_features,
             drop_cb_status=self.drop_cb_status,
             scaler=self.scaler,  # type: ignore[arg-type]  # validado no __init__
         )

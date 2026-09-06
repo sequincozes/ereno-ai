@@ -11,28 +11,38 @@ confundidas:
 ``PLAYBOOKS``
     O que a *família de ataque* pede em termos de IEC-61850, independente do
     que o detector reparou nesta rodada. Um playbook de replay recomenda
-    validação de sequência mesmo quando nenhuma feature de sequência aparece
-    no relatório — e, como se vê abaixo, nenhuma jamais aparece.
+    validação de sequência mesmo rodando sob um modo em que nenhuma feature de
+    sequência chega ao relatório — o controle de protocolo não deixa de ser
+    necessário só porque o IDS está cego para ele.
 
-## Por que o mapa de features é tão pequeno
+## O espaço de features depende do modo, e o catálogo cobre os dois
 
-O CSV do ERENO tem 53 colunas, mas ``core/preprocessor.py::_ALWAYS_DROP``
-descarta 33 delas em toda execução — temporais, sequência (``StNum``,
-``SqNum``, ``stDiff``, ``sqDiff``), identidade do publisher (``ethSrc``,
-``gocbRef``, ``goID``, ``datSet``) e metadados de protocolo. Elas são
-identificadores e derivados fortes: manter qualquer uma delas ensinaria o
-detector a reconhecer *o gerador*, não o ataque.
+O CSV do ERENO tem 53 colunas e o preprocessador nunca entrega todas. O que
+ele descarta depende de ``PROTOCOL_FEATURES_MODE`` (ver
+``docs/preprocessing.md``):
 
-Sobram **20 features**, e 18 são grandezas elétricas. Mapear ``StNum`` para
-``goose_sequence_validation`` seria catálogo morto: essa chave não tem como
-chegar a um ``DetectionReport``. Um teste fixa que este mapa cobre exatamente
-o que sobrevive ao descarte, nem mais nem menos.
+- ``drop`` (default): sobram **20 features**, e 18 são grandezas elétricas. É
+  o comportamento herdado, e é por isso que só a falta forjada é detectável —
+  não há uma única feature de sequência ou temporização no espaço.
+- ``deltas``: sobram **29**. As 9 a mais são ``stDiff``, ``sqDiff``,
+  ``SqNum``, ``tDiff``, ``timestampDiff``, ``timeFromLastChange`` e os três
+  deltas de tamanho — a semântica de que replay, flooding e grayhole dependem.
 
-A consequência prática é que o lado ancorado em métrica carrega mais peso do
-que o ancorado em feature — e mais ainda quando o detector é ``svm_rbf``, que
-não expõe importância nenhuma e produz ``top_features`` vazio (épico E8, ver
-``docs/detectors.md``). Um plano daquela execução se sustenta só em métrica, e
-``METRIC_TECHNIQUES`` existe para que ele ainda tenha técnica fundamentada.
+Identidade sai nos dois modos: ``ethSrc``, ``gocbRef``, ``goID``, ``datSet``,
+os relógios absolutos e ``StNum`` bruto. Mantê-las ensinaria o detector a
+reconhecer *o publisher*, não o ataque — e a medição concorda, todas dão
+informação mútua ~0 contra a classe.
+
+Este catálogo mapeia a **união dos dois modos**, 29 features. Um teste fixa
+isso contra o header do dataset versionado: nenhuma feature utilizável sem
+técnica, e nenhuma chave que não possa chegar a um ``DetectionReport`` sob
+modo nenhum. Mapear ``StNum`` seria catálogo morto; mapear ``sqDiff`` não é.
+
+O lado ancorado em métrica não é redundante com isso: ele é tudo que resta
+quando o detector é ``svm_rbf``, que não expõe importância nenhuma e produz
+``top_features`` vazio (épico E8, ver ``docs/detectors.md``). Um plano daquela
+execução se sustenta só em métrica, e ``METRIC_TECHNIQUES`` existe para que
+ele ainda tenha técnica fundamentada.
 
 O vocabulário em si é ``domain.defense_plan.DefenseTechnique``; este módulo se
 declara em sincronia com ele, nunca o contrário.
@@ -60,12 +70,26 @@ _INSTANTANEOUS = tuple(f"{q}sb{p}" for q in ("i", "v") for p in _PHASES)
 _RMS = tuple(f"{q}sb{p}RmsValue" for q in ("i", "v") for p in _PHASES)
 _TRAP_AREA = tuple(f"{q}sb{p}TrapAreaSum" for q in ("i", "v") for p in _PHASES)
 
+# As três famílias de protocolo só existem sob PROTOCOL_FEATURES_MODE="deltas";
+# em "drop" nenhuma delas chega ao relatório. O catálogo as mapeia mesmo assim,
+# porque o modo é do experimento e o catálogo não deve depender de qual foi
+# escolhido.
 FEATURE_FAMILIES: dict[str, tuple[str, ...]] = {
     "analog_instantaneous": _INSTANTANEOUS,
     "analog_rms": _RMS,
     "analog_trap_area": _TRAP_AREA,
     "breaker_state": ("cbStatus", "cbStatusDiff"),
+    "goose_sequence": ("stDiff", "sqDiff", "SqNum"),
+    "goose_timing": ("tDiff", "timestampDiff", "timeFromLastChange"),
+    "goose_payload_size": ("gooseLengthDiff", "apduSizeDiff", "frameLengthDiff"),
 }
+
+# Quais famílias dependem do modo "deltas" para aparecer.
+PROTOCOL_FAMILIES: tuple[str, ...] = (
+    "goose_sequence",
+    "goose_timing",
+    "goose_payload_size",
+)
 
 # --------------------------------------------------------------------------- #
 # Feature → técnica                                                           #
@@ -99,12 +123,40 @@ _TECHNIQUES_BY_FAMILY: dict[str, tuple[str, ...]] = {
         "operator_alerting",
     ),
     # Estado do disjuntor. Uma mudança de estado legítima vem acompanhada de
-    # incremento de stNum e de uma assinatura elétrica compatível; é o único
-    # ponto do espaço de features onde a semântica de sequência do GOOSE ainda
-    # é observável, já que stNum/sqNum foram descartados.
+    # incremento de stNum e de uma assinatura elétrica compatível. Sob o modo
+    # "drop" é o único ponto do espaço de features onde a semântica de sequência
+    # do GOOSE ainda é observável, já que os deltas saem todos.
     "breaker_state": (
         "goose_sequence_validation",
         "physical_consistency_check",
+        "device_quarantine",
+    ),
+    # Deltas de stNum/sqNum. É a assinatura direta de replay e de injeção: um
+    # quadro reproduzido repete ou retrocede a sequência, e um injetado a
+    # atropela. A resposta primária é validar a sequência no subscriber;
+    # autenticar (62351-6) é o que impede o quadro forjado de chegar.
+    "goose_sequence": (
+        "goose_sequence_validation",
+        "goose_authentication",
+        "publisher_binding",
+        "device_quarantine",
+    ),
+    # Deltas temporais. Cadência fora do esperado é replay atrasado, inundação
+    # ou supressão — os três se distinguem pelo sinal do desvio, e os três
+    # aparecem aqui antes de aparecer em qualquer outra família.
+    "goose_timing": (
+        "goose_timing_analysis",
+        "traffic_rate_limiting",
+        "continuous_monitoring",
+        "operator_alerting",
+    ),
+    # Deltas de tamanho de quadro/APDU. Um quadro cujo tamanho não bate com o
+    # dataset configurado não deveria ser aceito: em IEC-61850 o subscriber
+    # valida datSet/confRev/numDatSetEntries contra a própria configuração, que
+    # é o vínculo entre publisher e o que ele tem direito de publicar.
+    "goose_payload_size": (
+        "publisher_binding",
+        "goose_authentication",
         "device_quarantine",
     ),
 }
@@ -241,10 +293,17 @@ _PLAYBOOK_LIST: tuple[DefensePlaybook, ...] = (
             "goose_authentication",
             "publisher_binding",
         ),
-        # Vazio de propósito: stNum, sqNum e os deltas temporais estão todos no
-        # _ALWAYS_DROP, então o replay não deixa rastro no espaço de features.
-        # É o caso que mais depende de controle de protocolo, e menos do IDS.
-        signature_features=(),
+        # Só observáveis sob PROTOCOL_FEATURES_MODE="deltas". No modo default
+        # o replay não deixa rastro nenhum no espaço de features, e aí o
+        # cenário depende inteiramente de controle de protocolo.
+        signature_features=(
+            "sqDiff",
+            "stDiff",
+            "SqNum",
+            "tDiff",
+            "timestampDiff",
+            "timeFromLastChange",
+        ),
         reference="IEC 62351-6 §7 (autenticação) e IEC 61850-8-1 §18.1 (stNum/sqNum)",
     ),
     DefensePlaybook(
@@ -262,7 +321,14 @@ _PLAYBOOK_LIST: tuple[DefensePlaybook, ...] = (
             "goose_authentication",
             "device_quarantine",
         ),
-        signature_features=("cbStatus", "cbStatusDiff"),
+        signature_features=(
+            "cbStatus",
+            "cbStatusDiff",
+            "stDiff",
+            "SqNum",
+            "gooseLengthDiff",
+            "apduSizeDiff",
+        ),
         reference="IEC 61850-8-1 §18.1 e IEC 62351-6 §7",
     ),
     DefensePlaybook(
@@ -279,7 +345,8 @@ _PLAYBOOK_LIST: tuple[DefensePlaybook, ...] = (
             "network_segmentation",
             "operator_alerting",
         ),
-        signature_features=(),
+        # Inundação comprime a cadência: tDiff/timestampDiff despencam.
+        signature_features=("tDiff", "timestampDiff", "frameLengthDiff"),
         reference="IEC 61850-90-4 (engenharia de rede de subestação)",
     ),
     DefensePlaybook(
@@ -297,7 +364,9 @@ _PLAYBOOK_LIST: tuple[DefensePlaybook, ...] = (
             "operator_alerting",
             "network_segmentation",
         ),
-        signature_features=(),
+        # Supressão faz o oposto da inundação: o intervalo estica e a sequência
+        # salta os quadros que sumiram.
+        signature_features=("timeFromLastChange", "tDiff", "sqDiff"),
         reference="IEC 61850-8-1 §18.1.2 (timeAllowedToLive)",
     ),
 )
