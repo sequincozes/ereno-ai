@@ -219,3 +219,12 @@ DETECTOR_MODE = os.getenv("DETECTOR_MODE", "random_forest").strip().lower()
 
 _detector_scaler_raw = os.getenv("DETECTOR_SCALER", "").strip().lower()
 DETECTOR_SCALER = _detector_scaler_raw or None
+
+# Quais colunas de protocolo GOOSE chegam ao detector (ver docs/preprocessing.md).
+# "drop" (default) descarta identidade e deltas juntos — o comportamento herdado
+# do commit inicial do framework. "deltas" descarta só a identidade, deixando
+# stDiff/sqDiff/tDiff e companhia disponíveis: são elas que carregam a semântica
+# de sequência e temporização, e sem elas replay/flooding/grayhole não têm como
+# ser detectados. Default conservador de propósito: virar a chave move toda a
+# linha de base de métricas, então a decisão é do experimento, com ablação.
+PROTOCOL_FEATURES_MODE = os.getenv("PROTOCOL_FEATURES_MODE", "drop").strip().lower()
