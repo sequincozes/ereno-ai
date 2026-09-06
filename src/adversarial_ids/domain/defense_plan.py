@@ -40,6 +40,7 @@ DEFENSE_BUCKETS: tuple[str, ...] = get_args(DefenseBucket)
 
 DefenseTechnique = Literal[
     # Detecção — melhoram a capacidade de perceber o ataque.
+    "physical_consistency_check",
     "goose_sequence_validation",
     "goose_timing_analysis",
     "detector_threshold_tuning",
@@ -65,6 +66,13 @@ DEFENSE_TECHNIQUES: tuple[str, ...] = get_args(DefenseTechnique)
 # erro que a LLM realmente comete: propor `network_segmentation` como ação de
 # *detecção*, onde ela não mede nada.
 _BUCKETS_BY_TECHNIQUE: dict[str, frozenset[str]] = {
+    # Confrontar a grandeza elétrica declarada com a física do evento: uma falta
+    # real move as três fases de forma correlacionada e casa com a operação do
+    # disjuntor. É a única técnica que responde às 18 features analógicas, que
+    # são quase todo o espaço de features que sobrevive ao preprocessador.
+    "physical_consistency_check": frozenset(
+        {"detection_actions", "hardening_actions"}
+    ),
     "goose_sequence_validation": frozenset({"detection_actions", "hardening_actions"}),
     "goose_timing_analysis": frozenset({"detection_actions"}),
     "detector_threshold_tuning": frozenset({"detection_actions"}),
