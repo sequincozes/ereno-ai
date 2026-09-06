@@ -12,19 +12,22 @@ tipada e por regras determinísticas antes de ser persistida no
 `LoopRecord` — a DoD do épico E5: "toda ação referencia métrica/feature e
 método de verificação".
 
-## Contrato de saída
+## Contrato de saída (`schema_version: 2`)
 
 A resposta deve respeitar o modelo `DefensePlan`, composto por:
 
 - prioridade (`low`, `medium`, `high` ou `critical`);
+- uma referência opcional ao `DetectionReport` de origem
+  (`detection_report_ref`), no topo do plano;
 - listas de ações de detecção, contenção e hardening (ao menos uma no
   total).
 
 Cada ação (`DefenseAction`) contém:
 
 - descrição;
+- uma **técnica defensiva** nomeada (`technique`);
 - ao menos uma evidência;
-- método de verificação.
+- um **teste de validação** (`validation_test`).
 
 Cada evidência (`Evidence`) contém:
 
@@ -32,15 +35,64 @@ Cada evidência (`Evidence`) contém:
 - o valor citado;
 - uma referência opcional ao `DetectionReport` de origem.
 
+### A v1 e por que ela mudou
+
+Até a janela D36-46 o contrato estava na v1, e a ação carregava um
+`validation_method: str` de texto livre: qualquer string não vazia passava,
+inclusive `"revalidar"`. O gate de saída do D47-54 é "100% das recomendações
+ligadas a evidência **e teste de validação**", e metade dele não era
+verificável por tipo nenhum. A v2 troca aquele campo por `ValidationTest`.
+A prosa não se perdeu — virou `ValidationTest.procedure`.
+
+### Técnicas e baldes
+
+`DefenseTechnique` é o vocabulário fechado de técnicas defensivas, e vive em
+`domain/defense_plan.py` (assim como `DetectorKey` vive em
+`domain/detector_manifest.py`): o catálogo feature→técnica em `config/` se
+declara em sincronia com ele, nunca o contrário.
+
+Cada técnica é legal em um ou mais baldes. Várias são de duplo uso — uma
+allowlist de publisher bloqueia o intruso *e* é controle estrutural —, então
+forçar um balde único rejeitaria plano correto. O que o mapa impede é o erro
+que a LLM de fato comete: propor `network_segmentation` como ação de
+*detecção*, onde ela não mede nada.
+
+O prompt recebe a lista por balde em `legal_techniques`, montada por
+`agents/defender/tools.py::legal_techniques_by_bucket` a partir do mesmo mapa
+que o contrato consulta para recusar — o que é oferecido e o que é aceito não
+têm como divergir.
+
+### O teste de validação
+
+`ValidationTest` responde "como saberemos se isto funcionou?" em termos
+remedíveis:
+
+| campo | significado |
+|---|---|
+| `metric` | a métrica a medir de novo; só valores de `ValidationMetric` |
+| `direction` | `increase`/`decrease` cobram mudança; `at_least`/`at_most` são piso/teto |
+| `target` | o número a alcançar; finito, não negativo, e em [0, 1] para taxas |
+| `split` | opcional; `null` significa o mesmo split do relatório |
+| `procedure` | como a medição será feita, em uma frase |
+
+`ValidationMetric` é um subconjunto estrito da allowlist de evidência:
+`model_name` e `split` são texto (não há "aumentar o split"), e importância de
+feature ficou de fora porque **não é resultado defensivo** — provar que uma
+feature ficou mais importante não prova que o ataque passou a ser detectado.
+
 ## Validação por schema
 
 O modelo Pydantic `DefensePlan` (`extra="forbid"`, `frozen=True`) rejeita:
 
-- campos extras;
+- campos extras — inclusive o `validation_method` da v1;
 - prioridade fora dos quatro valores permitidos;
-- ação sem nenhuma evidência;
+- ação sem nenhuma evidência, sem técnica ou sem teste de validação;
 - plano sem nenhuma ação nos três baldes;
-- descrição, evidência ou método de verificação vazios.
+- técnica fora do vocabulário, ou legítima mas no balde errado;
+- métrica de validação que não seja um escalar remedível do relatório;
+- alvo NaN, infinito, negativo, ou acima de 1.0 numa métrica de taxa;
+- descrição, procedimento ou evidência vazios;
+- evidência que referencia uma execução diferente da declarada pelo plano.
 
 ## Validação contra o DetectionReport
 
@@ -60,10 +112,22 @@ São rejeitados:
    com `int`);
 3. evidência duplicada dentro da mesma ação, em qualquer um dos três
    baldes;
-4. prioridade incompatível com `priority_from_report`;
-5. `detection_report_ref` presente e diferente do relatório desta
+4. teste de validação cujo alvo não cobra melhora: "subir o recall para
+   0.50" quando o recall já é 0.60 é uma regressão vendida como correção, e
+   passaria em qualquer checagem de tipo. Só `increase`/`decrease` são
+   comparados contra o valor medido — `at_least`/`at_most` são guardas
+   contra regressão, legitimamente já satisfeitas quando a ação existe para
+   *proteger* uma métrica que está boa enquanto outra é atacada;
+5. prioridade incompatível com `priority_from_report`;
+6. `detection_report_ref` presente e diferente do relatório desta
    execução — fecha a lacuna de o Defensor citar uma evidência real mas
    apontar para um relatório inventado.
+
+A divisão entre contrato e portão segue a mesma linha do resto do repo: o
+contrato recusa o que é verificável sozinho (vocabulário, tipo, domínio
+numérico, coerência interna do plano), e o portão recusa o que só se sabe com
+o `DetectionReport` na mão (a evidência é real? o alvo significa alguma
+coisa?).
 
 Um guard adicional em `select_evidence_candidates` rejeita a construção da
 própria allowlist se o nome de uma feature colidir com uma chave de
@@ -110,13 +174,22 @@ a causa nunca se perde.
 
 Os testes automatizados cobrem:
 
-- contrato `DefensePlan` (`tests/test_new_contracts.py`);
+- contrato `DefensePlan` v2 — vocabulário de técnicas, técnica no balde
+  errado, domínio do alvo, NaN/infinito, rastreabilidade e os invariantes
+  herdados da v1 (`tests/test_defense_plan_contract.py`), além do
+  versionamento/congelamento/round-trip comum a todos os contratos
+  (`tests/test_new_contracts.py`);
 - `priority_from_report` nos quatro níveis e nas fronteiras 0.50/0.80/recall
   0.50;
 - montagem da allowlist, truncamento por `top_n` e o guard de colisão de
   nomes;
-- detecção de evidência inventada, valor alterado, evidência duplicada e
-  prioridade incompatível;
+- a costura entre `ValidationMetric` e a allowlist: toda métrica de validação
+  precisa existir num `DetectionReport` real, e o que sobra da allowlist é
+  texto ou importância de feature;
+- detecção de evidência inventada, valor alterado, evidência duplicada,
+  alvo que não cobra melhora e prioridade incompatível;
+- o exemplo JSON do prompt, parseado através do `DefensePlan` — um exemplo
+  inválido ensinaria o modelo a produzir exatamente o que o portão recusa;
 - detecção de `detection_report_ref` divergente;
 - conversão de dict, JSON (com e sem cerca ```` ``` ````) e modelo
   Pydantic;
