@@ -208,3 +208,38 @@ def test_constructor_raises_for_empty_prompt_file(tmp_path):
 def test_defender_agent_satisfies_the_defenderlike_protocol():
     defender = DefenderAgent(agent=FakeAgnoAgent(valid_plan()))
     assert isinstance(defender, DefenderLike)
+
+
+def test_build_prompt_lists_the_legal_techniques_per_bucket():
+    """A LLM não pode adivinhar o vocabulário: ele chega junto com os dados."""
+
+    import json
+
+    from adversarial_ids.domain import techniques_for_bucket
+
+    defender = DefenderAgent(agent=FakeAgnoAgent(valid_plan()))
+
+    prompt = defender.build_prompt(report_data())
+    payload = json.loads(prompt.split("## Dados da execução", 1)[1].strip())
+
+    assert payload["legal_techniques"] == {
+        bucket: list(techniques_for_bucket(bucket))
+        for bucket in ("detection_actions", "containment_actions", "hardening_actions")
+    }
+
+
+def test_build_prompt_lists_the_metrics_a_validation_test_may_use():
+    import json
+
+    from adversarial_ids.domain import VALIDATION_METRICS
+
+    defender = DefenderAgent(agent=FakeAgnoAgent(valid_plan()))
+
+    prompt = defender.build_prompt(report_data())
+    payload = json.loads(prompt.split("## Dados da execução", 1)[1].strip())
+
+    assert payload["validation_metrics"] == list(VALIDATION_METRICS)
+    # Importância de feature não é resultado defensivo, então fica de fora
+    # mesmo estando em `citable_evidence`.
+    assert "TrapAreaSum" in payload["citable_evidence"]
+    assert "TrapAreaSum" not in payload["validation_metrics"]
