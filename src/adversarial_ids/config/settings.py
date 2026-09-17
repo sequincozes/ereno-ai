@@ -153,6 +153,16 @@ INTENT_LOOP_OUTPUT_DIR = OUTPUTS_DIR / "intent_loop"
 INTENT_LOOP_MIN_ATTACK_ROWS = 5
 INTENT_LOOP_MIN_NORMAL_ROWS = 5
 
+# Piso de *prevalência* da classe de ataque, no mesmo gate. Os pisos acima são
+# absolutos e só pegam trace vazio/quebrado: uma variante de `injection` gerada
+# pelo JAR passou com 27 linhas de ataque em 50.025 (0,05%) e produziu
+# recall=0,26 sobre 27 amostras — ruído estatístico que o FEEDBACK tomou como
+# métrica-objetivo real e o Defender tratou como incidente crítico. Um trace
+# raro demais não mede detecção, ele mede acaso. 1% é folgado de propósito: as
+# famílias que rodam de verdade ficam entre 23% e 50%, então isso reprova o
+# degenerado sem reprovar ataque de baixa intensidade legítimo. 0.0 desliga.
+INTENT_LOOP_MIN_ATTACK_PREVALENCE = 0.01
+
 # Campanha multi-rodada do estágio FEEDBACK (E10). O default é 1 rodada — o
 # mesmo comportamento de antes do E10 — porque cada rodada extra paga um ciclo
 # completo de ERENO + treino/avaliação do detector.
