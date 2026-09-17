@@ -11,7 +11,9 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
 - ERENO       — ``GeneratorRunner.generate_dataset`` sobre o
   ``AttackCandidate.config`` compilado.
 - PREPROCESS  — ``core.dataset_bundle_builder.build_dataset_bundle`` (E4):
-  hash, classes e volume do trace validados antes do detector rodar.
+  hash, classes e volume do trace validados antes do detector rodar — volume
+  tanto absoluto quanto em prevalência da classe de ataque, porque um trace
+  íntegro mas com ataque raro demais produz métrica de acaso.
 - DETECTOR    — ``IdsEvaluator`` treinado no baseline do ataque e avaliado
   sobre o ``DatasetBundle`` aprovado, empacotado como ``DetectionReport``
   (``core.detection_reporter``). Qual modelo treina vem do parâmetro
@@ -85,6 +87,7 @@ from adversarial_ids.config.settings import (
     GENERATOR_RUNTIME_DIR,
     GENERATOR_TIMEOUT_SECONDS,
     INTENT_LOOP_DEFAULT_ROUNDS,
+    INTENT_LOOP_MIN_ATTACK_PREVALENCE,
     INTENT_LOOP_MIN_ATTACK_ROWS,
     INTENT_LOOP_MIN_NORMAL_ROWS,
     INTENT_LOOP_OUTPUT_DIR,
@@ -145,6 +148,7 @@ class IntentLoopOrchestrator:
         save_path: Path | str | None = LOOP_RECORDS_PATH,
         min_attack_rows: int = INTENT_LOOP_MIN_ATTACK_ROWS,
         min_normal_rows: int = INTENT_LOOP_MIN_NORMAL_ROWS,
+        min_attack_prevalence: float = INTENT_LOOP_MIN_ATTACK_PREVALENCE,
         cached_dataset_path: Path | str | None = None,
         feedback_min_delta: float = FEEDBACK_MIN_DELTA,
         detector: str = DETECTOR_MODE,
@@ -166,6 +170,7 @@ class IntentLoopOrchestrator:
         self.save_path = Path(save_path) if save_path is not None else None
         self.min_attack_rows = min_attack_rows
         self.min_normal_rows = min_normal_rows
+        self.min_attack_prevalence = min_attack_prevalence
         # Override de teste: aponta o modo cacheado para uma seed pequena em
         # vez de settings.BASELINE_DATASET_PATH (o baseline real, ~80k
         # linhas). Produção usa o default (None -> BASELINE_DATASET_PATH).
@@ -328,6 +333,7 @@ class IntentLoopOrchestrator:
                     expected_attack_label=spec.label,
                     min_attack_rows=self.min_attack_rows,
                     min_normal_rows=self.min_normal_rows,
+                    min_attack_prevalence=self.min_attack_prevalence,
                 ),
                 persist_as="dataset_bundle.json",
             )
