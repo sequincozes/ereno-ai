@@ -207,8 +207,17 @@ def _print_loop_record_summary(
             line += f" ({stage.error})"
         print(line, file=stdout)
 
+    footer: list[str] = []
     if record.total_duration_seconds is not None:
-        print(f"  total: {record.total_duration_seconds:.2f}s", file=stdout)
+        footer.append(f"{record.total_duration_seconds:.2f}s")
+    # Consumo (E11): só aparece quando os agentes informaram. Um "0 tokens"
+    # impresso porque ninguém contou seria pior que a ausência.
+    if record.total_tokens is not None:
+        footer.append(f"{record.total_tokens} tokens")
+    if record.cost_usd is not None:
+        footer.append(f"US$ {record.cost_usd:.4f}")
+    if footer:
+        print(f"  total: {' · '.join(footer)}", file=stdout)
 
 
 def _print_campaign_summary(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> None:

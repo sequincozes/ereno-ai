@@ -275,6 +275,21 @@ def _render_saved() -> None:
                 "value": _duration(chosen.total_duration_seconds),
                 "accent": "#f5a524",
             },
+            {
+                "label": "Tokens",
+                "value": (
+                    "—" if chosen.total_tokens is None else f"{chosen.total_tokens:,}"
+                ),
+                "hint": (
+                    "não informado pelo provedor"
+                    if chosen.total_tokens is None
+                    else (
+                        "custo não informado"
+                        if chosen.cost_usd is None
+                        else f"US$ {chosen.cost_usd:.4f}"
+                    )
+                ),
+            },
         ]
     )
     st.markdown(
