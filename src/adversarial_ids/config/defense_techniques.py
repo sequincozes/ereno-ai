@@ -409,6 +409,28 @@ def techniques_for_metric(metric: str) -> tuple[str, ...]:
     return METRIC_TECHNIQUES[metric]
 
 
+def techniques_for_evidence(key: str) -> tuple[str, ...]:
+    """Técnicas catalogadas para uma chave de evidência, seja ela qual for.
+
+    Uma ``Evidence.metric_or_feature`` pode ser uma métrica do relatório, o nome
+    de uma feature ou um descritor textual (``model_name``, ``split``) — quem
+    avalia o plano recebe a chave crua e não deveria ter que adivinhar de qual
+    tabela consultar. Esta função faz o despacho e é a única fonte de
+    "o que esta evidência recomenda": o prompt do Defensor mostra o resultado
+    dela e o portão recusa a partir dela, então os dois lados não têm como
+    divergir sobre o que sustenta uma técnica.
+
+    Devolve tupla vazia para o que não sustenta nada — descritor textual ou
+    feature fora do catálogo. Quem chama distingue os dois casos; aqui os dois
+    significam a mesma coisa: nenhuma técnica se apoia nisso.
+    """
+
+    if key in METRIC_TECHNIQUES:
+        return METRIC_TECHNIQUES[key]
+
+    return techniques_for_feature(key)
+
+
 def playbook_for_attack(attack_key: str) -> DefensePlaybook:
     """Playbook IEC-61850 da família a que o ataque pertence."""
 
