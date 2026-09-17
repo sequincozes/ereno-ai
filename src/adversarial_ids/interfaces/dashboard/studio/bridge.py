@@ -18,6 +18,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
+from adversarial_ids.config.settings import MODEL_ID
 from adversarial_ids.domain import IterationRecord
 from adversarial_ids.interfaces.experiment_runner import create_default_runner
 
@@ -71,7 +72,7 @@ class ExperimentConfig:
     persona: str = "conservative"        # conservative | aggressive
     orchestration: str = "team"          # team | direct
     generator_mode: str = "cached"       # cached | jar
-    model_id: str = "llama-3.1-8b-instant"
+    model_id: str = MODEL_ID
 
     def as_summary(self) -> dict[str, str]:
         return {
