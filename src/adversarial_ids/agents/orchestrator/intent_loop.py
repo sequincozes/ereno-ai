@@ -116,6 +116,7 @@ from adversarial_ids.shared.loop_event_store import (
     fanout,
 )
 from adversarial_ids.shared.loop_record_store import append_loop_record
+from adversarial_ids.shared.redaction import redact
 from adversarial_ids.shared.run_id import new_run_id
 
 _VALID_GENERATOR_MODES = ("cached", "jar")
@@ -181,6 +182,10 @@ class _RoundContext:
                 "sequence": self._sequence,
                 "kind": kind,
                 **fields,
+                # Redigido aqui, e não em quem chama: este é o único caminho
+                # pelo qual uma mensagem vira evento, então nenhum chamador
+                # futuro consegue esquecer (ver shared/redaction.py).
+                "message": redact(fields.get("message")),
             }
         )
         self._sequence += 1
@@ -668,12 +673,15 @@ class IntentLoopOrchestrator:
         try:
             result = fn()
         except Exception as exc:
+            # A exceção de um cliente HTTP costuma trazer a requisição que
+            # falhou, cabeçalho de autorização incluído — e este texto vai para
+            # o disco e para a tela.
             ctx.record_stage(
                 LoopStage(
                     name=name,
                     status=LoopStageStatus.FAILED,
                     duration_seconds=time.perf_counter() - start,
-                    error=str(exc),
+                    error=redact(str(exc)),
                 )
             )
             raise
