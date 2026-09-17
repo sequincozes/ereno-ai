@@ -6,7 +6,8 @@ aprovado". Não é o preprocessador modular completo (fit/transform, NaN,
 leakage) — isso é o épico E6 (``core/preprocessor.py::FeaturePreprocessor``,
 ver ``docs/preprocessing.md``), que consome o trace já aprovado por este
 gate; aqui só validamos o que o ``DatasetBundle`` (contrato congelado) já
-promete: hash de conteúdo, classes presentes e volume mínimo por classe.
+promete: hash de conteúdo, classes presentes e volume mínimo por classe —
+este último tanto em valor absoluto quanto em prevalência da classe de ataque.
 
 Um trace que não passa neste gate nunca vira um ``DatasetBundle`` — o
 ``IntentLoopOrchestrator`` (E3) marca o estágio ``preprocess`` como falho e
@@ -57,6 +58,7 @@ def build_dataset_bundle(
     expected_attack_label: str,
     min_attack_rows: int = 5,
     min_normal_rows: int = 5,
+    min_attack_prevalence: float = 0.01,
 ) -> DatasetBundle:
     """Valida ``trace_path`` e devolve um ``DatasetBundle`` aprovado.
 
@@ -66,7 +68,23 @@ def build_dataset_bundle(
     volume. O hash é sobre os bytes exatos do arquivo — dois traces com o
     mesmo conteúdo produzem o mesmo ``content_hash``, o que permite detectar
     reuso/deduplicação de traces entre execuções.
+
+    ``min_attack_rows``/``min_normal_rows`` são pisos **absolutos** e só
+    pegam trace vazio ou quebrado. ``min_attack_prevalence`` é o piso
+    **proporcional** (fração das linhas rotuladas que são da classe de
+    ataque) e cobre o caso que os absolutos deixam passar: um trace íntegro
+    em que o ataque é raro demais para ser medido. As duas checagens são
+    distintas de propósito — um trace pode ter 27 linhas de ataque (muito
+    acima do piso absoluto de 5) e ainda assim 0,05% de prevalência, caso em
+    que qualquer recall/precision que sair dali é ruído amostral, não
+    evidência sobre o detector. ``0.0`` desliga só o piso proporcional.
     """
+
+    if not 0.0 <= min_attack_prevalence <= 1.0:
+        raise ValueError(
+            "min_attack_prevalence precisa estar em [0.0, 1.0] "
+            f"(veio {min_attack_prevalence})."
+        )
 
     path = Path(trace_path)
     if not path.exists():
@@ -109,6 +127,18 @@ def build_dataset_bundle(
         raise DatasetGateError(
             f"Volume da classe de ataque {expected_attack_label!r} abaixo do "
             f"piso em {path}: {attack_rows} < {min_attack_rows}."
+        )
+
+    labeled_rows = sum(class_counts.values())
+    prevalence = attack_rows / labeled_rows
+    if prevalence < min_attack_prevalence:
+        raise DatasetGateError(
+            f"Prevalência da classe de ataque {expected_attack_label!r} abaixo "
+            f"do piso em {path}: {attack_rows}/{labeled_rows} = "
+            f"{prevalence:.4%} < {min_attack_prevalence:.4%}. O trace é íntegro, "
+            "mas raro demais para medir detecção — as métricas sairiam ruído "
+            "amostral. Quem está reprovado é o dataset, não a intenção: gere "
+            "de novo com o ataque mais intenso ou com menos tráfego benigno."
         )
 
     normal_rows = sum(

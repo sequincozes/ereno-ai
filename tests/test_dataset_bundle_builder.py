@@ -129,3 +129,91 @@ def test_build_dataset_bundle_finds_the_class_column_case_insensitively(tmp_path
         trace, lineage_run_id="run-1", expected_attack_label="attack_label"
     )
     assert bundle.class_counts == {"attack_label": 6, "normal": 6}
+
+
+def test_build_dataset_bundle_rejects_attack_class_too_rare_to_measure(tmp_path):
+    """Piso proporcional: o absoluto passa, a prevalência não.
+
+    Forma real observada numa variante de ``injection`` gerada pelo JAR —
+    27 linhas de ataque contra ~50k normais. Antes do piso de prevalência o
+    trace era aprovado e o detector reportava recall sobre 27 amostras.
+    """
+
+    trace = _valid_trace(tmp_path / "trace.csv", attack_rows=27, normal_rows=49_998)
+
+    with pytest.raises(DatasetGateError, match="Prevalência") as excinfo:
+        build_dataset_bundle(
+            trace,
+            lineage_run_id="run-1",
+            expected_attack_label="attack_label",
+        )
+
+    message = str(excinfo.value)
+    # O piso absoluto não é o que reprovou — a mensagem precisa dizer isso, ou
+    # quem lê vai mexer em min_attack_rows e não resolver nada.
+    assert "27/50025" in message
+    assert "dataset, não a intenção" in message
+
+
+def test_build_dataset_bundle_approves_attack_class_at_the_prevalence_floor(tmp_path):
+    trace = _valid_trace(tmp_path / "trace.csv", attack_rows=10, normal_rows=990)
+
+    bundle = build_dataset_bundle(
+        trace,
+        lineage_run_id="run-1",
+        expected_attack_label="attack_label",
+        min_attack_prevalence=0.01,
+    )
+
+    assert bundle.class_counts == {"attack_label": 10, "normal": 990}
+
+
+def test_build_dataset_bundle_prevalence_floor_can_be_disabled(tmp_path):
+    """``0.0`` volta ao comportamento anterior ao piso proporcional."""
+
+    trace = _valid_trace(tmp_path / "trace.csv", attack_rows=27, normal_rows=49_998)
+
+    bundle = build_dataset_bundle(
+        trace,
+        lineage_run_id="run-1",
+        expected_attack_label="attack_label",
+        min_attack_prevalence=0.0,
+    )
+
+    assert bundle.class_counts["attack_label"] == 27
+
+
+def test_build_dataset_bundle_rejects_an_out_of_range_prevalence_floor(tmp_path):
+    """Erro de configuração do chamador, não trace reprovado — ``ValueError``
+    puro, não ``DatasetGateError``."""
+
+    trace = _valid_trace(tmp_path / "trace.csv")
+
+    with pytest.raises(ValueError, match=r"\[0.0, 1.0\]") as excinfo:
+        build_dataset_bundle(
+            trace,
+            lineage_run_id="run-1",
+            expected_attack_label="attack_label",
+            min_attack_prevalence=1.5,
+        )
+
+    assert not isinstance(excinfo.value, DatasetGateError)
+
+
+def test_build_dataset_bundle_prevalence_counts_every_labeled_row(tmp_path):
+    """A prevalência é sobre o total rotulado, não sobre ataque+normal — um
+    trace com uma terceira classe não pode inflar a fração do ataque."""
+
+    rows = ["f1,f2,class"]
+    rows += [f"{i},1,attack_label" for i in range(10)]
+    rows += [f"{i},0,normal" for i in range(500)]
+    rows += [f"{i},2,other_attack" for i in range(490)]
+    trace = _write_csv(tmp_path / "trace.csv", rows)
+
+    with pytest.raises(DatasetGateError, match="10/1000"):
+        build_dataset_bundle(
+            trace,
+            lineage_run_id="run-1",
+            expected_attack_label="attack_label",
+            min_attack_prevalence=0.02,
+        )
