@@ -88,6 +88,7 @@ from adversarial_ids.config.settings import (
     GENERATOR_RUNTIME_DIR,
     GENERATOR_TIMEOUT_SECONDS,
     INTENT_LOOP_DEFAULT_ROUNDS,
+    INTENT_LOOP_TOKEN_BUDGET,
     INTENT_LOOP_MIN_ATTACK_PREVALENCE,
     INTENT_LOOP_MIN_ATTACK_ROWS,
     INTENT_LOOP_MIN_NORMAL_ROWS,
@@ -108,6 +109,7 @@ from adversarial_ids.domain.detection_report import DetectionReport
 from adversarial_ids.domain.feedback_decision import FeedbackDecision, RoundOutcome
 from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.loop_event import LoopEvent
+from adversarial_ids.domain.run_usage import AgentUsage
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json, save_json
 from adversarial_ids.shared.loop_event_store import (
@@ -223,6 +225,7 @@ class IntentLoopOrchestrator:
         feedback_min_delta: float = FEEDBACK_MIN_DELTA,
         detector: str = DETECTOR_MODE,
         event_sink: LoopEventSink | None = None,
+        token_budget: int = INTENT_LOOP_TOKEN_BUDGET,
     ) -> None:
         if generator_mode not in _VALID_GENERATOR_MODES:
             raise ValueError(
@@ -253,6 +256,13 @@ class IntentLoopOrchestrator:
         # modo cacheado a métrica nunca se move, então um teste que precise
         # rodar mais de duas rodadas passa 0.0 aqui.
         self.feedback_min_delta = feedback_min_delta
+        # Teto de tokens da campanha (E11); 0 desliga. Ver `run_campaign`.
+        if token_budget < 0:
+            raise ValueError(
+                f"token_budget precisa ser >= 0 (veio {token_budget}); "
+                "use 0 para desligar o limite."
+            )
+        self.token_budget = token_budget
         # Observador opcional da timeline (E11). O sink de arquivo é sempre
         # ligado, por execução; este aqui é quem *mais* quer ver — a UI ao vivo
         # registra um sink de memória, um teste registra uma lista.
@@ -294,8 +304,15 @@ class IntentLoopOrchestrator:
         seguinte roda a ``IntentSpec`` que o estágio FEEDBACK da anterior
         produziu — sem nova chamada de LLM do lado Red. A campanha para no
         primeiro destes casos: a decisão diz para parar, algum estágio da
-        rodada falhou (o FEEDBACK nem chega a rodar), ou ``rounds`` foi
-        atingido.
+        rodada falhou (o FEEDBACK nem chega a rodar), ``rounds`` foi atingido,
+        ou o orçamento de tokens acabou.
+
+        O orçamento (E11) é checado **entre** rodadas e fica fora da política de
+        feedback de propósito: a política decide se vale a pena continuar
+        *cientificamente*, e o teto decide se dá para continuar
+        *operacionalmente*. Misturar os dois faria um estouro de custo aparecer
+        como um veredito sobre o experimento. Uma campanha cujos agentes não
+        informam consumo nunca é interrompida por aqui — ver ``_round_usage``.
 
         Nunca levanta, pelo mesmo motivo de ``run()``: devolve os registros
         já concluídos (todos individualmente persistidos), e a causa da
@@ -324,6 +341,9 @@ class IntentLoopOrchestrator:
             records.append(record)
 
             if decision is None or not decision.should_continue:
+                break
+
+            if self._budget_exhausted(records):
                 break
 
             history += (
@@ -463,11 +483,14 @@ class IntentLoopOrchestrator:
             # abaixo do mesmo jeito.
             pass
 
+        usage = self._round_usage()
         record = LoopRecord(
             run_id=run_id,
             source_prompt=prompt,
             seed=record_seed,
             stages=tuple(stages),
+            cost_usd=usage.cost_usd if usage else None,
+            total_tokens=usage.total_tokens if usage else None,
             total_duration_seconds=time.perf_counter() - started,
             round=round_index,
             parent_run_id=parent_run_id,
@@ -593,6 +616,63 @@ class IntentLoopOrchestrator:
             dataset_bundle.trace_path,
             split=split,
         )
+
+    # ------------------------------------------------------------------ #
+    # Contabilidade de consumo (E11)                                      #
+    # ------------------------------------------------------------------ #
+    def _budget_exhausted(self, records: list[LoopRecord]) -> bool:
+        """A campanha já gastou o teto de tokens configurado?
+
+        Rodadas que não informaram consumo contam como zero *nesta soma*, e não
+        como desconhecido: elas não somam ao gasto conhecido, mas também não
+        impedem que o gasto conhecido estoure o teto.
+        """
+
+        if self.token_budget <= 0:
+            return False
+
+        spent = sum(record.total_tokens or 0 for record in records)
+
+        return spent >= self.token_budget
+
+    @staticmethod
+    def _usage_of(agent: Any) -> AgentUsage | None:
+        """O consumo da última chamada daquele agente, se ele souber informar.
+
+        Lido por ``getattr`` e não por um método do protocolo: ``IntentLike`` e
+        ``DefenderLike`` existem para que stubs determinísticos rodem o
+        orquestrador inteiro, e exigir contabilidade deles obrigaria todo stub a
+        fingir um número que não tem.
+        """
+
+        usage = getattr(agent, "last_usage", None)
+
+        return usage if isinstance(usage, AgentUsage) else None
+
+    def _round_usage(self) -> AgentUsage | None:
+        """Soma o que os dois agentes gastaram nesta rodada.
+
+        ``None`` quando nenhum dos dois informou: zero token é uma afirmação
+        sobre as chamadas, ``None`` é a confissão de que não se sabe — e um
+        orçamento comparado contra um zero inventado aprovaria qualquer coisa.
+        """
+
+        reported = [
+            usage
+            for usage in (
+                self._usage_of(self.intent_agent),
+                self._usage_of(self.defender_agent),
+            )
+            if usage is not None
+        ]
+        if not reported:
+            return None
+
+        total = reported[0]
+        for usage in reported[1:]:
+            total = total + usage
+
+        return total
 
     # ------------------------------------------------------------------ #
     # Estágio DEFENDER — plano validado + o veredito das regras (E5)      #
