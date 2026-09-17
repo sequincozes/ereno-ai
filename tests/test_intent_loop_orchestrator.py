@@ -27,6 +27,7 @@ from adversarial_ids.agents.orchestrator.intent_loop import (
 from adversarial_ids.config.attack_capabilities import get_attack_capability
 from adversarial_ids.config.attacks_registry import get_attack_spec, list_attack_keys
 from adversarial_ids.domain.defense_plan import DefensePlan
+from adversarial_ids.domain.defense_rule_report import DefenseRuleReport
 from adversarial_ids.domain.detection_report import DetectionReport
 from adversarial_ids.domain.intent_spec import (
     DesiredEffect,
@@ -114,12 +115,18 @@ class _StubDefenderAgent:
     def __init__(self) -> None:
         self.received_reports: list[DetectionReport] = []
         self.received_refs: list[str | None] = []
+        self.received_attack_keys: list[str | None] = []
 
     def defend(
-        self, report: DetectionReport, *, report_ref: str | None = None
+        self,
+        report: DetectionReport,
+        *,
+        report_ref: str | None = None,
+        attack_key: str | None = None,
     ) -> DefensePlan:
         self.received_reports.append(report)
         self.received_refs.append(report_ref)
+        self.received_attack_keys.append(attack_key)
         return DefensePlan.model_validate(
             {
                 "priority": priority_from_report(report),
@@ -161,7 +168,11 @@ class _UngroundedDefenderAgent:
     """
 
     def defend(
-        self, report: DetectionReport, *, report_ref: str | None = None
+        self,
+        report: DetectionReport,
+        *,
+        report_ref: str | None = None,
+        attack_key: str | None = None,
     ) -> DefensePlan:
         plan = DefensePlan.model_validate(
             {
@@ -192,13 +203,17 @@ class _UngroundedDefenderAgent:
             }
         )
         return validate_plan_against_report(
-            plan, report, expected_report_ref=report_ref
+            plan, report, expected_report_ref=report_ref, attack_key=attack_key
         )
 
 
 class _FailingDefenderAgent:
     def defend(
-        self, report: DetectionReport, *, report_ref: str | None = None
+        self,
+        report: DetectionReport,
+        *,
+        report_ref: str | None = None,
+        attack_key: str | None = None,
     ) -> DefensePlan:
         raise RuntimeError("a LLM não retornou um DefensePlan")
 
@@ -289,6 +304,9 @@ def test_run_completes_all_seven_stages_including_feedback(tmp_path):
     assert defender.received_reports[0].model_name == "random_forest"
     assert defender.received_refs[0] is not None
     assert defender.received_refs[0].endswith("detection_report.json")
+    # O ataque-base resolvido da intenção, não um parâmetro externo separado:
+    # é ele que escolhe o playbook IEC-61850 da avaliação por regras (E5).
+    assert defender.received_attack_keys == ["masquerade_fault"]
 
 
 @pytest.mark.parametrize("attack_key", list_attack_keys())
@@ -363,6 +381,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "selection_manifest.json",
         "detector_manifest.json",
         "defense_plan.json",
+        "defense_rules.json",
         "feedback.json",
     ):
         assert (run_dir / filename).exists(), filename
@@ -377,6 +396,18 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
 
     # O plano persistido é um DefensePlan válido e fundamentado no relatório.
     DefensePlan.model_validate(load_json(run_dir / "defense_plan.json"))
+
+    # A avaliação por regras (E5) fica ao lado do plano: é o artefato que
+    # sustenta o gate da janela D47-54, e `grounded_actions`/`total_actions` é
+    # literalmente a fração de recomendações ligadas a evidência.
+    rules = DefenseRuleReport.model_validate(load_json(run_dir / "defense_rules.json"))
+    assert rules.is_grounded
+    assert rules.grounded_fraction == 1.0
+    assert rules.detection_report_ref == str(run_dir / "detection_report.json")
+    # O eixo do playbook só existe porque o ataque-base da intenção chegou até
+    # aqui — sem ele o relatório não saberia de que cenário IEC-61850 falar.
+    assert rules.attack_key == "masquerade_fault"
+    assert rules.playbook_key == "spoofed_fault_indication"
 
     # A decisão persistida é um FeedbackDecision válido.
     FeedbackDecision.model_validate(load_json(run_dir / "feedback.json"))

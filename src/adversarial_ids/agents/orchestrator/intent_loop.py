@@ -95,6 +95,7 @@ from adversarial_ids.config.settings import (
 )
 from adversarial_ids.core.dataset_bundle_builder import build_dataset_bundle
 from adversarial_ids.core.detection_reporter import build_detection_report
+from adversarial_ids.core.defense_rules import evaluate_plan_rules
 from adversarial_ids.core.detectors import detector_spec
 from adversarial_ids.core.feedback_policy import decide_feedback
 from adversarial_ids.core.generator_runner import GeneratorRunner
@@ -124,14 +125,20 @@ class IntentLike(Protocol):
 class DefenderLike(Protocol):
     """Qualquer gerador de DefensePlan (``DefenderAgent`` real ou stub de teste).
 
-    Mais largo que ``IntentLike`` por um kwarg: ``report_ref`` é o caminho
+    Mais largo que ``IntentLike`` por dois kwargs: ``report_ref`` é o caminho
     determinístico do ``detection_report.json`` desta execução, repassado
     para que ``Evidence.detection_report_ref`` também seja validável contra
-    a execução real, não apenas contra os valores das métricas.
+    a execução real, não apenas contra os valores das métricas; ``attack_key``
+    é o ataque-base que a intenção compilada usou, e liga os achados de playbook
+    da avaliação por regras (E5) — que aconselham, nunca recusam.
     """
 
     def defend(
-        self, report: DetectionReport, *, report_ref: str | None = None
+        self,
+        report: DetectionReport,
+        *,
+        report_ref: str | None = None,
+        attack_key: str | None = None,
     ) -> DefensePlan: ...
 
 
@@ -347,8 +354,11 @@ class IntentLoopOrchestrator:
             report_ref = str(run_dir / "detection_report.json")
             defense_plan = self._stage(
                 stages, run_dir, "defender",
-                lambda: self.defender_agent.defend(
-                    detection_report, report_ref=report_ref
+                lambda: self._run_defender(
+                    detection_report,
+                    report_ref=report_ref,
+                    attack_key=intent.base_attack,
+                    run_dir=run_dir,
                 ),
                 persist_as="defense_plan.json",
             )
@@ -481,6 +491,45 @@ class IntentLoopOrchestrator:
             dataset_bundle.trace_path,
             split=split,
         )
+
+    # ------------------------------------------------------------------ #
+    # Estágio DEFENDER — plano validado + o veredito das regras (E5)      #
+    # ------------------------------------------------------------------ #
+    def _run_defender(
+        self,
+        detection_report: DetectionReport,
+        *,
+        report_ref: str,
+        attack_key: str,
+        run_dir: Path,
+    ) -> DefensePlan:
+        """Produz o plano e persiste ao lado dele a avaliação por regras.
+
+        ``defend`` já recusa o plano cuja recomendação não responde à evidência
+        citada — a avaliação aqui é a *mesma*, recalculada sobre um plano que já
+        passou, para deixar em disco o eixo que o portão não usa: o playbook
+        IEC-61850 daquela família, que aconselha sem bloquear. Reavaliar custa
+        nada (é função pura sobre dois modelos) e evita que ``defend`` devolva
+        duas coisas só para carregar o relatório de volta.
+
+        ``defense_rules.json`` é o artefato que sustenta o gate da janela
+        D47-54: ``grounded_actions``/``total_actions`` é, literalmente, a fração
+        de recomendações ligadas a evidência.
+        """
+
+        plan = self.defender_agent.defend(
+            detection_report, report_ref=report_ref, attack_key=attack_key
+        )
+
+        rules = evaluate_plan_rules(
+            plan,
+            detection_report,
+            attack_key=attack_key,
+            detection_report_ref=report_ref,
+        )
+        save_json(run_dir / "defense_rules.json", rules.model_dump(mode="json"))
+
+        return plan
 
     # ------------------------------------------------------------------ #
     # Núcleo (GeneratorRunner por execução, isolado por run_id)          #
