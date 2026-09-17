@@ -37,6 +37,8 @@ def _record(
         seed=42,
         stages=tuple(stages),
         total_duration_seconds=2.25,
+        total_tokens=1540,
+        cost_usd=0.0031,
         round=round,
         parent_run_id=parent_run_id,
     )
@@ -275,3 +277,43 @@ def test_intent_summary_prints_the_duration_of_each_stage_and_of_the_run():
     assert "0.75s" in output
     assert "1.50s" in output
     assert "total: 2.25s" in output
+
+
+def test_intent_summary_prints_the_consumption_when_the_agents_reported_it():
+    """"Execução cabe no orçamento definido" exige que o gasto seja visível."""
+
+    stdout = StringIO()
+
+    run_cli(
+        argv=["--engine", "intent", "--prompt", "x"],
+        stdout=stdout,
+        run_intent_loop=lambda **_: _records(),
+    )
+
+    output = stdout.getvalue()
+    assert "1540 tokens" in output
+    assert "US$ 0.0031" in output
+
+
+def test_a_run_with_no_reported_consumption_says_nothing_instead_of_zero():
+    """Um "0 tokens" impresso porque ninguém contou seria pior que a ausência."""
+
+    stdout = StringIO()
+    silent = LoopRecord(
+        run_id="run-1",
+        source_prompt="Reduza o recall.",
+        seed=42,
+        stages=(LoopStage(name="intent", status=LoopStageStatus.SUCCEEDED),),
+        total_duration_seconds=1.0,
+    )
+
+    run_cli(
+        argv=["--engine", "intent", "--prompt", "x"],
+        stdout=stdout,
+        run_intent_loop=lambda **_: (silent,),
+    )
+
+    output = stdout.getvalue()
+    assert "total: 1.00s" in output
+    assert "tokens" not in output
+    assert "US$" not in output
