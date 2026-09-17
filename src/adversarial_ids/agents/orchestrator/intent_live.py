@@ -27,6 +27,7 @@ from adversarial_ids.config.settings import (
     MODEL_ID,
 )
 from adversarial_ids.domain.loop_record import LoopRecord
+from adversarial_ids.shared.loop_event_store import LoopEventSink
 
 
 def build_intent_loop(
@@ -34,6 +35,7 @@ def build_intent_loop(
     model_id: str = MODEL_ID,
     generator_mode: str = "cached",
     detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
 ) -> IntentLoopOrchestrator:
     """Monta o orquestrador v2 com o ``IntentAgent`` e o ``DefenderAgent`` reais."""
 
@@ -42,6 +44,7 @@ def build_intent_loop(
         defender_agent=DefenderAgent(model_id=model_id),
         generator_mode=generator_mode,
         detector=detector,
+        event_sink=event_sink,
     )
 
 
@@ -52,6 +55,7 @@ def run_intent_loop(
     generator_mode: str = "cached",
     rounds: int = INTENT_LOOP_DEFAULT_ROUNDS,
     detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
 ) -> tuple[LoopRecord, ...]:
     """Roda a campanha intent-driven ponta a ponta e devolve um ``LoopRecord``
     por rodada.
@@ -64,9 +68,16 @@ def run_intent_loop(
 
     ``detector`` (E8) escolhe qual modelo o estágio DETECTOR treina; o default
     ``random_forest`` mantém o comportamento anterior. Ver ``docs/detectors.md``.
+
+    ``event_sink`` (E11) observa a timeline enquanto ela acontece. É opcional
+    porque a execução já grava ``events.jsonl`` por conta própria; quem passa um
+    sink é quem precisa dos eventos *antes* do fim — a UI ao vivo.
     """
 
     orchestrator = build_intent_loop(
-        model_id=model_id, generator_mode=generator_mode, detector=detector
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
     )
     return orchestrator.run_campaign(prompt, rounds=rounds)

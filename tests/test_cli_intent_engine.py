@@ -21,11 +21,13 @@ def _record(
         LoopStage(
             name="intent",
             status=LoopStageStatus.SUCCEEDED,
+            duration_seconds=0.75,
             artifact_ref="outputs/intent_loop/run-1/intent.json",
         ),
         LoopStage(
             name="generator",
             status=LoopStageStatus.FAILED if failed else LoopStageStatus.SUCCEEDED,
+            duration_seconds=1.5,
             error="falha controlada" if failed else None,
         ),
     ]
@@ -34,6 +36,7 @@ def _record(
         source_prompt="Reduza o recall.",
         seed=42,
         stages=tuple(stages),
+        total_duration_seconds=2.25,
         round=round,
         parent_run_id=parent_run_id,
     )
@@ -98,7 +101,8 @@ def test_intent_engine_forwards_arguments_and_reports_success():
     }
     output = stdout.getvalue()
     assert "run_id=run-1" in output
-    assert "[OK] intent" in output
+    assert "[OK]" in output
+    assert "intent" in output
     assert "intent.json" in output
 
 
@@ -175,7 +179,10 @@ def test_intent_engine_reports_nonzero_exit_when_a_stage_failed():
     )
 
     assert exit_code == 1
-    assert "[FALHOU] generator" in stdout.getvalue()
+    output = stdout.getvalue()
+    assert "[FALHOU]" in output
+    assert "generator" in output
+    assert "falha controlada" in output
     assert "falha controlada" in stdout.getvalue()
 
 
@@ -251,3 +258,20 @@ def test_intent_engine_forwards_the_chosen_detector():
 
     assert exit_code == 0
     assert received["detector"] == "svm_linear"
+
+
+def test_intent_summary_prints_the_duration_of_each_stage_and_of_the_run():
+    """O critério de pronto do E11 cobra duração, e o resumo media sem mostrar."""
+
+    stdout = StringIO()
+
+    run_cli(
+        argv=["--engine", "intent", "--prompt", "x"],
+        stdout=stdout,
+        run_intent_loop=lambda **_: _records(),
+    )
+
+    output = stdout.getvalue()
+    assert "0.75s" in output
+    assert "1.50s" in output
+    assert "total: 2.25s" in output
