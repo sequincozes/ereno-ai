@@ -25,6 +25,7 @@ from adversarial_ids.agents.defender.tools import (
     parse_defense_plan,
     priority_from_report,
     select_evidence_candidates,
+    techniques_by_evidence,
     validate_plan_against_report,
 )
 from adversarial_ids.config.settings import MODEL_ID, PROMPTS_DIR, TEMPERATURE
@@ -93,10 +94,14 @@ class DefenderAgent:
     ) -> str:
         """Monta um contexto compacto com a evidência citável do relatório.
 
-        ``legal_techniques`` e ``validation_metrics`` vêm dos mesmos mapas que o
-        contrato e o portão usam para recusar. O prompt não repete essas listas
-        em texto: uma cópia estática envelheceria em silêncio no dia em que o
-        catálogo de técnicas crescer.
+        ``legal_techniques``, ``techniques_by_evidence`` e ``validation_metrics``
+        vêm dos mesmos mapas que o contrato e o portão usam para recusar. O
+        prompt não repete essas listas em texto: uma cópia estática envelheceria
+        em silêncio no dia em que o catálogo de técnicas crescer.
+
+        ``techniques_by_evidence`` usa o mesmo ``top_n`` de
+        ``citable_evidence``: mostrar técnicas ancoradas numa feature que o
+        Defensor não pode citar seria oferecer uma escolha que o portão recusa.
         """
 
         report_model = DetectionReport.model_validate(report)
@@ -107,6 +112,7 @@ class DefenderAgent:
             "required_priority": priority_from_report(report_model),
             "detection_report_ref": report_ref,
             "citable_evidence": select_evidence_candidates(report_model, top_n=5),
+            "techniques_by_evidence": techniques_by_evidence(report_model, top_n=5),
             "legal_techniques": legal_techniques_by_bucket(),
             "validation_metrics": list(VALIDATION_METRICS),
         }
@@ -120,8 +126,15 @@ class DefenderAgent:
         report: DetectionReport | dict[str, Any],
         *,
         report_ref: str | None = None,
+        attack_key: str | None = None,
     ) -> DefensePlan:
-        """Executa o Defensor e devolve um DefensePlan validado."""
+        """Executa o Defensor e devolve um DefensePlan validado.
+
+        ``attack_key`` é o ataque-base desta execução. Ele não muda o que o
+        portão aceita — alimenta os achados de playbook da avaliação por regras,
+        que são conselho — mas é o que permite ao orquestrador persistir um
+        relatório de regras que sabe de que cenário IEC-61850 está falando.
+        """
 
         report_model = DetectionReport.model_validate(report)
 
@@ -139,4 +152,5 @@ class DefenderAgent:
             plan,
             report_model,
             expected_report_ref=report_ref,
+            attack_key=attack_key,
         )

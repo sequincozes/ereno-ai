@@ -10,8 +10,10 @@ from adversarial_ids.agents.defender.tools import (
     parse_defense_plan,
     priority_from_report,
     select_evidence_candidates,
+    techniques_by_evidence,
     validate_plan_against_report,
 )
+from adversarial_ids.config.defense_techniques import techniques_for_evidence
 from adversarial_ids.domain import (
     DEFENSE_BUCKETS,
     VALIDATION_METRICS,
@@ -502,3 +504,100 @@ def test_legal_techniques_matches_what_the_contract_accepts():
 
     for bucket, techniques in legal.items():
         assert techniques == techniques_for_bucket(bucket)
+
+
+# --------------------------------------------------------------------------- #
+# Portão de regras (E5) — a técnica precisa responder à evidência citada      #
+# --------------------------------------------------------------------------- #
+def test_validate_rejects_a_technique_that_answers_none_of_its_evidence():
+    """Todo o resto do plano está correto; só a recomendação não tem lastro.
+
+    É o caso que passava inteiro antes da avaliação por regras: `recall` é
+    evidência real, o valor bate, `goose_authentication` é técnica legítima de
+    hardening e o teste cobra melhora. Nada disso torna autenticar publisher uma
+    resposta a um recall baixo.
+    """
+
+    report = build_report()
+    plan = build_plan()
+    plan["hardening_actions"] = plan.pop("detection_actions")
+    plan["hardening_actions"][0]["technique"] = "goose_authentication"
+
+    with pytest.raises(DefensePlanValidationError, match="sem lastro"):
+        validate_plan_against_report(plan, report)
+
+
+def test_rejection_message_carries_the_grounded_fraction():
+    """A recusa precisa dizer *quanto* do plano se sustentava, não só que caiu.
+
+    ``grounded_actions``/``total_actions`` é o número que a janela D47-54 cobra,
+    e a exceção costuma ser a única coisa que sobra num ``LoopStage`` falho.
+    """
+
+    report = build_report()
+    plan = build_plan()
+    plan["hardening_actions"] = plan.pop("detection_actions")
+    plan["hardening_actions"][0]["technique"] = "goose_authentication"
+
+    with pytest.raises(DefensePlanValidationError, match=r"0/1 ações sustentadas"):
+        validate_plan_against_report(plan, report)
+
+
+def test_validate_accepts_the_technique_the_catalogue_recommends():
+    report = build_report()
+
+    accepted = validate_plan_against_report(build_plan(), report)
+
+    assert accepted.detection_actions[0].technique == "detector_threshold_tuning"
+
+
+def test_playbook_findings_never_turn_into_a_rejection():
+    """``attack_key`` só liga conselhos: passá-lo não pode mudar o veredito."""
+
+    report = build_report()
+    plan = build_plan()
+
+    without = validate_plan_against_report(plan, report)
+    with_attack = validate_plan_against_report(
+        plan, report, attack_key="masquerade_fault"
+    )
+
+    assert without == with_attack
+
+
+# --------------------------------------------------------------------------- #
+# techniques_by_evidence                                                      #
+# --------------------------------------------------------------------------- #
+def test_techniques_by_evidence_only_offers_what_the_gate_accepts():
+    """O que o prompt oferece por evidência é o que o portão exige dela."""
+
+    report = build_report()
+
+    offered = techniques_by_evidence(report)
+
+    for key, techniques in offered.items():
+        assert techniques == techniques_for_evidence(key)
+        assert techniques
+
+
+def test_techniques_by_evidence_omits_the_descriptive_keys():
+    """Mostrar ``model_name`` com lista vazia convidaria a citá-lo sozinho."""
+
+    offered = techniques_by_evidence(build_report())
+
+    assert "model_name" not in offered
+    assert "split" not in offered
+    assert "recall" in offered
+
+
+def test_techniques_by_evidence_honours_the_same_top_n_as_the_evidence():
+    """Oferecer técnica ancorada numa feature que o Defensor não pode citar
+    seria oferecer uma escolha que o portão de evidência recusa."""
+
+    report = build_report()
+
+    citable = select_evidence_candidates(report, top_n=1)
+    offered = techniques_by_evidence(report, top_n=1)
+
+    assert set(offered) <= set(citable)
+    assert "cbStatusDiff" not in offered

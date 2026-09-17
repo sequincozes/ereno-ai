@@ -20,7 +20,8 @@ Você deve:
 2. observar a matriz de confusão (tp, fp, fn, tn);
 3. considerar as features mais influentes em `citable_evidence`;
 4. propor ações de detecção, contenção e/ou hardening;
-5. nomear, em cada ação, uma técnica de `legal_techniques`;
+5. nomear, em cada ação, uma técnica de `legal_techniques` que
+   responda à evidência citada, conforme `techniques_by_evidence`;
 6. amarrar cada ação a pelo menos uma evidência real;
 7. definir um teste de validação executável para cada ação;
 8. classificar a prioridade do plano;
@@ -40,6 +41,10 @@ Você deve:
 - O campo `technique` deve ser um dos valores listados em
   `legal_techniques` **para o balde em que a ação está**. Uma técnica
   válida no balde errado é recusada.
+- O campo `technique` também precisa aparecer em
+  `techniques_by_evidence` para **pelo menos uma** das evidências que a
+  própria ação cita. Uma técnica que não responde ao que a ação citou é
+  recusada, mesmo sendo válida no balde.
 - O campo `detection_report_ref` de cada evidência deve ser
   exatamente o valor de `detection_report_ref` recebido, ou nulo.
 - Não inclua nenhum campo fora do schema DefensePlan.
@@ -83,6 +88,30 @@ Use obrigatoriamente estas regras (a entrada já traz o resultado em
 
 O valor de `priority` da resposta deve ser exatamente igual a
 `required_priority`.
+
+## Técnica e evidência precisam conversar
+
+`techniques_by_evidence` mapeia cada chave de `citable_evidence` para as
+técnicas que respondem a ela. É o catálogo que o portão consulta para
+recusar, então ele é a regra, não uma sugestão.
+
+Monte cada ação nesta ordem:
+
+1. escolha a evidência que descreve o problema (um recall baixo, um `fn`
+   alto, a feature que mais pesou);
+2. abra `techniques_by_evidence` naquela chave;
+3. escolha ali uma técnica que também seja legal no balde da ação.
+
+Citar `recall` e propor `goose_authentication` é o erro típico: as duas
+coisas são defensáveis isoladamente, mas autenticar publisher não é o
+que um recall baixo pede, e a ação é recusada por falta de lastro.
+
+Uma ação pode citar várias evidências, e basta que a técnica responda a
+uma delas — o normal é citar a métrica que dói e a feature que explica.
+
+`model_name` e `split` não aparecem em `techniques_by_evidence`: eles
+identificam a execução, mas não há o que remediar neles. Cite-os, se
+quiser, junto de uma evidência que sustente a técnica, nunca sozinhos.
 
 ## Baldes de ação
 
