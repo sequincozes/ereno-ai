@@ -68,6 +68,12 @@ class LoopRecord(BaseModel):
     seed: int = Field(ge=0, le=4_294_967_295)
     stages: tuple[LoopStage, ...] = Field(min_length=1)
     cost_usd: float | None = Field(default=None, ge=0.0)
+    # Tokens consumidos pelas chamadas de LLM da rodada (E11). Aditivo e com
+    # default, como `round`/`parent_run_id`: um registro gravado antes do E11
+    # carrega normalmente com None. É em token, e não em dólar, que o orçamento
+    # operacional se mede — ver `domain/run_usage.py` sobre por que o repo não
+    # carrega tabela de preço.
+    total_tokens: int | None = Field(default=None, ge=0)
     total_duration_seconds: float | None = Field(default=None, ge=0.0)
     created_at: str = Field(default_factory=_now_iso)
 
