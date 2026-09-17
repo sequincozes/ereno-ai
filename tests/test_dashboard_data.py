@@ -62,12 +62,21 @@ def test_config_diff_compares_serialized_attack_configs():
 
 
 def test_streamlit_dashboard_renders_typed_analyst_output():
+    """O dashboard renderiza o histórico golden sem Groq, Java nem `outputs/`.
+
+    Clica pela chave, nunca pela posição: o botão de "última execução" nasce
+    desabilitado quando `outputs/iteration_history.json` não existe — o que é o
+    normal numa máquina limpa ou depois do `scripts/init_state.py` —, e clicar
+    nele ali não carregaria registro nenhum. A demo golden é a única fonte
+    versionada, então é ela que este teste exercita.
+    """
+
     app = AppTest.from_file(
         "src/adversarial_ids/interfaces/dashboard/app.py"
     )
 
     app.run(timeout=20)
-    app.button[0].click().run(timeout=20)
+    app.button("load_golden_demo").click().run(timeout=20)
 
     assert not app.exception
     assert app.session_state["cached_records"]
