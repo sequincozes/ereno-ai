@@ -193,12 +193,22 @@ def _print_loop_record_summary(
         header += f" ({round_label})"
     print(header, file=stdout)
     for stage in record.stages:
-        line = f"  [{_stage_marker(stage.status)}] {stage.name}"
+        # Duração por estágio (E11): o critério da janela é "usuário vê estágio,
+        # duração, artefatos, erro e resultado", e era justamente a duração que
+        # o resumo media mas não mostrava.
+        duration = (
+            "     —" if stage.duration_seconds is None
+            else f"{stage.duration_seconds:6.2f}s"
+        )
+        line = f"  [{_stage_marker(stage.status)}] {duration}  {stage.name}"
         if stage.artifact_ref:
             line += f" -> {stage.artifact_ref}"
         if stage.error:
             line += f" ({stage.error})"
         print(line, file=stdout)
+
+    if record.total_duration_seconds is not None:
+        print(f"  total: {record.total_duration_seconds:.2f}s", file=stdout)
 
 
 def _print_campaign_summary(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> None:
