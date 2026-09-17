@@ -183,6 +183,16 @@ INTENT_LOOP_DEFAULT_ROUNDS = 1
 # queimar rodadas num platô (ver core/feedback_policy.py).
 FEEDBACK_MIN_DELTA = 0.01
 
+# Orçamento operacional da campanha, em tokens de LLM somados por rodada (E11,
+# linha "Operação" da tabela de aceite: "execução cabe no orçamento definido").
+# Em token e não em dólar porque token é contagem que o provedor informa, e o
+# repo não carrega tabela de preço própria — ver domain/run_usage.py.
+# 0 desliga o limite, que é o default: um teto apertado demais interromperia
+# campanhas legítimas, e quem define orçamento é quem está pagando.
+# A checagem é *entre* rodadas: a rodada em curso sempre termina, porque um
+# LoopRecord pela metade não é mais barato, só menos útil.
+INTENT_LOOP_TOKEN_BUDGET = int(os.getenv("INTENT_LOOP_TOKEN_BUDGET", "0"))
+
 # ------------------------------------------------------------
 # Preprocessador de features (E6): "modular" ajusta o
 # FeaturePreprocessor (core/preprocessor.py) só na partição de treino —
