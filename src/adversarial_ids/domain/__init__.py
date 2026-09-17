@@ -94,6 +94,7 @@ from adversarial_ids.domain.intent_spec import (
     IntentRestrictions,
     IntentSpec,
 )
+from adversarial_ids.domain.run_usage import AgentUsage
 from adversarial_ids.domain.loop_event import (
     LOOP_EVENT_KINDS,
     LoopEvent,
@@ -176,6 +177,7 @@ __all__ = [
     "LoopEvent",
     "LoopEventKind",
     "LOOP_EVENT_KINDS",
+    "AgentUsage",
     "FeedbackDecision",
     "FeedbackStopReason",
     "RoundOutcome",
