@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Literal
+from typing import Literal, get_args
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -32,18 +32,25 @@ class LoopStageStatus(str, Enum):
     SKIPPED = "skipped"
 
 
+# O nome do estágio é vocabulário compartilhado, não detalhe de um campo: o
+# `LoopEvent` (E11) fala dos mesmos sete estágios, e uma segunda cópia da lista
+# envelheceria em silêncio no dia em que o pipeline ganhasse uma etapa.
+LoopStageName = Literal[
+    "intent",
+    "generator",
+    "ereno",
+    "preprocess",
+    "detector",
+    "defender",
+    "feedback",
+]
+LOOP_STAGE_NAMES: tuple[str, ...] = get_args(LoopStageName)
+
+
 class LoopStage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    name: Literal[
-        "intent",
-        "generator",
-        "ereno",
-        "preprocess",
-        "detector",
-        "defender",
-        "feedback",
-    ]
+    name: LoopStageName
     status: LoopStageStatus
     artifact_ref: str | None = None
     duration_seconds: float | None = Field(default=None, ge=0.0)

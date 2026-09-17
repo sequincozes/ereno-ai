@@ -94,7 +94,18 @@ from adversarial_ids.domain.intent_spec import (
     IntentRestrictions,
     IntentSpec,
 )
-from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
+from adversarial_ids.domain.loop_event import (
+    LOOP_EVENT_KINDS,
+    LoopEvent,
+    LoopEventKind,
+)
+from adversarial_ids.domain.loop_record import (
+    LOOP_STAGE_NAMES,
+    LoopRecord,
+    LoopStage,
+    LoopStageName,
+    LoopStageStatus,
+)
 from adversarial_ids.domain.metrics import FeatureImportance, Metrics
 
 from adversarial_ids.domain.strategist_output import (  # M1 · issue #4
@@ -160,6 +171,11 @@ __all__ = [
     "LoopRecord",
     "LoopStage",
     "LoopStageStatus",
+    "LoopStageName",
+    "LOOP_STAGE_NAMES",
+    "LoopEvent",
+    "LoopEventKind",
+    "LOOP_EVENT_KINDS",
     "FeedbackDecision",
     "FeedbackStopReason",
     "RoundOutcome",
