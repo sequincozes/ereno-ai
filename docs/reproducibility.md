@@ -152,7 +152,7 @@ execução limpa. É idempotente e seguro: nunca toca em `data/`.
 
 ```bash
 cp .env.example .env        # preencha GROQ_API_KEY
-uv run adversarial-ids --model-id llama-3.1-8b-instant --iterations 2
+uv run adversarial-ids --model-id openai/gpt-oss-120b --iterations 2
 ```
 
 Sem o JAR, a geração cai em modo cacheado automaticamente.
