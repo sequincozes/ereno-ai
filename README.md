@@ -85,7 +85,7 @@ reprodutível.
 - **Python ≥ 3.10**
 - **[Agno](https://docs.agno.com/)** — agentes (`Agent`), times (`Team`) e tools
 - **[Groq](https://groq.com/)** — provedor do modelo de linguagem (default
-  `llama-3.1-8b-instant`)
+  `openai/gpt-oss-120b`)
 - **Pydantic v2** — contratos de domínio e validação (`AttackConfig`, `Metrics`,
   `IterationRecord`, `StrategistOutput`, `AnalystOutput`)
 - **pandas** + **scikit-learn** — treino/avaliação do IDS (Random Forest)
@@ -140,13 +140,14 @@ Variáveis (documentadas em `.env.example`):
 
 ```env
 GROQ_API_KEY=
-MODEL_ID=llama-3.1-8b-instant
+MODEL_ID=openai/gpt-oss-120b
 # GENERATOR_MODE=cached
 ```
 
 - `GROQ_API_KEY`: **sensível**; obrigatória apenas para chamadas reais à Groq
   (`--engine live`);
-- `MODEL_ID`: opcional; possui o default acima;
+- `MODEL_ID`: opcional; possui o default acima, e precisa ser um id que a sua
+  conta Groq realmente sirva — a lista aceita está em `settings.MODEL_IDS`;
 - `GENERATOR_MODE`: opcional; aceita `cached` ou `jar` (default: `jar` se o JAR
   existir, senão `cached`).
 

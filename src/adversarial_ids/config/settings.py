@@ -48,20 +48,30 @@ EXPERIMENTS_DIR = OUTPUTS_DIR / "experiments"
 # LLM models used in the experiments
 # ============================================================
 
+# Conferida contra GET /openai/v1/models em 17/09/2026. A lista anterior tinha
+# quatro entradas que a Groq já não serve — as duas `llama-*` e `qwen/qwen3-32b`
+# (renomeado para `qwen/qwen3.8-27b`) — e como `llama-3.1-8b-instant` era também
+# o default, qualquer `--engine live`/`intent` sem `--model-id` explícito
+# terminava em HTTP 404 `model_not_found`. Manter só o que a conta serve é o que
+# impede esse modo de falha de voltar silenciosamente.
 MODEL_IDS = [
-    "groq/compound-mini",
-    "openai/gpt-oss-20b",
-    "groq/compound",
-    "qwen/qwen3-32b",
-    "llama-3.1-8b-instant",
-    "llama-3.3-70b-versatile",
     "openai/gpt-oss-120b",
+    "openai/gpt-oss-20b",
+    "qwen/qwen3.8-27b",
+    "groq/compound",
+    "groq/compound-mini",
 ]
 
 # Default model used when running only:
 #   adversarial-ids
 # (ou: python -m adversarial_ids.interfaces.cli)
-MODEL_ID = os.getenv("MODEL_ID", "llama-3.1-8b-instant").strip()
+#
+# `openai/gpt-oss-120b` é o modelo com que o loop intent-driven foi validado
+# ponta a ponta contra o JAR real (as quatro famílias de ataque). Atenção ao
+# tier `on_demand`: o TPM é 8000 e o prompt do IntentAgent com o catálogo de
+# capacidades injetado pesa ~8,2-8,5k tokens, então execuções consecutivas
+# precisam de ~90s de intervalo ou a chamada volta `rate_limit_exceeded`.
+MODEL_ID = os.getenv("MODEL_ID", "openai/gpt-oss-120b").strip()
 
 # ============================================================
 # Agent configuration
