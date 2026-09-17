@@ -6,7 +6,9 @@ Execute com:
         src/adversarial_ids/interfaces/dashboard/studio_app.py
 
 Frontend completo do loop adversarial: Visão Geral → Configuração → Execução
-(logs ao vivo) → Resultados. Substitui o uso via terminal — tudo pela UI.
+(logs ao vivo) → Resultados, mais a página do pipeline intent-driven (E11), onde
+uma intenção em português vira campanha e cada estágio se mostra ao vivo.
+Substitui o uso via terminal — tudo pela UI.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from adversarial_ids.interfaces.dashboard.studio import state, theme
 from adversarial_ids.interfaces.dashboard.studio import (
     view_configure,
     view_home,
+    view_loop,
     view_results,
     view_run,
 )
@@ -56,6 +59,7 @@ def main() -> None:
         st.Page(view_configure.render, title="Configuração", icon="🎛️", url_path="config"),
         st.Page(view_run.render, title="Execução", icon="▶️", url_path="run"),
         st.Page(view_results.render, title="Resultados", icon="📊", url_path="resultados"),
+        st.Page(view_loop.render, title="Loop intent-driven", icon="🧭", url_path="loop"),
     ]
 
     with st.sidebar:
