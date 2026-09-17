@@ -320,6 +320,7 @@ def main() -> None:
         st.caption("Última execução salva pela CLI (`outputs/`).")
         if st.button(
             "Carregar última execução",
+            key="load_latest_run",
             type="primary",
             disabled=not latest_exists,
         ):
@@ -330,7 +331,7 @@ def main() -> None:
 
     with demo_col:
         st.caption("Histórico golden versionado (`data/`), sem Groq/Java.")
-        if st.button("Demo cacheada (golden)"):
+        if st.button("Demo cacheada (golden)", key="load_golden_demo"):
             st.session_state.dashboard_error = None
             with st.spinner("Carregando o histórico golden..."):
                 _run_into_session(create_default_runner("demo"))
@@ -342,7 +343,7 @@ def main() -> None:
             "Iterações", min_value=1, max_value=TOTAL_ITERATIONS, value=3, step=1
         )
         live_mode = st.selectbox("Modo do gerador", ("cached", "jar"))
-        if st.button("Executar ao vivo (Groq)"):
+        if st.button("Executar ao vivo (Groq)", key="run_live"):
             st.session_state.dashboard_error = None
             with st.spinner("Executando o loop adversarial ao vivo..."):
                 _run_into_session(
