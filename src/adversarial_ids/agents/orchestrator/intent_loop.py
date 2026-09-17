@@ -70,6 +70,7 @@ consequência, uma campanha em modo cacheado para na rodada 2 com
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
@@ -106,8 +107,14 @@ from adversarial_ids.domain.defense_plan import DefensePlan
 from adversarial_ids.domain.detection_report import DetectionReport
 from adversarial_ids.domain.feedback_decision import FeedbackDecision, RoundOutcome
 from adversarial_ids.domain.intent_spec import IntentSpec
+from adversarial_ids.domain.loop_event import LoopEvent
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json, save_json
+from adversarial_ids.shared.loop_event_store import (
+    JsonlEventSink,
+    LoopEventSink,
+    fanout,
+)
 from adversarial_ids.shared.loop_record_store import append_loop_record
 from adversarial_ids.shared.run_id import new_run_id
 
@@ -142,6 +149,57 @@ class DefenderLike(Protocol):
     ) -> DefensePlan: ...
 
 
+def _no_sink(event: LoopEvent) -> None:
+    """Sink neutro: uma rodada sem observador nenhum não é caso especial."""
+
+
+@dataclass
+class _RoundContext:
+    """O estado vivo de uma rodada: onde gravar, o que já rodou, quem observa.
+
+    Os três andavam soltos como variáveis locais de ``_run_round`` e eram
+    repassados a cada ``_stage`` na mão. Juntá-los é o que torna impossível
+    registrar um ``LoopStage`` sem emitir o ``LoopEvent`` correspondente — a
+    timeline ao vivo e o registro final saem do mesmo lugar, e não podem
+    discordar sobre o que aconteceu.
+    """
+
+    run_id: str
+    run_dir: Path
+    round_index: int
+    emit: LoopEventSink = _no_sink
+    stages: list[LoopStage] = field(default_factory=list)
+    _sequence: int = 0
+
+    def event(self, kind: str, **fields: Any) -> None:
+        """Emite um evento já numerado; o sink nunca derruba a execução."""
+
+        event = LoopEvent.model_validate(
+            {
+                "run_id": self.run_id,
+                "round": self.round_index,
+                "sequence": self._sequence,
+                "kind": kind,
+                **fields,
+            }
+        )
+        self._sequence += 1
+        self.emit(event)
+
+    def record_stage(self, stage: LoopStage) -> None:
+        """Anexa o estágio ao registro e anuncia o mesmo fato como evento."""
+
+        self.stages.append(stage)
+        self.event(
+            "stage_finished",
+            stage=stage.name,
+            status=stage.status,
+            duration_seconds=stage.duration_seconds,
+            artifact_ref=stage.artifact_ref,
+            message=stage.error,
+        )
+
+
 class IntentLoopOrchestrator:
     """Controlador do pipeline intent-driven (E3), uma intenção por execução."""
 
@@ -159,6 +217,7 @@ class IntentLoopOrchestrator:
         cached_dataset_path: Path | str | None = None,
         feedback_min_delta: float = FEEDBACK_MIN_DELTA,
         detector: str = DETECTOR_MODE,
+        event_sink: LoopEventSink | None = None,
     ) -> None:
         if generator_mode not in _VALID_GENERATOR_MODES:
             raise ValueError(
@@ -189,6 +248,10 @@ class IntentLoopOrchestrator:
         # modo cacheado a métrica nunca se move, então um teste que precise
         # rodar mais de duas rodadas passa 0.0 aqui.
         self.feedback_min_delta = feedback_min_delta
+        # Observador opcional da timeline (E11). O sink de arquivo é sempre
+        # ligado, por execução; este aqui é quem *mais* quer ver — a UI ao vivo
+        # registra um sink de memória, um teste registra uma lista.
+        self.event_sink = event_sink
 
     # ------------------------------------------------------------------ #
     # Loop principal                                                      #
@@ -293,7 +356,17 @@ class IntentLoopOrchestrator:
 
         run_id = new_run_id()
         run_dir = self.output_dir / run_id
-        stages: list[LoopStage] = []
+        # Disco sempre, observador ao vivo quando houver: uma execução pela CLI
+        # deixa a timeline em `events.jsonl` sem ninguém pedir, e a UI só
+        # acrescenta um segundo destino. Nenhum dos dois lados sabe do outro.
+        ctx = _RoundContext(
+            run_id=run_id,
+            run_dir=run_dir,
+            round_index=round_index,
+            emit=fanout(JsonlEventSink(run_dir / "events.jsonl"), self.event_sink),
+        )
+        stages = ctx.stages
+        ctx.event("run_started", message=prompt)
         started = time.perf_counter()
         record_seed = seed
         resolved: dict[str, Any] = {}
@@ -302,13 +375,13 @@ class IntentLoopOrchestrator:
         try:
             if intent_override is None:
                 intent = self._stage(
-                    stages, run_dir, "intent",
+                    ctx, "intent",
                     lambda: self.intent_agent.interpret(prompt),
                     persist_as="intent.json",
                 )
             else:
                 intent = self._inherited_intent_stage(
-                    stages, run_dir, intent_override, round_index
+                    ctx, intent_override, round_index
                 )
             record_seed = intent.seed
 
@@ -320,7 +393,7 @@ class IntentLoopOrchestrator:
                 return compile_attack_candidate(intent)
 
             candidate = self._stage(
-                stages, run_dir, "generator",
+                ctx, "generator",
                 _compile_candidate,
                 persist_as="attack_candidate.json",
             )
@@ -328,12 +401,12 @@ class IntentLoopOrchestrator:
             generator = self._build_generator(run_dir, spec)
 
             trace_path = self._stage(
-                stages, run_dir, "ereno",
+                ctx, "ereno",
                 lambda: generator.generate_dataset(candidate.config, iteration=1),
             )
 
             dataset_bundle = self._stage(
-                stages, run_dir, "preprocess",
+                ctx, "preprocess",
                 lambda: build_dataset_bundle(
                     trace_path,
                     lineage_run_id=run_id,
@@ -346,14 +419,14 @@ class IntentLoopOrchestrator:
             )
 
             detection_report = self._stage(
-                stages, run_dir, "detector",
+                ctx, "detector",
                 lambda: self._run_detector(generator, spec, dataset_bundle, run_dir),
                 persist_as="detection_report.json",
             )
 
             report_ref = str(run_dir / "detection_report.json")
             defense_plan = self._stage(
-                stages, run_dir, "defender",
+                ctx, "defender",
                 lambda: self._run_defender(
                     detection_report,
                     report_ref=report_ref,
@@ -364,7 +437,7 @@ class IntentLoopOrchestrator:
             )
 
             decision = self._stage(
-                stages, run_dir, "feedback",
+                ctx, "feedback",
                 lambda: decide_feedback(
                     intent=intent,
                     report=detection_report,
@@ -398,6 +471,31 @@ class IntentLoopOrchestrator:
         if self.save_path is not None:
             append_loop_record(self.save_path, record)
 
+        # Fecha a timeline. O estágio que falhou já se anunciou com a causa; o
+        # evento terminal diz que não vem mais nada — sem ele, quem observa não
+        # distingue uma execução que parou de uma que ainda está pensando.
+        failed = next(
+            (
+                stage
+                for stage in record.stages
+                if stage.status is LoopStageStatus.FAILED
+            ),
+            None,
+        )
+        ctx.event(
+            "run_finished",
+            status=(
+                LoopStageStatus.FAILED if failed else LoopStageStatus.SUCCEEDED
+            ),
+            duration_seconds=record.total_duration_seconds,
+            artifact_ref=str(self.save_path) if self.save_path else None,
+            message=(
+                f"Interrompido no estágio {failed.name}: {failed.error}"
+                if failed
+                else None
+            ),
+        )
+
         return record, decision
 
     # ------------------------------------------------------------------ #
@@ -405,8 +503,7 @@ class IntentLoopOrchestrator:
     # ------------------------------------------------------------------ #
     def _inherited_intent_stage(
         self,
-        stages: list[LoopStage],
-        run_dir: Path,
+        ctx: _RoundContext,
         intent: IntentSpec,
         round_index: int,
     ) -> IntentSpec:
@@ -419,9 +516,9 @@ class IntentLoopOrchestrator:
         portões quando a rodada anterior a produziu).
         """
 
-        artifact_path = run_dir / "intent.json"
+        artifact_path = ctx.run_dir / "intent.json"
         save_json(artifact_path, intent.model_dump(mode="json"))
-        stages.append(
+        ctx.record_stage(
             LoopStage(
                 name="intent",
                 status=LoopStageStatus.SKIPPED,
@@ -560,18 +657,18 @@ class IntentLoopOrchestrator:
     # ------------------------------------------------------------------ #
     def _stage(
         self,
-        stages: list[LoopStage],
-        run_dir: Path,
+        ctx: _RoundContext,
         name: str,
         fn: Any,
         *,
         persist_as: str | None = None,
     ) -> Any:
+        ctx.event("stage_started", stage=name)
         start = time.perf_counter()
         try:
             result = fn()
         except Exception as exc:
-            stages.append(
+            ctx.record_stage(
                 LoopStage(
                     name=name,
                     status=LoopStageStatus.FAILED,
@@ -584,7 +681,7 @@ class IntentLoopOrchestrator:
         duration = time.perf_counter() - start
         artifact_ref: str | None
         if persist_as is not None:
-            artifact_path = run_dir / persist_as
+            artifact_path = ctx.run_dir / persist_as
             save_json(artifact_path, result.model_dump(mode="json"))
             artifact_ref = str(artifact_path)
         elif isinstance(result, str):
@@ -592,7 +689,7 @@ class IntentLoopOrchestrator:
         else:
             artifact_ref = None
 
-        stages.append(
+        ctx.record_stage(
             LoopStage(
                 name=name,
                 status=LoopStageStatus.SUCCEEDED,

@@ -40,6 +40,11 @@ from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
 from adversarial_ids.domain.selection_manifest import SelectionManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
+from adversarial_ids.shared.loop_event_store import (
+    MemoryEventSink,
+    load_loop_events,
+    stage_timeline,
+)
 from adversarial_ids.shared.json_io import load_json
 from adversarial_ids.shared.loop_record_store import load_loop_records
 
@@ -228,6 +233,7 @@ def _orchestrator(
     min_normal_rows: int = 5,
     feedback_min_delta: float = 0.01,
     detector: str = "random_forest",
+    event_sink=None,
 ) -> IntentLoopOrchestrator:
     return IntentLoopOrchestrator(
         intent_agent=intent_agent,
@@ -240,6 +246,7 @@ def _orchestrator(
         min_normal_rows=min_normal_rows,
         feedback_min_delta=feedback_min_delta,
         detector=detector,
+        event_sink=event_sink,
     )
 
 
@@ -728,3 +735,107 @@ def test_unknown_detector_is_rejected_when_the_orchestrator_is_built(tmp_path):
     # na construção, antes de qualquer geração de dataset.
     with pytest.raises(DetectorError, match="Detector desconhecido"):
         _orchestrator(tmp_path, _StubIntentAgent(_intent()), detector="xgboost")
+
+
+# --------------------------------------------------------------------------- #
+# Timeline observável (E11)                                                    #
+# --------------------------------------------------------------------------- #
+def test_run_emits_a_typed_timeline_from_the_first_stage_to_the_last(tmp_path):
+    """A UI passa a ler evento, não a adivinhar fase por substring de print."""
+
+    sink = MemoryEventSink()
+    orchestrator = _orchestrator(tmp_path, _StubIntentAgent(_intent()), event_sink=sink)
+
+    record = orchestrator.run("Reduza o recall.")
+
+    events = sink.snapshot()
+    assert [e.sequence for e in events] == list(range(len(events)))
+    assert events[0].kind == "run_started"
+    assert events[0].message == "Reduza o recall."
+    assert events[-1].kind == "run_finished"
+    assert events[-1].status is LoopStageStatus.SUCCEEDED
+    assert all(e.run_id == record.run_id for e in events)
+
+    # Cada estágio se anuncia ao começar e ao terminar, nessa ordem.
+    for stage in ("intent", "generator", "ereno", "preprocess", "detector",
+                  "defender", "feedback"):
+        kinds = [e.kind for e in events if e.stage == stage]
+        assert kinds == ["stage_started", "stage_finished"], stage
+
+
+def test_the_timeline_and_the_record_never_disagree(tmp_path):
+    """São o mesmo fato emitido duas vezes; divergir seria mentir numa das duas."""
+
+    sink = MemoryEventSink()
+    orchestrator = _orchestrator(tmp_path, _StubIntentAgent(_intent()), event_sink=sink)
+
+    record = orchestrator.run("Reduza o recall.")
+
+    timeline = stage_timeline(sink.snapshot())
+    for stage in record.stages:
+        finished = timeline[stage.name]
+        assert finished.status is stage.status
+        assert finished.artifact_ref == stage.artifact_ref
+        assert finished.duration_seconds == stage.duration_seconds
+
+
+def test_the_timeline_is_on_disk_without_anyone_asking(tmp_path):
+    """Execução pela CLI também precisa deixar rastro de progresso."""
+
+    orchestrator = _orchestrator(tmp_path, _StubIntentAgent(_intent()))
+
+    record = orchestrator.run("Reduza o recall.")
+
+    events = load_loop_events(tmp_path / "artifacts" / record.run_id / "events.jsonl")
+    assert events
+    assert events[-1].kind == "run_finished"
+
+
+def test_a_failed_stage_names_itself_and_its_cause_in_the_timeline(tmp_path):
+    """O critério de aceite da linha Operação: falha tem estágio e causa."""
+
+    sink = MemoryEventSink()
+    orchestrator = _orchestrator(
+        tmp_path, _FailingIntentAgent(), event_sink=sink
+    )
+
+    orchestrator.run("Reduza o recall.")
+
+    events = sink.snapshot()
+    failed = [e for e in events if e.status is LoopStageStatus.FAILED]
+    assert failed[0].stage == "intent"
+    assert "submit_intent_spec" in (failed[0].message or "")
+    # A execução ainda se fecha: quem observa distingue "parou" de "pensando".
+    assert events[-1].kind == "run_finished"
+    assert events[-1].status is LoopStageStatus.FAILED
+    assert "intent" in (events[-1].message or "")
+
+
+def test_each_campaign_round_carries_its_own_round_in_the_timeline(tmp_path):
+    sink = MemoryEventSink()
+    orchestrator = _orchestrator(
+        tmp_path,
+        _StubIntentAgent(_intent()),
+        feedback_min_delta=0.0,
+        event_sink=sink,
+    )
+
+    records = orchestrator.run_campaign("Reduza o recall.", rounds=2)
+
+    rounds = {e.round for e in sink.snapshot()}
+    assert rounds == {record.round for record in records}
+
+
+def test_a_sink_that_explodes_does_not_break_the_run(tmp_path):
+    def explode(_event):
+        raise RuntimeError("observador quebrado")
+
+    orchestrator = _orchestrator(
+        tmp_path, _StubIntentAgent(_intent()), event_sink=explode
+    )
+
+    record = orchestrator.run("Reduza o recall.")
+
+    assert [stage.status for stage in record.stages] == [
+        LoopStageStatus.SUCCEEDED
+    ] * 7
