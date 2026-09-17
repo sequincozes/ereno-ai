@@ -130,11 +130,13 @@ def render() -> None:
             disabled=live_disabled,
         )
     with col_e:
-        model_options = MODEL_IDS if cfg.model_id in MODEL_IDS or True else MODEL_IDS
         model_id = st.selectbox(
             "Modelo (Groq)",
             options=MODEL_IDS,
-            index=MODEL_IDS.index(cfg.model_id) if cfg.model_id in MODEL_IDS else MODEL_IDS.index("llama-3.1-8b-instant"),
+            # Cai no primeiro da lista quando a config guardada aponta para um
+            # modelo que saiu de MODEL_IDS — indexar por um id fixo levantaria
+            # ValueError justamente quando a Groq retira aquele modelo.
+            index=MODEL_IDS.index(cfg.model_id) if cfg.model_id in MODEL_IDS else 0,
             disabled=live_disabled,
         )
 

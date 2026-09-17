@@ -199,10 +199,10 @@ def test_build_team_constructs_route_team_with_named_members():
     from adversarial_ids.agents.analyst.agent import AnalystAgent
     from adversarial_ids.agents.strategist.agent import StrategistAgent
 
-    strat = StrategistAgent(model_id="llama-3.1-8b-instant")
-    analyst = AnalystAgent(model_id="llama-3.1-8b-instant")
+    strat = StrategistAgent(model_id="openai/gpt-oss-120b")
+    analyst = AnalystAgent(model_id="openai/gpt-oss-120b")
 
-    team = _build_team("llama-3.1-8b-instant", strat, analyst)
+    team = _build_team("openai/gpt-oss-120b", strat, analyst)
 
     assert str(getattr(team.mode, "value", team.mode)) == "route"
     assert team.respond_directly is True
