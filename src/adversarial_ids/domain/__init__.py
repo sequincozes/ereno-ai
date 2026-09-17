@@ -52,6 +52,15 @@ from adversarial_ids.domain.defense_plan import (
     ValidationTest,
     techniques_for_bucket,
 )
+from adversarial_ids.domain.defense_rule_report import (
+    DEFENSE_RULE_IDS,
+    DefenseRuleId,
+    DefenseRuleReport,
+    RuleFinding,
+    RuleSeverity,
+    blocking_rules,
+    severity_of,
+)
 from adversarial_ids.domain.detection_report import ConfusionMatrix, DetectionReport
 from adversarial_ids.domain.detector_comparison import (
     DetectorComparison,
@@ -141,6 +150,13 @@ __all__ = [
     "ValidationDirection",
     "ValidationMetric",
     "VALIDATION_METRICS",
+    "DefenseRuleReport",
+    "DefenseRuleId",
+    "DEFENSE_RULE_IDS",
+    "RuleFinding",
+    "RuleSeverity",
+    "blocking_rules",
+    "severity_of",
     "LoopRecord",
     "LoopStage",
     "LoopStageStatus",
