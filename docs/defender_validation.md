@@ -121,7 +121,9 @@ São rejeitados:
 5. prioridade incompatível com `priority_from_report`;
 6. `detection_report_ref` presente e diferente do relatório desta
    execução — fecha a lacuna de o Defensor citar uma evidência real mas
-   apontar para um relatório inventado.
+   apontar para um relatório inventado;
+7. ação cuja técnica não responde a nenhuma evidência que ela própria cita —
+   a avaliação por regras, descrita na seção seguinte.
 
 A divisão entre contrato e portão segue a mesma linha do resto do repo: o
 contrato recusa o que é verificável sozinho (vocabulário, tipo, domínio
@@ -134,6 +136,71 @@ própria allowlist se o nome de uma feature colidir com uma chave de
 métrica reservada (por exemplo, uma feature chamada `f1`) — nunca ocorre
 com dados reais do ERENO (features são CamelCase, como `TrapAreaSum`), mas
 mantém a allowlist sem ambiguidade quando ocorre.
+
+## Avaliação por regras (`core/defense_rules.py`)
+
+Os seis itens acima provam que o plano **não mente**: a métrica existe, o valor
+bate, o alvo cobra melhora. Nenhum deles prova que a recomendação **responde** ao
+problema. Um plano que cita `recall` e propõe `goose_authentication` passava
+inteiro — o balde é legal, a evidência é real, o teste é remedível —, e
+autenticar publisher simplesmente não é o que um recall baixo pede.
+
+`core/defense_rules.py::evaluate_plan_rules` fecha isso consultando o catálogo
+feature→técnica (`config/defense_techniques.py`, ver a seção "Técnicas e
+baldes"). Uma ação está **sustentada** quando sua `technique` aparece no
+catálogo para pelo menos uma das evidências que ela cita — pelo menos uma, e não
+todas: um plano sério cita a métrica que dói *e* a feature que a explica, e
+exigir que a técnica respondesse às duas rejeitaria justamente a ação mais bem
+fundamentada.
+
+A avaliação é determinística e pura (nenhuma LLM, mesma disciplina do E10), e
+nunca levanta exceção por conteúdo: ela devolve um `DefenseRuleReport`, e quem
+recusa é o portão. Um plano ruim precisa ser legível antes de ser recusado.
+
+### As cinco regras
+
+| regra | severidade | o que ela vê |
+|---|---|---|
+| `technique_not_grounded` | **blocking** | a técnica não é resposta catalogada a nenhuma evidência citada |
+| `evidence_not_actionable` | advisory | a ação cita `model_name`/`split`: identificam a execução, mas não há o que remediar neles |
+| `uncatalogued_feature` | advisory | a evidência é uma feature real que o catálogo ainda não cobre — lacuna do catálogo, não defeito do plano |
+| `playbook_technique_missing` | advisory | o playbook IEC-61850 daquela família prescreve técnicas que o plano não propõe |
+| `playbook_signature_ignored` | advisory | o relatório destacou uma feature-assinatura do playbook e nenhuma ação a citou |
+
+Só a primeira recusa. As duas do playbook falam do **cenário**, não desta
+rodada: um playbook de replay pede validação de sequência mesmo sob um
+`PROTOCOL_FEATURES_MODE` em que nenhum delta chega ao relatório (ver
+`docs/preprocessing.md`). Bloquear por elas transformaria a resposta certa para
+*esta* execução em erro; silenciá-las jogaria fora a única leitura que o
+catálogo tem do cenário.
+
+O eixo do playbook só liga quando o chamador informa `attack_key` — o
+orquestrador passa `IntentSpec.base_attack`, o mesmo ataque que a intenção
+compilada usou. Sem ele o relatório sai com `playbook_key=None`, dizendo que
+aquele eixo não foi avaliado em vez de deixar a ausência de achados parecer
+aprovação. `playbook_signature_ignored` só cobra features que o relatório
+**de fato** destacou em `top_features`: cobrar uma ausente seria cobrar do plano
+algo que o relatório não tinha como mostrar.
+
+### O prompt e o portão leem o mesmo mapa
+
+`techniques_by_evidence` chega no contexto do Defensor com as técnicas
+catalogadas para cada chave de `citable_evidence`, sob o mesmo `top_n`. Os dois
+lados consultam `config/defense_techniques.py::techniques_for_evidence`, então o
+que o prompt oferece é literalmente o que o portão exige — mesma disciplina de
+`select_evidence_candidates` para evidência e de `legal_techniques_by_bucket`
+para balde. Sem isso, a LLM escolheria a técnica às cegas e descobriria a regra
+só na recusa. `model_name` e `split` ficam de fora do mapa: mostrá-los com lista
+vazia convidaria a citá-los sozinhos.
+
+### O artefato `defense_rules.json`
+
+O estágio DEFENDER persiste o `DefenseRuleReport` ao lado do plano
+(`IntentLoopOrchestrator._run_defender`). `grounded_actions`/`total_actions` é,
+literalmente, a fração de recomendações ligadas a evidência que o gate de saída
+da janela D47-54 cobra — e os achados advisory ficam registrados por execução,
+que é o que permite ver ao longo de uma campanha qual playbook o Defensor
+sistematicamente ignora.
 
 ## Regra de prioridade
 
@@ -195,5 +262,14 @@ Os testes automatizados cobrem:
   Pydantic;
 - execução sem chamadas externas usando agente falso
   (`tests/test_defender_agent.py`);
+- a avaliação por regras: lastro por ação e por balde, a técnica alheia à
+  evidência, as duas evidências que não sustentam nada (descritiva e fora do
+  catálogo), os dois achados de playbook e os invariantes do próprio
+  `DefenseRuleReport` — contagem que contradiz os achados, severidade
+  rebaixada, achado de ação sem localização (`tests/test_defense_rules.py`);
+- a recusa do portão pela regra de lastro e a fração citada na mensagem, mais
+  `techniques_by_evidence` contra a mesma consulta que o portão usa
+  (`tests/test_defender_tools.py`);
 - o estágio DEFENDER de ponta a ponta no orquestrador, incluindo o caminho
-  de falha (`tests/test_intent_loop_orchestrator.py`).
+  de falha e o `defense_rules.json` persistido
+  (`tests/test_intent_loop_orchestrator.py`).
