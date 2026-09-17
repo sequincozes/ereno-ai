@@ -28,10 +28,12 @@ from adversarial_ids.agents.defender.tools import (
     techniques_by_evidence,
     validate_plan_against_report,
 )
+from adversarial_ids.agents.usage import usage_from_response
 from adversarial_ids.config.settings import MODEL_ID, PROMPTS_DIR, TEMPERATURE
 from adversarial_ids.domain import DefensePlan
 from adversarial_ids.domain.defense_plan import VALIDATION_METRICS
 from adversarial_ids.domain.detection_report import DetectionReport
+from adversarial_ids.domain.run_usage import AgentUsage
 
 DEFENDER_PROMPT_PATH = PROMPTS_DIR / "defender.md"
 
@@ -53,6 +55,8 @@ class DefenderAgent:
         """
 
         self.model_id = model_id
+        # Consumo da última chamada (E11); None enquanto nenhuma aconteceu.
+        self.last_usage: AgentUsage | None = None
         self.temperature = temperature
         self.prompt_path = Path(prompt_path)
 
@@ -141,6 +145,9 @@ class DefenderAgent:
         prompt = self.build_prompt(report_model, report_ref=report_ref)
 
         response = self.agent.run(prompt)
+        # Ver o comentário equivalente no IntentAgent: conta-se a chamada, não
+        # o sucesso dela.
+        self.last_usage = usage_from_response(response)
 
         if response is None:
             raise RuntimeError("O agente Defensor não retornou uma resposta.")

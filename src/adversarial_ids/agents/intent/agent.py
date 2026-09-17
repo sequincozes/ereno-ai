@@ -20,9 +20,11 @@ from agno.models.groq import Groq
 from pydantic import ValidationError
 
 from adversarial_ids.agents.intent.catalog_context import build_intent_instructions
+from adversarial_ids.agents.usage import usage_from_response
 from adversarial_ids.agents.intent.tools import submit_intent_spec
 from adversarial_ids.config.attack_capabilities import validate_intent_capability
 from adversarial_ids.domain.intent_spec import IntentSpec
+from adversarial_ids.domain.run_usage import AgentUsage
 
 
 class IntentCompilationError(ValueError):
@@ -62,6 +64,9 @@ class IntentAgent:
 
     def __init__(self, model_id: str, temperature: float = 0.1) -> None:
         self.model_id = model_id
+        # Consumo da última chamada (E11); None enquanto nenhuma aconteceu,
+        # que é diferente de zero token.
+        self.last_usage: AgentUsage | None = None
         self.agent = Agent(
             model=Groq(id=model_id, temperature=temperature),
             tools=[submit_intent_spec],
@@ -78,6 +83,10 @@ class IntentAgent:
         ambos os portões.
         """
         response = self.agent.run(prompt)
+        # Contabilidade antes de qualquer portão: a chamada foi paga mesmo
+        # quando a saída é recusada logo abaixo, e um orçamento que só conta
+        # chamada bem-sucedida não mede o que se gastou (E11).
+        self.last_usage = usage_from_response(response)
         tool_result = self._extract_tool_result(response)
         if tool_result is None:
             raise IntentCompilationError(
