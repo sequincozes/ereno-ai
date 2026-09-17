@@ -11,6 +11,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from adversarial_ids.config.defense_techniques import techniques_for_evidence
+from adversarial_ids.core.defense_rules import evaluate_plan_rules
 from adversarial_ids.domain import DefenseAction, DefensePlan
 from adversarial_ids.domain.defense_plan import (
     DEFENSE_BUCKETS,
@@ -103,6 +105,35 @@ def select_evidence_candidates(
         allowlist[feature.feature] = feature.importance
 
     return allowlist
+
+
+def techniques_by_evidence(
+    report: DetectionReport | dict[str, Any],
+    *,
+    top_n: int | None = None,
+) -> dict[str, tuple[str, ...]]:
+    """O que cada evidência citável desta execução recomenda, pelo catálogo.
+
+    É o mapa que torna o portão de regras (``core/defense_rules.py``)
+    satisfazível em vez de surpreendente: o Defensor recebe, por evidência, as
+    técnicas que se ancoram nela, e o portão recusa a partir da mesma consulta
+    (``techniques_for_evidence``). Sem isto, a LLM escolheria a técnica às cegas
+    e descobriria a regra só na recusa — mesma disciplina de
+    ``select_evidence_candidates`` para evidência e de
+    ``legal_techniques_by_bucket`` para balde.
+
+    Chaves sem técnica catalogada ficam de fora: ``model_name`` e ``split``
+    identificam a execução mas não se remedeiam, e mostrá-las com uma lista
+    vazia só convidaria a citá-las como se sustentassem alguma coisa.
+    """
+
+    candidates = select_evidence_candidates(report, top_n=top_n)
+
+    return {
+        key: techniques
+        for key in candidates
+        if (techniques := techniques_for_evidence(key))
+    }
 
 
 def legal_techniques_by_bucket() -> dict[str, tuple[str, ...]]:
@@ -280,6 +311,7 @@ def validate_plan_against_report(
     report: DetectionReport | dict[str, Any],
     *,
     expected_report_ref: str | None = None,
+    attack_key: str | None = None,
 ) -> DefensePlan:
     """Valida se o ``DefensePlan`` está sustentado pelo ``DetectionReport``.
 
@@ -290,10 +322,16 @@ def validate_plan_against_report(
     - evidência duplicada dentro da mesma ação, em qualquer um dos três baldes;
     - teste de validação cujo alvo não cobra melhora sobre o valor medido;
     - prioridade incompatível com ``priority_from_report``;
-    - ``detection_report_ref`` presente e diferente do relatório desta execução.
+    - ``detection_report_ref`` presente e diferente do relatório desta execução;
+    - ação cuja técnica não responde a nenhuma evidência que ela própria cita
+      (avaliação por regras do E5, ``core/defense_rules.py``).
 
     O que o *contrato* já garantiu antes de chegar aqui: a técnica pertence ao
     balde que a carrega, a métrica do teste é remedível e o alvo é finito.
+
+    ``attack_key`` só liga os achados de playbook, que são conselhos e nunca
+    recusam — passá-lo ou não muda o que o relatório de regras *relata*, jamais
+    o que este portão aceita.
     """
 
     plan_model = DefensePlan.model_validate(plan)
@@ -318,6 +356,23 @@ def validate_plan_against_report(
         raise DefensePlanValidationError(
             "Prioridade incompatível com o relatório: "
             f"esperado={expected_priority!r}, recebido={plan_model.priority!r}"
+        )
+
+    # Por último, de propósito: a avaliação por regras pressupõe que a evidência
+    # citada é real, e só faz sentido perguntar se a técnica responde a ela
+    # depois que os checks acima provaram que ela existe e bate com o relatório.
+    rules = evaluate_plan_rules(
+        plan_model,
+        report_model,
+        attack_key=attack_key,
+        detection_report_ref=expected_report_ref,
+    )
+    if not rules.is_grounded:
+        motivos = " | ".join(finding.message for finding in rules.blocking_findings)
+        raise DefensePlanValidationError(
+            f"Recomendação sem lastro na evidência citada "
+            f"({rules.grounded_actions}/{rules.total_actions} ações "
+            f"sustentadas): {motivos}"
         )
 
     return plan_model

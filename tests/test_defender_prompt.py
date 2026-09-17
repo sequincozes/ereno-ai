@@ -32,6 +32,7 @@ def test_defender_prompt_contains_required_terms():
         "required_priority",
         "validation_test",
         "legal_techniques",
+        "techniques_by_evidence",
         "validation_metrics",
         "detection_report_ref",
         "não invente",
