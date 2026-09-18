@@ -25,6 +25,14 @@ dele.
 - **`minimum`/`maximum`**: o piso/teto que o compilador respeita. É a única
   defesa contra compilar o ataque para fora de existência — o pipeline
   intent-driven não roda `shared/validator.py` (isso é só do loop legado).
+- **Pares `{min, max}`**: o piso/teto de cada campo não protege o *par*. Um
+  limite empurrado contra o irmão congelado pararia em cima dele, e
+  `min == max` passa pelo catálogo e pelo schema do ataque mas o ERENO recusa
+  a execução inteira ("The lower limit must be less than the upper limit").
+  A invariante é garantida estruturalmente no compilador
+  (`intent_compiler._clamp_paired`, que trata o irmão como limite efetivo em
+  vez de encostar nele), não campo a campo aqui — nenhuma declaração de
+  capacidade precisa se preocupar com isso. Ver `docs/pilot_e0.md`.
 
 ## Ataques e campos
 

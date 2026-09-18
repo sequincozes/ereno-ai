@@ -184,15 +184,41 @@ def _compute_new_value(
     raise IntentCompilerError(f"Tipo de campo não suportado: {field.value_type!r}")
 
 
-def _clamp_paired(config: dict[str, Any], path: str, value: Any) -> Any:
-    """Trava um limite do par no irmão vigente, preservando ``min <= max``.
+def _keeps_order(leaf: str, value: Any, sibling: Any) -> bool:
+    """O par continua sendo um intervalo: ``min`` estritamente abaixo de ``max``."""
+
+    return value < sibling if leaf == "min" else value > sibling
+
+
+def _clamp_paired(
+    config: dict[str, Any], path: str, value: Any, *, baseline: Any, step: float
+) -> Any:
+    """Aproxima um limite do par do irmão vigente, preservando ``min < max``.
 
     ``_select_field_paths`` devolve os caminhos em ordem alfabética, então
-    "...max" é sempre resolvido antes de "...min". Cada um é clampado contra
+    "...max" é sempre resolvido antes de "...min". Cada um é resolvido contra
     o valor *corrente* do irmão no ``config`` de trabalho — a baseline se o
     irmão não foi selecionado, o valor recém-escrito se foi (``_set_by_path``
     já mutou o dict). A invariante vale ao fim do laço para qualquer
     subconjunto do par.
+
+    A invariante é ``<`` estrito, e não ``<=``. A versão anterior travava o
+    limite **em cima** do irmão, e ``min == max`` passa por tudo que este repo
+    tem: o clamp aceita, o schema do ataque em ``domain/attack_configs/``
+    valida, o portão de capacidade não olha pares — e o ERENO recusa o
+    processo inteiro com *"The lower limit (2000) must be less than the upper
+    limit (2000)"*. Era o caso do ``random_replay`` em intensidade alta, que
+    fechava ``windowS`` em ``{2.0, 2.0}`` (medido no piloto E0, 18/09/2026;
+    ver ``docs/pilot_e0.md``). Um intervalo degenerado não é um intervalo.
+
+    Quando o valor calculado cruzaria o irmão, **o irmão vira o limite efetivo**
+    e o mesmo passo da intensidade é reaplicado contra ele. Isso evita inventar
+    um épsilon — a distância vem da política de escalada que já está em uso — e
+    mantém a escada monotônica: intensidade maior chega mais perto do irmão sem
+    nunca encostar. Só o arredondamento de inteiro pode colar no irmão; aí o
+    valor recua uma unidade, e se nem isso couber o campo não se move (o
+    chamador o descarta do ``diff``, que passa a dizer a verdade sobre o que
+    mudou).
     """
 
     resolved = _paired_sibling_path(config, path)
@@ -201,11 +227,22 @@ def _clamp_paired(config: dict[str, Any], path: str, value: Any) -> Any:
 
     sibling_path, leaf = resolved
     sibling_value = _get_by_path(config, sibling_path)
-    if leaf == "min" and value > sibling_value:
-        return sibling_value
-    if leaf == "max" and value < sibling_value:
-        return sibling_value
-    return value
+    if _keeps_order(leaf, value, sibling_value):
+        return value
+
+    approached = _round_like(baseline, baseline + step * (sibling_value - baseline))
+    if _keeps_order(leaf, approached, sibling_value):
+        return approached
+
+    retreat = sibling_value - 1 if leaf == "min" else sibling_value + 1
+    if isinstance(baseline, int) and not isinstance(baseline, bool):
+        within_direction = (
+            baseline <= retreat if leaf == "min" else retreat <= baseline
+        )
+        if within_direction and _keeps_order(leaf, retreat, sibling_value):
+            return retreat
+
+    return baseline
 
 
 def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
@@ -236,7 +273,7 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
         # valor DIMINUI — a direção efetiva é o oposto da direção do efeito.
         field_direction = _flip_direction(direction) if field.polarity == "inverse" else direction
         new_value = _compute_new_value(field, old_value, field_direction, step)
-        new_value = _clamp_paired(config, path, new_value)
+        new_value = _clamp_paired(config, path, new_value, baseline=old_value, step=step)
         if new_value == old_value:
             continue
         _set_by_path(config, path, new_value)

@@ -145,13 +145,19 @@ def test_a_field_outside_the_effects_capability_is_rejected_before_compiling():
         compile_attack_candidate(intent)
 
 
-def test_analog_delta_max_alone_is_clamped_to_the_unchanged_min_floor():
-    """Decrescer só o teto do par sem tocar o piso não pode invertê-los.
+def test_analog_delta_max_alone_approaches_the_unchanged_min_without_touching_it():
+    """Decrescer só o teto do par sem tocar o piso não pode invertê-los — nem igualá-los.
 
     Em intensidade alta, decrescer ``analog.deltaAbs.max`` sozinho levaria o
     valor abaixo do ``analog.deltaAbs.min`` (0.2) da baseline, que não foi
-    selecionado. ``_clamp_paired`` trava o teto no piso ainda vigente em vez
-    de deixar o schema por ataque rejeitar a config compilada.
+    selecionado. Nesse caso o piso vira o limite efetivo e o mesmo passo da
+    intensidade é reaplicado contra ele: 0.8 + 0.85 * (0.2 - 0.8) = 0.29.
+
+    A versão anterior travava o teto **em cima** do piso (0.2 == 0.2). Um
+    intervalo degenerado passa pelo clamp, pelo schema do ataque e pelo portão
+    de capacidade, e só morre no gerador — *"The lower limit must be less than
+    the upper limit"* —, que é onde a falha custa uma rodada inteira. Ver
+    ``docs/pilot_e0.md``.
     """
     intent = _intent(
         desired_effect=DesiredEffect.MIMIC_NORMAL_TRAFFIC,
@@ -162,8 +168,9 @@ def test_analog_delta_max_alone_is_clamped_to_the_unchanged_min_floor():
 
     change = candidate.diff[0]
     assert change.path == "analog.deltaAbs.max"
-    assert change.new_value == pytest.approx(0.2)
+    assert change.new_value == pytest.approx(0.29)
     assert candidate.config["analog"]["deltaAbs"]["min"] == pytest.approx(0.2)
+    assert change.new_value > candidate.config["analog"]["deltaAbs"]["min"]
 
 
 def test_seed_changes_which_fields_are_selected_when_candidates_exceed_the_limit():
