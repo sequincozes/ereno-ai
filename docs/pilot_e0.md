@@ -14,6 +14,8 @@ Quem executa é `scripts/run_pilot.py`:
 uv run python scripts/run_pilot.py                      # as três famílias (~90s, precisa do JAR)
 uv run python scripts/run_pilot.py --attack grayhole --replicates 5
 uv run python scripts/run_pilot.py --llm-probe          # inclui o custo em token do estágio intent
+uv run python scripts/run_pilot.py --llm-probe-only     # só o custo em token, sem gerar trace
+uv run python scripts/run_pilot.py --attack grayhole --max-fields 11 --label campos11  # execução separada
 ```
 
 Saída: `outputs/pilot/pilot_report.json` (JSON simples com `schema_version`; é
@@ -31,11 +33,11 @@ o piloto mede exatamente o gerador de variação que a campanha vai usar, sem
 gastar chamada de modelo e sem introduzir variabilidade de LLM na medição.
 
 O custo em token entra por outro caminho: `--llm-probe` faz **uma** chamada real
-do `IntentAgent` por família só para registrar o consumo, espaçando as chamadas
-90s porque o prompt com o catálogo de capacidades pesa ~8,2k tokens e o tier
-`on_demand` da conta tem TPM 8000 — duas chamadas na mesma janela viram
-`rate_limit_exceeded`, que aparece de fora como "a LLM não chamou
-submit_intent_spec".
+do `IntentAgent` por família só para registrar o consumo (`--llm-probe-only`
+mede sem gerar trace nenhum). As chamadas são espaçadas em 90s porque o prompt
+com o catálogo de capacidades injetado pesa 6,66k tokens e o tier `on_demand` da
+conta tem TPM 8000 — duas chamadas na mesma janela viram `rate_limit_exceeded`,
+que aparece de fora como "a LLM não chamou submit_intent_spec".
 
 ## Três medidas, e o que cada uma deixa passar
 
@@ -155,6 +157,54 @@ legítimas são recapturadas, e com elas os valores analógicos carregados. Só 
 `timestampDiff` e `timeFromLastChange`, que é onde um replay deveria aparecer.
 Atribuir a deriva de `low`/`medium` à temporização do ataque seria ler errado o
 que a medição diz.
+
+## O grayhole está espremido pelos dois lados
+
+A reprovação do `grayhole` com `lower_recall` e 3 campos não bastava para cortar
+a família — podia ser o piloto que rodou estreito. Duas execuções de diagnóstico
+(`--label`, que separa os diretórios para não sobrescrever os traces do E0)
+fecharam a questão, e a resposta é mais interessante que "passa" ou "não passa":
+
+| execução | campos | prevalência low→high | deriva low/medium/high |
+|---|---|---|---|
+| `lower_recall`, 3 campos | 3 | — | 0.045 / 0.073 / 0.163 |
+| `lower_recall`, 11 campos | 9–11 | 0.27 → 0.41 | 0.039 / 0.084 / 0.115 |
+| `increase_attack_activity` | 6 | 0.13 → **abaixo do piso** | 0.108 / 0.063 / — |
+
+As duas direções mexem na prevalência em sentidos **opostos**, e as duas têm
+parede:
+
+- Empurrar para **evasão** significa descartar menos. Sobram mais mensagens
+  rotuladas como ataque (0.23 na baseline → 0.41), mas o tráfego fica cada vez
+  mais parecido com a baseline — a variante `low` cai dentro do ruído do
+  gerador e é ela que reprova a família.
+- Empurrar para **atividade** significa descartar mais. Em intensidade alta
+  sobram 115 linhas de ataque em 50.112 (0.23%), e o portão de prevalência do E4
+  rejeita o dataset: um recall calculado sobre 115 amostras é ruído amostral.
+  A classe de ataque do grayhole desaparece justamente quando o ataque fica
+  mais agressivo, porque as linhas dele *são* as mensagens que ele não descartou.
+
+E em toda configuração testada — 3, 6, 9 ou 11 campos, nas duas direções — a
+deriva se concentra em **uma única feature**, `timestampDiff`. A família é
+usável, mas numa faixa estreita e num eixo só: com 11 campos, `medium` e `high`
+são distintas da baseline e monotônicas. O E1 pode usá-la desde que não conte
+com a intensidade `low` nem com a direção de atividade.
+
+## Orçamento medido
+
+**Geração:** ~4,9s por trace e ~45 MB por trace no JAR (18 gerações = 88s e
+891 MB). É o custo dominante em disco e o menor em dinheiro.
+
+**Estágio `intent`:** 6.657 tokens de entrada e 228–259 de saída por chamada,
+medidos em 18/09/2026 com `openai/gpt-oss-120b` sobre as três famílias
+(`--llm-probe-only`). Praticamente tudo é o prompt: o catálogo de capacidades
+injetado. Ou seja **~6,9k tokens por chamada contra um TPM de 8.000** — uma
+chamada por minuto é o teto da conta, e as três só passaram porque a sonda as
+espaça em 90s. É restrição de conta, não de código, e vale para qualquer
+campanha: uma rodada por minuto, no melhor caso.
+
+A parcela do `Defender` ainda não foi medida — ela depende do `DetectionReport`
+da rodada e só aparece num ciclo completo, em `LoopRecord.total_tokens`.
 
 ## Como ler o relatório
 
