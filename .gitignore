@@ -38,3 +38,6 @@ CLAUDE.md
 # Documentos de planejamento na raiz (ex.: o plano de 60 dias em PDF).
 # Ficam locais de propósito: são material de trabalho, não artefato do repo.
 /*.pdf
+# Rascunho local (ex.: os .tex do artigo em preparação). Mesma razão do PDF
+# acima: material de trabalho, e o artigo tem repositório próprio.
+/tmp/
