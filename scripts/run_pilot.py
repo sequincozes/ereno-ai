@@ -381,7 +381,10 @@ def _attack_rows(trace_path: Path, spec: AttackSpec, protocol_features: str) -> 
 # --------------------------------------------------------------------------- #
 def run_attack(attack_key: str, args: argparse.Namespace) -> dict[str, Any]:
     spec = get_attack_spec(attack_key)
-    run_dir = PILOT_DIR / attack_key
+    # O rótulo separa execuções da mesma família: comparar "3 campos" com "11
+    # campos" exige que a segunda não apague os traces da primeira, e o gerador
+    # não é determinístico — o que foi sobrescrito não volta igual.
+    run_dir = PILOT_DIR / (f"{attack_key}__{args.label}" if args.label else attack_key)
     run_dir.mkdir(parents=True, exist_ok=True)
     runner = _build_generator(spec, run_dir, args.generator_mode)
 
@@ -795,9 +798,22 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--label",
+        default="",
+        help=(
+            "Sufixo do diretório e do relatório desta execução. Sem ele, rodar a "
+            "mesma família duas vezes sobrescreve os traces da primeira."
+        ),
+    )
+    parser.add_argument(
+        "--llm-probe-only",
+        action="store_true",
+        help="Só mede o consumo do estágio intent, sem gerar trace nenhum.",
+    )
+    parser.add_argument(
         "--output",
-        default=str(DEFAULT_REPORT_PATH),
-        help=f"Caminho do relatório (default: {DEFAULT_REPORT_PATH}).",
+        default="",
+        help=f"Caminho do relatório (default: {DEFAULT_REPORT_PATH}, com --label no nome).",
     )
 
     return parser
@@ -878,10 +894,12 @@ def main(argv: list[str] | None = None) -> int:
     PILOT_DIR.mkdir(parents=True, exist_ok=True)
     started = time.perf_counter()
 
-    attacks = [run_attack(attack_key, args) for attack_key in args.attack]
+    attacks = [] if args.llm_probe_only else [
+        run_attack(attack_key, args) for attack_key in args.attack
+    ]
 
     llm = None
-    if args.llm_probe:
+    if args.llm_probe or args.llm_probe_only:
         print("\nSonda de token do estágio intent")
         llm = _llm_probe(args.attack, args)
 
@@ -937,7 +955,9 @@ def main(argv: list[str] | None = None) -> int:
         },
     }
 
-    output_path = Path(args.output)
+    output_path = Path(args.output) if args.output else (
+        PILOT_DIR / (f"pilot_report_{args.label}.json" if args.label else "pilot_report.json")
+    )
     save_json(output_path, report)
 
     print()
