@@ -100,10 +100,17 @@ def _fields_ceiling(intent: IntentSpec) -> int:
 
     Reaproveita ``resolve_candidate_paths`` (o mesmo portão que o compilador e
     o ``IntentAgent`` usam) em vez de recontar campos aqui.
+
+    Os campos com valor fixado entram na conta mesmo quando não carregam o
+    efeito pedido: o compilador os aplica de todo jeito e eles consomem cota,
+    então um teto que os ignorasse poderia ficar **abaixo** do
+    ``max_fields_changed`` que a rodada já usa — e a escada derivaria uma
+    intenção que o próprio portão recusa.
     """
 
     _, candidates = resolve_candidate_paths(intent)
-    return min(MAX_FIELDS_CHANGED_CEILING, len(candidates))
+    pinned = {target.path for target in intent.restrictions.target_values}
+    return min(MAX_FIELDS_CHANGED_CEILING, len(candidates | pinned))
 
 
 def _derive_intent(intent: IntentSpec, **changes: Any) -> IntentSpec:

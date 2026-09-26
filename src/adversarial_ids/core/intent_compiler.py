@@ -21,6 +21,23 @@ uma heurística de MVP — o vínculo entre o valor escolhido e o efeito
 observado é o que a etapa DETECTOR mede e a etapa DEFENDER referencia; o
 compilador não promete o efeito, apenas produz uma variante plausível e
 rastreável.
+
+Valores fixados pelo pedido
+---------------------------
+``IntentSpec.restrictions.target_values`` fura essa heurística campo a campo:
+um campo com valor fixado ("duração máxima de 80 ms") recebe exatamente o valor
+pedido — não entra no sorteio da seed, não recebe o passo da intensidade e não
+é clampado contra o irmão do par. Ele **conta** na cota de
+``max_fields_changed``, e o que sobra da cota é o que a heurística pode usar.
+
+A ausência de clamp é deliberada: um valor ditado que não cabe (fora dos
+limites do catálogo, ou que inverte um par ``{min, max}``) faz a compilação
+**falhar**, em vez de ser ajustado em silêncio. Corrigir o número produziria
+uma config que afirma um valor que o usuário não pediu, e o ``diff`` e a
+justificativa — que o Defensor lê — passariam a mentir sobre a origem dele.
+O que é decidível sem a baseline é recusado antes, no portão de capacidades
+(``config/attack_capabilities.py::validate_target_values``); o resto é
+``_assert_pinned_ranges`` aqui.
 """
 
 from __future__ import annotations
@@ -33,6 +50,7 @@ from adversarial_ids.config.attack_capabilities import (
     AttackCapability,
     FieldCapability,
     resolve_candidate_paths,
+    validate_target_values,
 )
 from adversarial_ids.config.attacks_registry import get_attack_spec
 from adversarial_ids.domain.attack_candidate import AttackCandidate, FieldChange
@@ -116,9 +134,19 @@ def _select_field_paths(
     capability: AttackCapability,
     candidates: frozenset[str],
     intent: IntentSpec,
+    *,
+    limit: int,
 ) -> tuple[str, ...]:
+    """Escolhe até ``limit`` campos candidatos, reprodutível pela seed.
+
+    ``limit`` vem de fora (e não mais de ``max_fields_changed`` direto) porque
+    os campos com valor fixado já consumiram parte da cota antes de a
+    heurística escolher qualquer coisa.
+    """
+
+    if limit <= 0:
+        return ()
     ordered = sorted(candidates)
-    limit = intent.restrictions.max_fields_changed
     if len(ordered) <= limit:
         return tuple(ordered)
 
@@ -126,6 +154,41 @@ def _select_field_paths(
     shuffled = list(ordered)
     rng.shuffle(shuffled)
     return tuple(sorted(shuffled[:limit]))
+
+
+def _assert_pinned_ranges(config: dict[str, Any], pinned_paths: set[str]) -> None:
+    """Todo par ``{min, max}`` tocado por um valor fixado ainda é um intervalo.
+
+    ``_clamp_paired`` resolve o caso da heurística aproximando um limite do
+    irmão. Um valor fixado não pode ser aproximado de nada — ou ele vale como
+    pedido, ou o pedido é impossível. Os dois casos que chegam aqui:
+
+    - o pedido fixou um limite e o irmão ficou na baseline (``min=2000`` contra
+      ``max=1000``);
+    - o pedido fixou um limite e a heurística mexeu no irmão sem conseguir
+      preservar a ordem.
+
+    Falhar aqui é a razão de o compilador não "consertar" o número: o pedido
+    volta para o usuário como contradição declarada, em vez de virar um ataque
+    que ninguém pediu (mesma disciplina do piloto E0 — um intervalo degenerado
+    faz o ERENO recusar a execução inteira, ver ``docs/pilot_e0.md``).
+    """
+
+    for path in sorted(pinned_paths):
+        resolved = _paired_sibling_path(config, path)
+        if resolved is None:
+            continue
+        sibling_path, leaf = resolved
+        value = _get_by_path(config, path)
+        sibling = _get_by_path(config, sibling_path)
+        if _keeps_order(leaf, value, sibling):
+            continue
+        raise IntentCompilerError(
+            f"O valor fixado em {path!r} ({value}) não forma um intervalo com "
+            f"{sibling_path!r} ({sibling}): 'min' precisa ser estritamente "
+            "menor que 'max'. Fixe também o outro limite ou escolha um valor "
+            "dentro do intervalo da baseline."
+        )
 
 
 def _round_like(reference: Any, value: float) -> Any:
@@ -258,13 +321,33 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
     spec = get_attack_spec(intent.base_attack)
     baseline: dict[str, Any] = load_json(spec.baseline_path)
 
-    selected_paths = _select_field_paths(capability, candidates, intent)
+    # Os campos com valor fixado saem da heurística inteira: não entram no
+    # sorteio, não recebem o passo da intensidade e não são clampados. O que
+    # sobra da cota de ``max_fields_changed`` é o que a heurística pode usar.
+    pinned = validate_target_values(capability, intent)
+    budget = intent.restrictions.max_fields_changed - len(pinned)
+    selected_paths = _select_field_paths(
+        capability, frozenset(candidates - set(pinned)), intent, limit=budget
+    )
     direction = _DIRECTION_BY_EFFECT[intent.desired_effect]
     step = _STEP_BY_INTENSITY[intent.intensity]
 
     fields_by_path = {field.path: field for field in capability.fields}
     config = copy.deepcopy(baseline)
     diff: list[FieldChange] = []
+
+    # Os fixados primeiro, para que o clamp da heurística enxergue o valor
+    # pedido ao resolver o irmão de um par — e ceda a ele, nunca o contrário.
+    for path in sorted(pinned):
+        old_value = _get_by_path(config, path)
+        # O contrato guarda ``integer_list`` como tupla (o modelo é congelado);
+        # a config do ERENO é JSON e fala em lista. Sem a conversão, o campo
+        # entraria no ``diff`` como mudança mesmo quando o valor é o mesmo.
+        new_value = list(pinned[path]) if isinstance(pinned[path], tuple) else pinned[path]
+        if new_value == old_value:
+            continue
+        _set_by_path(config, path, new_value)
+        diff.append(FieldChange(path=path, old_value=old_value, new_value=new_value))
 
     for path in selected_paths:
         field = fields_by_path[path]
@@ -279,10 +362,13 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
         _set_by_path(config, path, new_value)
         diff.append(FieldChange(path=path, old_value=old_value, new_value=new_value))
 
+    _assert_pinned_ranges(config, set(pinned))
+
     if not diff:
+        detail = " Os valores fixados já são os da baseline." if pinned else ""
         raise IntentCompilerError(
             "Nenhum campo mudou de valor — a intenção não produziu uma "
-            "configuração distinta da baseline."
+            "configuração distinta da baseline." + detail
         )
 
     config_model = config_model_for(spec.key)
@@ -299,11 +385,22 @@ def compile_attack_candidate(intent: IntentSpec) -> AttackCandidate:
         ) from exc
 
     changed_fields = ", ".join(change.path for change in diff)
+    # A justificativa separa as duas origens de propósito: ela é o que o
+    # Defensor e o relatório leem para saber *por que* a config é essa, e
+    # "o usuário pediu 80" não é a mesma afirmação que "a intensidade alta
+    # calculou 80".
+    pinned_in_diff = [change.path for change in diff if change.path in pinned]
+    origin = (
+        f" {len(pinned_in_diff)} deles com valor fixado no pedido "
+        f"({', '.join(pinned_in_diff)}), fora da escada de intensidade."
+        if pinned_in_diff
+        else ""
+    )
     rationale = (
         f"Compilado deterministicamente da intenção {intent.objective.value}/"
         f"{intent.desired_effect.value} (intensidade {intent.intensity.value}, "
         f"seed {intent.seed}, direção {direction}): "
-        f"{len(diff)} campo(s) ajustado(s) — {changed_fields}."
+        f"{len(diff)} campo(s) ajustado(s) — {changed_fields}.{origin}"
     )
 
     return AttackCandidate(
