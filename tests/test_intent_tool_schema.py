@@ -36,3 +36,26 @@ def test_source_prompt_is_not_part_of_the_tool_schema():
     # A LLM nunca deve reconstituir source_prompt — ele é injetado pelo
     # IntentAgent depois da tool call.
     assert "source_prompt" not in _properties()
+
+
+def test_target_values_is_an_object_whose_values_are_scalars_not_empty_objects():
+    """Mesmo bug de ``list[object]``, agora em ``dict[str, Any]``.
+
+    Anotado como ``Any``, o Pydantic rende cada valor como um objeto vazio que
+    **proíbe** qualquer propriedade — o schema diria à LLM que
+    ``{"fault.prob": 0.42}`` é inválido, e o número certo nunca chegaria à
+    tool. A união explícita é o que mantém o schema dizendo a verdade sobre o
+    que a ferramenta aceita.
+    """
+
+    variants = _properties()["target_values"]["anyOf"]
+    assert {"type": "null"} in variants
+
+    obj = next(v for v in variants if v.get("type") == "object")
+    assert obj["propertyNames"]["type"] == "string"
+    accepted = {v["type"] for v in obj["additionalProperties"]["anyOf"]}
+    assert accepted == {"boolean", "integer", "number", "string", "array"}
+
+
+def test_target_values_is_optional_so_a_prompt_without_numbers_stays_simple():
+    assert "target_values" not in set(submit_intent_spec.parameters["required"])
