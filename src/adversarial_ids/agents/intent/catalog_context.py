@@ -20,6 +20,18 @@ from __future__ import annotations
 from adversarial_ids.config.attack_capabilities import AttackCapability, ATTACK_CAPABILITY_CATALOG
 from adversarial_ids.config.attacks_registry import get_attack_spec, list_attack_keys
 from adversarial_ids.config.settings import PROMPTS_DIR
+from adversarial_ids.domain.intent_spec import DesiredEffect
+
+# Só três conjuntos de efeitos existem nos 103 campos do catálogo (verificado:
+# a invariante 4 garante que as três alavancas de evasão sempre andam juntas).
+# Enumerar os nomes longos em cada campo custava ~1,9k tokens por chamada — um
+# rótulo curto com legenda única corta a maior redundância do prompt sem perder
+# nada, o que abre espaço para as faixas de `_render_domain` (Fase 1) caberem no
+# TPM de 8.000 da conta. Ver `docs/target_values.md` e [[groq-modelos-e-tpm]].
+_EVASION = frozenset(
+    {DesiredEffect.LOWER_F1, DesiredEffect.LOWER_RECALL, DesiredEffect.MIMIC_NORMAL_TRAFFIC}
+)
+_ACTIVITY = frozenset({DesiredEffect.INCREASE_ATTACK_ACTIVITY})
 
 _INTENT_PROMPT_PATH = PROMPTS_DIR / "intent.md"
 
@@ -44,24 +56,42 @@ def _render_domain(field) -> str:
     return f" [{low}..{high}]"
 
 
+def _render_effects(field) -> str:
+    """Rótulo curto dos efeitos do campo, resolvido pela legenda do catálogo.
+
+    Colapsa a lista de nomes (``lower_f1, lower_recall, ...``) num dos três
+    casos que de fato ocorrem — ``evasão``, ``atividade`` ou os dois. A legenda
+    no topo do catálogo mapeia cada rótulo de volta aos nomes reais dos efeitos
+    que o portão aceita, então o texto não diz menos do que dizia; só diz mais
+    curto.
+    """
+
+    effects = frozenset(field.effects)
+    if effects == _EVASION:
+        return "evasão"
+    if effects == _ACTIVITY:
+        return "atividade"
+    if effects == _EVASION | _ACTIVITY:
+        return "evasão, atividade"
+    # Um quarto conjunto surgiria só se o catálogo mudasse; então o nome longo
+    # é o correto — melhor um campo verboso que um rótulo que mente.
+    return ", ".join(sorted(e.value for e in field.effects))
+
+
 def _render_capability(capability: AttackCapability) -> str:
     spec = get_attack_spec(capability.attack_key)
     objectives = ", ".join(sorted(o.value for o in capability.supported_objectives))
-    effects = ", ".join(sorted(e.value for e in capability.supported_effects))
 
     lines = [
         f"### `{capability.attack_key}` — `{capability.capability_id}`",
-        f"- Descrição: {spec.description}",
-        f"- Classe rotulada no dataset: `{spec.label}`",
-        f"- Objetivos suportados: {objectives}",
-        f"- Efeitos suportados: {effects}",
-        "- Campos (caminho — tipo [faixa aceita] — efeitos):",
+        f"- {spec.description} Classe no dataset: `{spec.label}`. "
+        f"Objetivos: {objectives}.",
+        "- Campos (caminho — tipo [faixa] · efeitos):",
     ]
     for field in capability.fields:
-        field_effects = ", ".join(sorted(e.value for e in field.effects))
         lines.append(
-            f"  - `{field.path}` — {field.value_type}{_render_domain(field)} — "
-            f"{field_effects} — {field.description}"
+            f"  - `{field.path}` — {field.value_type}{_render_domain(field)} · "
+            f"{_render_effects(field)} — {field.description}"
         )
     return "\n".join(lines)
 
@@ -88,6 +118,12 @@ def build_capability_context(
         "`base_attack` fora desta lista faz o portão determinístico rejeitar a "
         "intenção antes do compilador — nunca invente um ataque ou um caminho "
         "de campo que não esteja listado aqui.",
+        "",
+        "Legenda dos campos: `[a..b]` é a faixa aceita (um lado vazio = sem "
+        "limite daquele lado), e `[x|y]` são os únicos valores aceitos — um "
+        "valor fixado fora disso é rejeitado. Os efeitos após `·`: `evasão` = "
+        "o campo serve a `lower_f1`, `lower_recall` e `mimic_normal_traffic`; "
+        "`atividade` = serve a `increase_attack_activity`.",
         "",
     ]
     for attack_key in list_attack_keys():
