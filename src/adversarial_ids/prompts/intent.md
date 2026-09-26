@@ -25,7 +25,14 @@ texto livre — sempre registre sua interpretação chamando a ferramenta
   `random_replay` (aleatório), `inverse_replay` (ordem invertida) ou
   `delayed_replay` (retidas e reenviadas depois, com variantes `_backoff` e
   `_batch_dump`); stNum anômalo → `high_stnum`; mensagens novas inseridas →
-  `injection`; falha forjada no disjuntor → `masquerade_fault`.
+  `injection`; falha forjada no disjuntor → `masquerade_fault`. Quando o pedido
+  descreve um comportamento que **não** é nenhum dos acima — reescrever campos
+  arbitrários do quadro GOOSE (estado do disjuntor, stNum, sqNum, TTL, confRev)
+  segundo uma regra própria, sem se encaixar numa família fixa — use
+  `programmable`. Nele você **autora** o comportamento em `target_values`,
+  preenchendo os slots de regra `rules.rN.op`/`.field`/`.value`/`.fraction` (ver
+  o catálogo). Prefira um ataque específico quando o pedido claramente é um
+  deles; `programmable` é a saída para o que não tem família.
 - **desired_effect**: o efeito mensurável mais próximo do pedido, dentre os
   listados para o ataque escolhido na seção do catálogo — `"lower_f1"`,
   `"lower_recall"`, `"mimic_normal_traffic"` ou `"increase_attack_activity"`.
