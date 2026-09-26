@@ -1,0 +1,162 @@
+[
+  {
+    "id": "pinned-01",
+    "category": "valid",
+    "prompt": "Reduza o recall do IDS com a duração da falha entre 50 e 80 ms.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "target_values": {
+        "fault.durationMs.min": 50,
+        "fault.durationMs.max": 80
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "note": "Um intervalo do texto são dois caminhos, um por limite."
+  },
+  {
+    "id": "pinned-02",
+    "category": "valid",
+    "prompt": "Avalie a robustez com a probabilidade de injeção da falha em 0.9.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "target_values": { "fault.prob": 0.9 },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "note": "Valor escalar simples; a intensidade fica irrelevante para o campo fixado."
+  },
+  {
+    "id": "pinned-03",
+    "category": "valid",
+    "prompt": "Camufle o ataque deixando o disjuntor forjado em 0 e sem avançar o stNum.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "medium",
+      "target_values": { "cbStatus": 0, "incrementStNumOnFault": false },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "note": "Inteiro de enum e booleano ditados no mesmo pedido."
+  },
+  {
+    "id": "pinned-04",
+    "category": "valid",
+    "prompt": "Reduza o F1 usando TTL de 10 e 15 ms nas mensagens forjadas.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": { "ttlMsValues": [10, 15] },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "note": "Lista de inteiros ditada; chega à config como array JSON."
+  },
+  {
+    "id": "pinned-05",
+    "category": "valid",
+    "prompt": "Reduza o recall com o descarte de mensagens em 40% do tráfego.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "grayhole",
+      "desired_effect": "lower_recall",
+      "intensity": "medium",
+      "target_values": { "dropRate.min": 0.4 },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "note": "Outro ataque, e só um limite do par fixado — o irmão fica na baseline."
+  },
+  {
+    "id": "pinned-invalid-01",
+    "category": "invalid",
+    "prompt": "Reduza o recall com a probabilidade da falha em 1.4.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "target_values": { "fault.prob": 1.4 },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "acima do máximo",
+    "note": "Fora da faixa do catálogo; não é clampado para 1.0."
+  },
+  {
+    "id": "pinned-invalid-02",
+    "category": "invalid",
+    "prompt": "Reduza o recall com a duração da falha entre 80 e 50 ms.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "target_values": {
+        "fault.durationMs.min": 80,
+        "fault.durationMs.max": 50
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "expected_error": "invertido",
+    "note": "Contradição do próprio texto, recusada sem abrir a baseline."
+  },
+  {
+    "id": "pinned-invalid-03",
+    "category": "invalid",
+    "prompt": "Reduza o recall fixando a duração mínima, a máxima e a probabilidade.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "target_values": {
+        "fault.durationMs.min": 40,
+        "fault.durationMs.max": 90,
+        "fault.prob": 0.3
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "expected_error": "max_fields_changed >= 3",
+    "note": "A cota é menor que o número de campos fixados; o erro diz o número a usar."
+  },
+  {
+    "id": "pinned-invalid-04",
+    "category": "invalid",
+    "prompt": "Reduza o recall com o modo de sqNum em turbo.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "target_values": { "sqnumMode": "turbo" },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "fora das opções",
+    "note": "Enum inventado pela LLM; só 'fast' e 'normal' existem."
+  },
+  {
+    "id": "pinned-invalid-05",
+    "category": "invalid",
+    "prompt": "Reduza o recall fixando o tempo de vida da falha em 200 ms.",
+    "payload": {
+      "objective": "evade_detection",
+      "base_attack": "masquerade_fault",
+      "desired_effect": "lower_recall",
+      "target_values": { "fault.ttlMs": 200 },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist",
+    "note": "Caminho plausível que não existe no catálogo."
+  }
+]

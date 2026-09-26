@@ -27,6 +27,7 @@ class FakeIntentAgent:
             intensity=payload.get("intensity", "medium"),
             allowed_fields=payload.get("allowed_fields"),
             forbidden_fields=payload.get("forbidden_fields"),
+            target_values=payload.get("target_values"),
             max_fields_changed=payload.get("max_fields_changed", 3),
             seed=payload.get("seed", 42),
         )
