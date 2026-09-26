@@ -34,6 +34,10 @@ from adversarial_ids.domain.attack_configs.masquerade_fault import (
     MasqueradeFaultConfig,
     TrapAreaConfig,
 )
+from adversarial_ids.domain.attack_configs.programmable import (
+    MutationRule,
+    ProgrammableConfig,
+)
 from adversarial_ids.domain.attack_configs.random_replay import RandomReplayConfig
 from adversarial_ids.domain.attack_configs.ranges import (
     FloatRange,
@@ -56,6 +60,7 @@ CONFIG_MODEL_BY_ATTACK: dict[str, type[BaseModel]] = {
     "delayed_replay_backoff": DelayedReplayBackoffConfig,
     "delayed_replay_batch_dump": DelayedReplayBatchDumpConfig,
     "delayed_replay_double_drop": DelayedReplayDoubleDropConfig,
+    "programmable": ProgrammableConfig,
 }
 
 
