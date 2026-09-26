@@ -115,6 +115,43 @@ chegava ao gerador.
   `docs/pilot_e0.md` (a seção "O gerador não é determinístico" agora tem
   ressalva: vale só sem `randomSeed`).
 
+### 2.R — Modo de réplicas (varredura de seeds) **[decidido 26/09: incluir no plano]**
+
+Contrapartida da 2.0. A 2.0 tornou cada seed reprodutível; a 2.R usa isso para
+rodar **N seeds do mesmo experimento** e reportar a métrica-objetivo como
+**média ± desvio**, que é o que o TCC precisa para uma afirmação estatística (um
+único trace é uma amostra, não uma medida). Independe da 2.1/2.2/2.3 — vale para
+os 11 ataques atuais e para o programável.
+
+- **Insight que a arquitetura já oferece (economia de TPM):** entre réplicas, só
+  a **geração** muda; a **intenção** é a mesma (mesmo prompt → mesma
+  `IntentSpec`). Então a réplica chama o LLM **uma vez** e reaproveita a
+  `IntentSpec` compilada, variando só o `seed` passado ao `GeneratorRunner`. N
+  réplicas custam **1** chamada de intent, não N — decisivo com o TPM de 8.000
+  (ver `docs/target_values.md`/E0). É a mesma separação intenção↔geração que já
+  sustenta a retomada e a política de feedback (o lado Red é determinístico da
+  rodada 2 em diante).
+- **Onde vive:** um controlador fino que, dada uma `IntentSpec` já compilada,
+  itera sobre uma lista de seeds e chama o núcleo determinístico
+  (`GeneratorRunner` → `IdsEvaluator` → `DetectionReport`) por seed. Cada réplica
+  é um `LoopRecord` próprio (o `seed` já é campo dele), ligadas por um id de
+  lote. A agregação (média ± desvio da métrica-objetivo, e o intervalo) lê o
+  ledger — nada de novo contrato de "resultado agregado" antes de precisar.
+- **Interface:** `--replicates N` (varre `seed, seed+1, …`) ou `--seeds a,b,c`
+  (lista explícita) no `--engine intent`; alternativamente um
+  `scripts/run_replicates.py` para manter a CLI enxuta. Decidir na 2.R.
+- **Relação com a campanha (E10):** uma réplica é **uma rodada** repetida sob
+  seeds diferentes — não uma campanha multi-rodada. As duas são ortogonais:
+  pode-se replicar cada rodada de uma campanha, mas o primeiro corte replica só
+  a rodada 1 (a intenção do prompt), que é o caso do artigo.
+- **DoD:** `--replicates 5` sobre um ataque JAR-mensurável produz 5
+  `LoopRecord` com seeds distintos, **uma** chamada de LLM no lote, e um resumo
+  com média ± desvio da métrica-objetivo. Reexecutar o lote com a mesma lista de
+  seeds reproduz os mesmos números (a 2.0 garante isso).
+- **Cuidado:** só faz sentido em `--generator-mode jar`. Em cached, todo trace é
+  o mesmo arquivo e as réplicas colapsam — o modo deve avisar, como o piloto já
+  faz.
+
 ### 2.1 — Fatia vertical: ataque programável, DSL só de mutação **[decidido 26/09: escopo = só mutação]**
 
 Um `attack_key = "programmable"` novo, com **um** tipo de regra: mutação de um
@@ -167,7 +204,11 @@ como dado, validado por schema nas duas pontas. Só depois de 2.1 provar o loop.
 ## Estado
 
 - Fase 0/1 entregues; tags `intent-driven-v0.1.0` (loop + retomada) e
-  `intent-driven-v0.2.0` (valores ditados). 1472 testes passam sem Groq/Java.
+  `intent-driven-v0.2.0` (valores ditados). 1476 testes passam sem Groq/Java.
 - Branch Java `feat/journal` criada da `dev-ian`; configs locais da dev-ian em
   `git stash` (ver memória `ereno-jar-origem`).
-- Próximo passo: **2.0, determinismo**.
+- **2.0 (determinismo) ENTREGUE** — seed reprodutível verificada; JAR recompilado
+  e trocado em `generator_runtime`.
+- Próximo passo: **2.1 (ataque programável, DSL de mutação)**, com **2.R (modo de
+  réplicas)** planejada e pronta para entrar quando quiser medir variância —
+  as duas são independentes.
