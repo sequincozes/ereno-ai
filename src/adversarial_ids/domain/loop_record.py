@@ -95,6 +95,14 @@ class LoopRecord(BaseModel):
     max_rounds: int | None = Field(default=None, ge=1)
     retry_of: str | None = None
 
+    # Lote de réplicas (Fase 2.R): réplicas do mesmo experimento sob seeds
+    # diferentes compartilham este id. Ortogonal à linhagem de campanha — uma
+    # réplica é uma rodada repetida sob outra seed, não uma campanha multi-rodada
+    # — então convive com round/parent_run_id sem restrição cruzada. Aditivo com
+    # default; ``schema_version`` continua 1. O ``seed`` de cada réplica já
+    # distingue uma da outra; este campo só as agrupa no ledger.
+    replicate_batch_id: str | None = None
+
     @model_validator(mode="after")
     def _first_round_has_no_parent(self) -> "LoopRecord":
         if (self.round == 1) != (self.parent_run_id is None):
