@@ -57,6 +57,9 @@ _DOCUMENTED_EXCLUSIONS: dict[str, frozenset[str]] = {
     "delayed_replay_backoff": frozenset({"orderBy"}),
     "delayed_replay_batch_dump": frozenset({"orderBy"}),
     "delayed_replay_double_drop": frozenset({"orderBy"}),
+    # O ataque programável expõe todos os campos de cada slot (fraction/op/field/
+    # value) — nada é excluído.
+    "programmable": frozenset(),
 }
 
 _EVASION_EFFECTS = (
