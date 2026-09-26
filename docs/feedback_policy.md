@@ -137,6 +137,75 @@ Uma falha no FEEDBACK (ou em qualquer estágio anterior da rodada) marca o
 registros já concluídos (cada um persistido individualmente) são
 devolvidos, e a causa fica no `LoopStage` que falhou.
 
+## Retomada da campanha
+
+Critério de aceite da camada Loop: *"retomada não duplica registros"*.
+
+```bash
+uv run adversarial-ids --engine intent --resume <RUN_ID>             # qualquer rodada da campanha
+uv run adversarial-ids --engine intent --resume <RUN_ID> --rounds 5  # sobrescreve o teto gravado
+```
+
+Uma campanha para sem ter acabado de três jeitos, e a retomada
+(`IntentLoopOrchestrator.resume_campaign`, resolvida por
+`agents/orchestrator/campaign_resume.py::plan_resume`) trata cada um a partir
+do ledger:
+
+| a ponta da campanha | ação | o que roda |
+|---|---|---|
+| tem um estágio `failed` (limite de taxa, timeout do JAR, portão de volume) | `retry` | a mesma rodada de novo, com `run_id` novo e `retry_of` apontando a que falhou |
+| terminou e a política mandou continuar (orçamento de tokens, processo morto no meio da rodada seguinte) | `continue` | a rodada seguinte, com a `next_intent` do `feedback.json` |
+| terminou e a política encerrou (`should_continue` falso) | `done` | nada — devolve `()` e o ledger não muda |
+
+É o caso `done` que faz a retomada não duplicar: retomar uma campanha encerrada,
+ou retomar duas vezes a mesma, não grava nada. A retomada nunca desfaz um
+veredito da política, e `--rounds` também não desfaz: uma rodada que parou por
+`max_rounds_reached` não tem `next_intent`, então não há de onde continuar.
+
+Algumas regras:
+
+- **A ponta sai do ledger.** Qualquer `run_id` da campanha serve. Retomar a
+  partir de uma rodada que já tem filho criaria um segundo ramo da mesma
+  campanha, que é justamente a duplicata proibida. A campanha é o componente
+  conexo por `parent_run_id` e `retry_of`, e a ponta é a rodada de maior
+  `round`, com a mais recente no ledger desempatando.
+- **A rodada que falhou continua no ledger.** O ledger é append-only e ela é a
+  verdade sobre a primeira tentativa. A nova tentativa tem o mesmo `round` e o
+  mesmo pai, e é o `retry_of` que a distingue de uma duplicata.
+- **A intenção validada é reaproveitada.** Refazer uma rodada que caiu no
+  DEFENDER não chama o `IntentLike` de novo: a `intent.json` da rodada que falhou
+  é persistida e o estágio fica `skipped`, com a origem na mensagem. Só a rodada
+  1 que falhou no próprio INTENT chama o LLM outra vez. Com o TPM da conta
+  (~6,9k tokens por chamada contra 8k, ver `docs/pilot_e0.md`), isso decide se o
+  retry cabe no minuto.
+- **O `history` é reconstruído.** Os `objective_value` de cada rodada do caminho
+  são lidos dos `feedback.json`. Uma campanha interrompida e retomada toma as
+  mesmas decisões que a mesma campanha sem interrupção
+  (`test_a_resumed_campaign_decides_exactly_like_an_uninterrupted_one`).
+- **O orçamento conta só a chamada de retomada.** Retomar uma campanha cortada
+  pelo teto é a decisão explícita de gastar mais. Somar o gasto anterior a
+  cortaria de novo logo depois da primeira rodada.
+- **O detector é o da campanha.** Sem `--detector`, a CLI usa o do
+  `detector_manifest.json` mais recente da campanha. Um detector diferente é
+  recusado (`CampaignResumeError`), porque juntaria dois experimentos no mesmo
+  ledger. O `generator_mode` não fica gravado em lugar nenhum, então essa
+  checagem não o cobre: retome com o mesmo modo.
+- **Erros do chamador levantam, falhas de estágio não.** `run_id` desconhecido,
+  orquestrador sem ledger, artefato apagado (`outputs/` limpo por
+  `scripts/init_state.py`) ou registro anterior a `max_rounds` sem `--rounds`
+  explícito geram `CampaignResumeError`, e a CLI sai com código 2. Depois de
+  retomada, a campanha segue as regras de `run_campaign`.
+- **Ponto de retomada antes dos agentes.** A CLI resolve o ponto de retomada
+  antes de montar os agentes, então descobrir que não há nada a retomar não
+  exige `GROQ_API_KEY`.
+
+O ledger ganhou dois campos aditivos com default, `max_rounds` e `retry_of`, no
+mesmo padrão de `round`/`parent_run_id`; `schema_version` continua `1`. Além
+disso, `append_loop_record` passou a recusar um `run_id` que já está no ledger.
+Uma rodada que o processo perdeu no meio deixa um diretório em
+`outputs/intent_loop/<run_id>/` (com `events.jsonl`) sem linha no ledger. Esse
+diretório é órfão e a retomada o ignora.
+
 ## Limitação do modo cacheado
 
 Em `generator_mode="cached"` o dataset do baseline e o do candidato
@@ -187,5 +256,11 @@ para exercitar mais rodadas sem depender de medição real). Use
   `--rounds` não positivo, `--iterations` (do loop legado) ignorado no
   motor intent, resumo por rodada, saída não-zero quando qualquer rodada
   falha.
+- `tests/test_campaign_resume.py` — retomada: retry de rodada que falhou no
+  DEFENDER (sem nova chamada de LLM) e no INTENT (com), retry de rodada do
+  meio, continuação depois do teto de tokens e de um processo morto, decisões
+  idênticas às da campanha sem interrupção, e os casos que não gravam nada
+  (campanha encerrada, retomar do meio, retomar duas vezes); erros do chamador
+  e a flag `--resume` da CLI.
 - `tests/test_loop_record_store.py` — um `LoopRecord` gravado antes do E10
   (sem `round`/`parent_run_id`) continua carregando com os defaults.
