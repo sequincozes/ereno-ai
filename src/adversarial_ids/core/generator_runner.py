@@ -56,6 +56,7 @@ class GeneratorRunner:
         timeout_seconds: float | None = None,
         max_retries: int = 0,
         retry_backoff_seconds: float = 2.0,
+        random_seed: int | None = None,
     ) -> None:
         self.runtime_dir = Path(runtime_dir)
         self.output_dataset_path = Path(output_dataset_path)
@@ -76,6 +77,13 @@ class GeneratorRunner:
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
         self.retry_backoff_seconds = retry_backoff_seconds
+        # Semente determinística repassada ao JAR (Fase 2.0). Quando informada, é
+        # gravada como ``randomSeed`` no action config, e o ERENO a aplica antes
+        # de qualquer sorteio dos creators — a mesma config passa a gerar os
+        # mesmos bytes. ``None`` mantém o comportamento anterior (RNG do relógio,
+        # não determinística — o que o piloto E0 mediu). Só o modo ``jar`` a usa;
+        # o modo cacheado serve o mesmo arquivo de qualquer forma.
+        self.random_seed = random_seed
 
     @property
     def is_cached(self) -> bool:
@@ -153,6 +161,15 @@ class GeneratorRunner:
             raise ValueError(
                 f"Segmento {self.segment_name!r} não define 'attackConfig' no action config."
             )
+
+        # Semente determinística (Fase 2.0): o ERENO lê ``randomSeed`` do topo do
+        # action config (CreateAttackDatasetAction) e a aplica antes de gerar.
+        # Ausente => a chave é removida, para o action config versionado não
+        # ficar com uma seed de uma execução anterior grudada.
+        if self.random_seed is not None:
+            action["randomSeed"] = int(self.random_seed)
+        else:
+            action.pop("randomSeed", None)
 
         save_json(str(action_path), action)
         return self.runtime_dir / attack_rel
