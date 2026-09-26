@@ -1,0 +1,8 @@
+{
+  "attackType": "programmable",
+  "enabled": true,
+  "rules": {
+    "r0": {"op": "set", "field": "cbStatus", "value": 1, "fraction": 0.5},
+    "r1": {"op": "add", "field": "stNum", "value": 1, "fraction": 0.5}
+  }
+}
