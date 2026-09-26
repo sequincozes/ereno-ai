@@ -20,7 +20,12 @@ from __future__ import annotations
 
 from adversarial_ids.agents.defender.agent import DefenderAgent
 from adversarial_ids.agents.intent.agent import IntentAgent
-from adversarial_ids.agents.orchestrator.intent_loop import IntentLoopOrchestrator
+from collections.abc import Sequence
+
+from adversarial_ids.agents.orchestrator.intent_loop import (
+    IntentLoopOrchestrator,
+    ReplicateResult,
+)
 from adversarial_ids.config.settings import (
     DETECTOR_MODE,
     INTENT_LOOP_DEFAULT_ROUNDS,
@@ -106,3 +111,28 @@ def resume_intent_loop(
         event_sink=event_sink,
     )
     return orchestrator.resume_campaign(run_id, rounds=rounds)
+
+
+def run_intent_replicates(
+    *,
+    prompt: str,
+    seeds: Sequence[int],
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+) -> ReplicateResult:
+    """Roda a mesma intenção sob várias seeds e devolve o resumo do lote (2.R).
+
+    Mesma montagem de ``run_intent_loop``; o LLM é chamado uma vez para o lote
+    (ver ``IntentLoopOrchestrator.run_replicates``). Só é fisicamente
+    significativo em ``generator_mode="jar"``.
+    """
+
+    orchestrator = build_intent_loop(
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+    )
+    return orchestrator.run_replicates(prompt, seeds=seeds)
