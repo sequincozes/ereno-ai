@@ -24,6 +24,26 @@ from adversarial_ids.config.settings import PROMPTS_DIR
 _INTENT_PROMPT_PATH = PROMPTS_DIR / "intent.md"
 
 
+def _render_domain(field) -> str:
+    """Faixa aceita do campo, curta o bastante para caber no prompt.
+
+    Existe por causa de ``target_values``: para ditar um valor, a LLM precisa
+    saber onde ele pode cair, e o portão determinístico recusa o que estiver
+    fora (``attack_capabilities.validate_target_values``). Mantido telegráfico
+    de propósito — o catálogo inteiro já custa ~6,7k tokens por chamada contra
+    um TPM de 8.000 na conta do projeto (ver ``docs/pilot_e0.md``), então cada
+    campo paga no máximo um fragmento entre colchetes.
+    """
+
+    if field.choices is not None:
+        return " [" + "|".join(repr(choice) for choice in field.choices) + "]"
+    if field.minimum is None and field.maximum is None:
+        return ""
+    low = "" if field.minimum is None else f"{field.minimum:g}"
+    high = "" if field.maximum is None else f"{field.maximum:g}"
+    return f" [{low}..{high}]"
+
+
 def _render_capability(capability: AttackCapability) -> str:
     spec = get_attack_spec(capability.attack_key)
     objectives = ", ".join(sorted(o.value for o in capability.supported_objectives))
@@ -35,11 +55,14 @@ def _render_capability(capability: AttackCapability) -> str:
         f"- Classe rotulada no dataset: `{spec.label}`",
         f"- Objetivos suportados: {objectives}",
         f"- Efeitos suportados: {effects}",
-        "- Campos (caminho — tipo — efeitos):",
+        "- Campos (caminho — tipo [faixa aceita] — efeitos):",
     ]
     for field in capability.fields:
         field_effects = ", ".join(sorted(e.value for e in field.effects))
-        lines.append(f"  - `{field.path}` — {field.value_type} — {field_effects} — {field.description}")
+        lines.append(
+            f"  - `{field.path}` — {field.value_type}{_render_domain(field)} — "
+            f"{field_effects} — {field.description}"
+        )
     return "\n".join(lines)
 
 

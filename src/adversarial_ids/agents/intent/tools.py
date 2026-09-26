@@ -40,6 +40,7 @@ def submit_intent_spec(
     intensity: str = "medium",
     allowed_fields: list[str] | None = None,
     forbidden_fields: list[str] | None = None,
+    target_values: dict[str, bool | int | float | str | list[int]] | None = None,
     max_fields_changed: int = 3,
     seed: int = 42,
 ) -> str:
@@ -61,9 +62,20 @@ def submit_intent_spec(
             podem mudar, liste os caminhos dot aqui. Deixe vazio/None quando
             o prompt não impuser essa restrição.
         forbidden_fields: Caminhos dot que o prompt proíbe alterar.
+        target_values: Valores exatos que o prompt ditou, como
+            {"caminho.do.campo": valor}. Use SOMENTE quando o prompt disser um
+            número, um estado ou um intervalo concreto (ex.: "duração entre 50
+            e 80 ms" -> {"fault.durationMs.min": 50, "fault.durationMs.max":
+            80}). Um intervalo são dois caminhos, um por limite. O valor
+            precisa respeitar o tipo e os limites do campo listados no
+            catálogo; cada campo fixado conta em max_fields_changed. Deixe
+            vazio/None quando o prompt não disser valores — aí a intensidade
+            decide, que é o caso comum.
         max_fields_changed: Máximo de campos que o compilador pode alterar
             (1 a 16; o teto efetivo é o número de campos do ataque escolhido
-            capazes do efeito pedido, que pode ser bem menor).
+            capazes do efeito pedido, que pode ser bem menor). Campos em
+            target_values contam aqui: se o prompt fixa 4 valores, este
+            parâmetro precisa ser no mínimo 4.
         seed: Semente determinística para reprodutibilidade (0 a 4294967295).
     """
     errors: list[str] = []
@@ -91,6 +103,13 @@ def submit_intent_spec(
         restrictions = IntentRestrictions(
             allowed_fields=tuple(allowed_fields) if allowed_fields else None,
             forbidden_fields=tuple(forbidden_fields or ()),
+            # Ordenado por caminho para que o mesmo pedido produza o mesmo
+            # artefato: um dict vindo de JSON preserva a ordem em que a LLM
+            # escreveu as chaves, que varia entre chamadas idênticas.
+            target_values=tuple(
+                {"path": path, "value": value}
+                for path, value in sorted((target_values or {}).items())
+            ),
             max_fields_changed=max_fields_changed,
         )
     except ValidationError as exc:

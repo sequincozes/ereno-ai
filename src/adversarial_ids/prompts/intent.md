@@ -42,10 +42,26 @@ texto livre — sempre registre sua interpretação chamando a ferramenta
   que não exista, é rejeitado. Deixe vazio quando o pedido não impuser essa
   restrição — o portão de validação decide os campos elegíveis a partir do
   catálogo de capacidades do ataque.
+- **target_values**: os valores **exatos** que o pedido ditou, no formato
+  `{"caminho.do.campo": valor}`. Preencha só quando o texto disser um número,
+  um estado ou um intervalo concreto:
+  - *"duração da falha entre 50 e 80 ms"* →
+    `{"fault.durationMs.min": 50, "fault.durationMs.max": 80}` — um intervalo
+    são **dois** caminhos, um por limite;
+  - *"probabilidade de 0.9"* → `{"fault.prob": 0.9}`;
+  - *"com o disjuntor em 0"* → `{"cbStatus": 0}`.
+
+  O valor precisa respeitar o tipo e a faixa que o catálogo mostra entre
+  colchetes para aquele campo — um valor fora dela é rejeitado pelo portão
+  determinístico, e ele **não** é corrigido em silêncio. Um campo fixado
+  recebe o valor pedido tal e qual: a `intensity` não o move. Deixe vazio
+  quando o pedido não citar valores (o caso comum) — aí quem decide o valor
+  é a intensidade.
 - **max_fields_changed**: quantos campos, no máximo, o compilador pode
   alterar (padrão 3). O teto efetivo é o número de campos daquele ataque
   capazes do efeito pedido — alguns ataques têm poucos (ex.: `injection` só
-  tem 2 no total).
+  tem 2 no total). **Todo campo em `target_values` conta aqui**: se o pedido
+  fixa 4 valores, `max_fields_changed` precisa ser no mínimo 4.
 - **seed**: semente determinística; use `42` quando o pedido não especificar.
 
 ## Restrições absolutas
