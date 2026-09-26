@@ -369,6 +369,30 @@ _PLAYBOOK_LIST: tuple[DefensePlaybook, ...] = (
         signature_features=("timeFromLastChange", "tDiff", "sqDiff"),
         reference="IEC 61850-8-1 §18.1.2 (timeAllowedToLive)",
     ),
+    DefensePlaybook(
+        key="forged_state_fields",
+        title="Forjamento programável de campos de estado GOOSE",
+        scenario=(
+            "O adversário reescreve campos do quadro GOOSE (estado do disjuntor, "
+            "stNum/sqNum, TTL, confRev) segundo regras arbitrárias — o ataque não "
+            "tem uma assinatura física fixa, então a defesa não é um limiar e sim "
+            "impedir que o quadro forjado seja aceito e cruzar cada campo com a "
+            "física e a sequência esperadas."
+        ),
+        attack_keys=("programmable",),
+        techniques=(
+            "goose_authentication",
+            "publisher_binding",
+            "goose_sequence_validation",
+            "physical_consistency_check",
+            "operator_alerting",
+        ),
+        # cbStatus é o único campo mutável que sobrevive ao modo "drop"; os deltas
+        # de sequência (stDiff/sqDiff) só aparecem no modo "deltas". A assinatura
+        # depende de qual campo a regra escolheu — por isso é curta e não fixa.
+        signature_features=("cbStatus",),
+        reference="IEC 62351-6 §7 (autenticação GOOSE) e IEC 61850-8-1 §18.1",
+    ),
 )
 
 PLAYBOOKS: dict[str, DefensePlaybook] = {
