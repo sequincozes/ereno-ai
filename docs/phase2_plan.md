@@ -169,7 +169,23 @@ os 11 ataques atuais e para o programável.
   o mesmo arquivo e as réplicas colapsam — o modo deve avisar, como o piloto já
   faz.
 
-### 2.1 — Fatia vertical: ataque programável, DSL só de mutação **[decidido 26/09: escopo = só mutação]**
+### 2.1 — Fatia vertical: ataque programável, DSL só de mutação **[ENTREGUE 26/09]**
+
+Ver `docs/programmable_attack.md`. Entregue ponta a ponta: `attack_key
+"programmable"` (uc11) no Java (creator/IED lendo `rules` como dict de slots +
+label + switch) e no Python (AttackSpec, baseline, schema, capacidade, playbook).
+O compilador materializa as regras **sem código novo**: reusa o `target_values`
+da Fase 1 — a capacidade expõe `rules.rN.op/field/value` como campos author-only
+(efeito vazio, nunca varridos pela heurística) e `rules.rN.fraction` como a
+alavanca de intensidade. **Verificado com LLM real:** "multiplique o sqNum por 3
+em ~40%" → o LLM escolheu `programmable` e autorou a regra; o JAR gerou a classe
+`programmable`. 1537 testes passam. Escopo: só mutação (seleção/temporização é
+2.2). Nuance documentada: o baseline traz 2 slots com regra default.
+
+O texto abaixo é o desenho original.
+
+---
+
 
 Um `attack_key = "programmable"` novo, com **um** tipo de regra: mutação de um
 campo GOOSE (`set` / `add` / `scale`) numa fração das mensagens. Ligado ponta a
@@ -228,4 +244,7 @@ como dado, validado por schema nas duas pontas. Só depois de 2.1 provar o loop.
   e trocado em `generator_runtime`.
 - **2.R (modo de réplicas) ENTREGUE** — `--replicates`/`--seeds`, 1 chamada de LLM
   por lote, verificado com JAR + Groq.
-- Próximo passo: **2.1 (ataque programável, DSL de mutação)**.
+- **2.1 (ataque programável, DSL de mutação) ENTREGUE** — `programmable` (uc11)
+  ponta a ponta, autoração de regras via `target_values`, verificado com JAR +
+  Groq. Ver `docs/programmable_attack.md`.
+- Próximo passo: **2.2 (alargar a DSL: seleção + temporização)**.
