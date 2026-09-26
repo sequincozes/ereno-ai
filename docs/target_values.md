@@ -94,14 +94,28 @@ duas invariantes valem:
   sobreviva. Se a heurística escolher o irmão, ela cede ao valor fixado: os
   fixados são escritos na config **antes**, então o clamp já os enxerga.
 
-## O que isto custou no prompt
+## O que isto custou no prompt (e por que acabou sobrando espaço)
 
 O catálogo injetado passou a mostrar a faixa aceita de cada campo entre
 colchetes (`fault.prob — number [0..1]`, `cbStatus — integer [0|1]`) — sem ela a
-LLM não teria como escolher um valor que o portão aceite. Com as instruções
-novas, são **+485 tokens por chamada** do estágio `intent`: de ~6,7k para ~7,1k,
-contra um TPM de 8.000 na conta do projeto. Continua cabendo uma chamada por
-minuto, mas a folga encolheu — ver `docs/pilot_e0.md` e a nota sobre o TPM.
+LLM não teria como escolher um valor que o portão aceite. Sozinha, essa adição
+levou o prompt do estágio `intent` de ~7,9k para **8381 tokens** (contagem real
+da Groq), **acima** do TPM de 8.000 da conta `on_demand`: a primeira chamada
+real morreu com `rate_limit_exceeded / Request too large`. A funcionalidade era
+inutilizável com o LLM real.
+
+A correção não foi tirar as faixas — foi cortar a redundância que já estava lá.
+O catálogo repetia a lista de efeitos por extenso em cada um dos 103 campos
+(`lower_f1, lower_recall, mimic_normal_traffic`, ~1,9k tokens só nisso), mas a
+invariante 4 garante que as três alavancas de evasão sempre andam juntas — só
+três conjuntos de efeitos existem no catálogo inteiro. Trocá-los por um rótulo
+curto com legenda única (`· evasão`, `· atividade`, `· evasão, atividade`)
+devolveu mais do que as faixas custaram. Resultado medido em três chamadas
+reais: **~6,24k tokens de entrada** — cerca de 1,6k **abaixo** de onde o prompt
+estava antes da Fase 1. O estágio `intent` ganhou folga de TPM, não perdeu.
+
+O teste continua sendo: uma chamada por minuto (~6,9k in+out contra 8k), ver
+`docs/pilot_e0.md` e a nota sobre o TPM da conta.
 
 ## Compatibilidade
 
@@ -119,3 +133,10 @@ como antes — a heurística é o caminho comum, não o caminho legado.
   o ponta a ponta até o `attack_candidate.json` em disco.
 - `tests/test_intent_tool_schema.py` — o schema de `target_values` expõe
   escalares, não objetos vazios (mesmo bug de `list[object]` do Estrategista).
+
+Validação com o LLM real (`openai/gpt-oss-120b`, 26/09/2026, três chamadas
+espaçadas): intervalo em linguagem natural ("entre 50 e 80 ms") extraído para os
+dois caminhos com `max_fields_changed=2`; um campo inexistente (probabilidade no
+`flooding`) faz o LLM cair na heurística em vez de inventar caminho; e um valor
+fora da faixa (`fault.prob=1.5`) é proposto pelo LLM e **recusado pelo portão**
+com mensagem acionável — a garantia do nunca-clampar, confirmada ponta a ponta.
