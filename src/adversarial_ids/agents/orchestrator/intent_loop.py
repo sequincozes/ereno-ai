@@ -44,6 +44,11 @@ naquela rodada, nunca fabricado como se tivesse rodado). Cada rodada ainda é
 um ``LoopRecord`` completo, persistido individualmente; a linhagem da
 campanha vive em ``LoopRecord.round``/``parent_run_id``.
 
+``resume_campaign(run_id)`` continua uma campanha interrompida (estágio que
+falhou, orçamento de tokens, processo morto) a partir do ledger, sem reexecutar
+nem regravar rodada nenhuma; o ponto de retomada é resolvido por
+``campaign_resume.plan_resume``. Ver ``docs/feedback_policy.md``.
+
 Diferente do ``AdversarialWorkflow`` (loop legado Strategist↔Analyst, N
 iterações de uma config de ataque ajustada por tool calling livre), este
 orquestrador resolve **uma** intenção em linguagem natural por chamada —
@@ -74,6 +79,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
+from adversarial_ids.agents.orchestrator.campaign_resume import (
+    CampaignResumeError,
+    plan_resume,
+)
 from adversarial_ids.config.attacks_registry import AttackSpec, get_attack_spec
 from adversarial_ids.config.settings import (
     BASELINE_DATASET_PATH,
@@ -117,7 +126,10 @@ from adversarial_ids.shared.loop_event_store import (
     LoopEventSink,
     fanout,
 )
-from adversarial_ids.shared.loop_record_store import append_loop_record
+from adversarial_ids.shared.loop_record_store import (
+    append_loop_record,
+    load_loop_records,
+)
 from adversarial_ids.shared.redaction import redact
 from adversarial_ids.shared.run_id import new_run_id
 
@@ -323,22 +335,101 @@ class IntentLoopOrchestrator:
         if rounds < 1:
             raise ValueError(f"rounds precisa ser >= 1 (veio {rounds}).")
 
-        records: list[LoopRecord] = []
-        history: tuple[RoundOutcome, ...] = ()
-        next_intent: IntentSpec | None = None
-        parent_run_id: str | None = None
+        return self._chain(prompt, seed=seed, first_round=1, max_rounds=rounds)
 
-        for round_index in range(1, rounds + 1):
+    def resume_campaign(
+        self, run_id: str, *, rounds: int | None = None
+    ) -> tuple[LoopRecord, ...]:
+        """Retoma a campanha de ``run_id`` de onde ela parou, sem duplicar rodadas.
+
+        O ponto de retomada vem de ``campaign_resume.plan_resume`` sobre o ledger
+        (``save_path``): refaz a última rodada se ela falhou, roda a próxima se a
+        política mandou continuar e ninguém rodou, e não faz nada se a política
+        encerrou — devolve ``()`` nesse caso. Só as rodadas novas voltam; as já
+        gravadas nunca são reexecutadas nem regravadas.
+
+        Levanta ``CampaignResumeError`` quando não há o que retomar por erro do
+        chamador (sem ledger, ``run_id`` desconhecido, artefato apagado, detector
+        diferente do da campanha). Uma vez retomada, a campanha segue as mesmas
+        regras de ``run_campaign`` — inclusive nunca levantar por falha de
+        estágio. O orçamento de tokens conta só as rodadas desta chamada:
+        retomar uma campanha cortada pelo teto é a decisão explícita de gastar
+        mais, e contar o gasto anterior a cortaria de novo na primeira rodada.
+        """
+
+        if self.save_path is None:
+            raise CampaignResumeError(
+                "Retomar exige o ledger: este orquestrador foi montado com "
+                "save_path=None."
+            )
+        point = plan_resume(load_loop_records(self.save_path), run_id, rounds=rounds)
+        if point.action == "done":
+            return ()
+        if point.detector is not None and point.detector != self.detector:
+            raise CampaignResumeError(
+                f"A campanha de {run_id!r} treinou {point.detector!r}; retomar com "
+                f"{self.detector!r} misturaria dois experimentos no mesmo ledger."
+            )
+
+        # Só a nova tentativa precisa de nota própria: uma rodada que `continue`
+        # roda é uma rodada comum, e a nota de sempre ("herdada da rodada
+        # anterior pela política") já é a verdade sobre ela.
+        note = (
+            f"Intenção reaproveitada de {point.intent_source} para refazer a "
+            f"rodada {point.round_index} (retomada): nenhuma chamada de LLM "
+            "nesta rodada."
+            if point.action == "retry" and point.intent is not None
+            else None
+        )
+
+        return self._chain(
+            point.tip.source_prompt,
+            seed=point.tip.seed,
+            first_round=point.round_index,
+            max_rounds=point.max_rounds,
+            next_intent=point.intent,
+            intent_note=note,
+            parent_run_id=point.parent_run_id,
+            history=point.history,
+            retry_of=point.retry_of,
+        )
+
+    def _chain(
+        self,
+        prompt: str,
+        *,
+        seed: int,
+        first_round: int,
+        max_rounds: int,
+        next_intent: IntentSpec | None = None,
+        intent_note: str | None = None,
+        parent_run_id: str | None = None,
+        history: tuple[RoundOutcome, ...] = (),
+        retry_of: str | None = None,
+    ) -> tuple[LoopRecord, ...]:
+        """O laço de rodadas, do ponto em que a campanha está até o teto.
+
+        ``intent_note`` e ``retry_of`` valem só para a primeira rodada do laço —
+        a que a retomada refaz; as seguintes são rodadas comuns da campanha.
+        """
+
+        records: list[LoopRecord] = []
+
+        for round_index in range(first_round, max_rounds + 1):
             record, decision = self._run_round(
                 prompt,
                 seed=seed,
                 intent_override=next_intent,
+                intent_note=intent_note,
                 round_index=round_index,
                 parent_run_id=parent_run_id,
-                max_rounds=rounds,
+                max_rounds=max_rounds,
                 history=history,
+                retry_of=retry_of,
             )
             records.append(record)
+            intent_note = None
+            retry_of = None
 
             if decision is None or not decision.should_continue:
                 break
@@ -367,10 +458,12 @@ class IntentLoopOrchestrator:
         *,
         seed: int = 42,
         intent_override: IntentSpec | None = None,
+        intent_note: str | None = None,
         round_index: int = 1,
         parent_run_id: str | None = None,
         max_rounds: int = 1,
         history: tuple[RoundOutcome, ...] = (),
+        retry_of: str | None = None,
     ) -> tuple[LoopRecord, FeedbackDecision | None]:
         """Roda os sete estágios de uma rodada e devolve registro + decisão.
 
@@ -406,7 +499,14 @@ class IntentLoopOrchestrator:
                 )
             else:
                 intent = self._inherited_intent_stage(
-                    ctx, intent_override, round_index
+                    ctx,
+                    intent_override,
+                    note=intent_note
+                    or (
+                        f"Intenção herdada da rodada {round_index - 1} pela "
+                        "política de feedback (E10): nenhuma chamada de LLM "
+                        "nesta rodada."
+                    ),
                 )
             record_seed = intent.seed
 
@@ -494,6 +594,8 @@ class IntentLoopOrchestrator:
             total_duration_seconds=time.perf_counter() - started,
             round=round_index,
             parent_run_id=parent_run_id,
+            max_rounds=max_rounds,
+            retry_of=retry_of,
         )
 
         if self.save_path is not None:
@@ -533,15 +635,19 @@ class IntentLoopOrchestrator:
         self,
         ctx: _RoundContext,
         intent: IntentSpec,
-        round_index: int,
+        *,
+        note: str,
     ) -> IntentSpec:
-        """Persiste a intenção que a política (E10) produziu, sem chamar o LLM.
+        """Persiste uma intenção que já existia, sem chamar o LLM.
+
+        Vem da política (E10), da rodada 2 em diante, ou da rodada que falhou e
+        está sendo refeita pela retomada; ``note`` diz qual das duas.
 
         Registrado como ``skipped``, nunca ``succeeded``: o status precisa
         continuar dizendo a verdade sobre o que rodou nesta rodada — o
         ``IntentLike`` real não foi chamado, então não há duração de LLM a
         medir nem uma proposta a validar de novo (já passou pelos dois
-        portões quando a rodada anterior a produziu).
+        portões quando foi produzida).
         """
 
         artifact_path = ctx.run_dir / "intent.json"
@@ -551,11 +657,7 @@ class IntentLoopOrchestrator:
                 name="intent",
                 status=LoopStageStatus.SKIPPED,
                 artifact_ref=str(artifact_path),
-                error=(
-                    f"Intenção herdada da rodada {round_index - 1} pela "
-                    "política de feedback (E10): nenhuma chamada de LLM "
-                    "nesta rodada."
-                ),
+                error=note,
             )
         )
         return intent

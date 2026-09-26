@@ -81,3 +81,28 @@ def run_intent_loop(
         event_sink=event_sink,
     )
     return orchestrator.run_campaign(prompt, rounds=rounds)
+
+
+def resume_intent_loop(
+    *,
+    run_id: str,
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    rounds: int | None = None,
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+) -> tuple[LoopRecord, ...]:
+    """Retoma a campanha de ``run_id`` e devolve só as rodadas novas.
+
+    Mesma montagem de ``run_intent_loop``; o prompt vem do ledger, não de um
+    argumento — a campanha retomada é a mesma intenção, não uma nova. Ver
+    ``IntentLoopOrchestrator.resume_campaign``.
+    """
+
+    orchestrator = build_intent_loop(
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+    )
+    return orchestrator.resume_campaign(run_id, rounds=rounds)
