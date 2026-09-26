@@ -85,6 +85,12 @@
       "enabled": false,
       "attackConfig": "config/attacks/uc10_delayed_replay_double_drop.json",
       "description": "UC10 double drop delayed replay"
+    },
+    {
+      "name": "uc11_programmable",
+      "enabled": false,
+      "attackConfig": "config/attacks/uc11_programmable.json",
+      "description": "Programmable attack (uc11)"
     }
   ],
   "gooseFlow": {
