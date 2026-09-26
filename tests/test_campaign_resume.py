@@ -135,7 +135,7 @@ def test_a_failed_middle_round_is_retried_with_the_same_parent(tmp_path):
     broken = _orchestrator(
         tmp_path, agent, defender_agent=_FailingDefenderAgent(), feedback_min_delta=0.0
     )
-    failed_round_two, _ = broken._run_round(
+    failed_round_two, _, _ = broken._run_round(
         PROMPT,
         seed=first.seed,
         intent_override=plan.intent,
@@ -169,17 +169,22 @@ def test_a_campaign_cut_by_the_token_budget_continues_on_resume(tmp_path):
         built.token_budget = 500
         return built
 
+    # Só a rodada 1 chama o LLM (600 tokens) e estoura o teto de 500 — a campanha
+    # para nela. As rodadas 2+ reusam a intenção (custo de intent zero), então não
+    # somam ao gasto conhecido: na retomada elas completam a campanha.
     (first,) = orchestrator().run_campaign(PROMPT, rounds=3)
+    assert first.total_tokens == 600
 
-    # O orçamento conta só a chamada de retomada: cada uma roda uma rodada e é
-    # cortada de novo, mas nunca na primeira, pelo gasto de antes.
-    (second,) = orchestrator().resume_campaign(first.run_id)
-    (third,) = orchestrator().resume_campaign(second.run_id)
+    resumed = orchestrator().resume_campaign(first.run_id)
 
-    assert [r.round for r in (first, second, third)] == [1, 2, 3]
-    assert second.parent_run_id == first.run_id
-    assert third.parent_run_id == second.run_id
-    assert {r.max_rounds for r in (first, second, third)} == {3}
+    assert [r.round for r in (first, *resumed)] == [1, 2, 3]
+    assert resumed[0].parent_run_id == first.run_id
+    assert resumed[1].parent_run_id == resumed[0].run_id
+    assert {r.max_rounds for r in (first, *resumed)} == {3}
+    # A intenção reusada não recontabiliza os 600 tokens da rodada 1: as rodadas
+    # 2+ não têm consumo de intent (só o defender stub, que não informa nada).
+    assert all(r.total_tokens is None for r in resumed)
+    # O LLM foi chamado uma única vez na campanha inteira.
     assert agent.received_prompts == [PROMPT]
 
 
