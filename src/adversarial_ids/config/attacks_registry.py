@@ -179,6 +179,20 @@ _SPECS: tuple[AttackSpec, ...] = (
         ),
         intent_capability_id="delayed_replay_double_drop.v1",
     ),
+    AttackSpec(
+        key="programmable",
+        segment_name="uc11_programmable",
+        attack_type="programmable",
+        label="programmable",
+        baseline_filename="uc11_programmable.json",
+        description=(
+            "Ataque programável (uc11): o comportamento vem de regras "
+            "declarativas de mutação no config (op/campo/valor/fração por slot), "
+            "não de uma classe por comportamento — a via para intenções fora do "
+            "catálogo dos 10 ataques fixos."
+        ),
+        intent_capability_id="programmable.v1",
+    ),
 )
 
 ATTACK_REGISTRY: dict[str, AttackSpec] = {spec.key: spec for spec in _SPECS}

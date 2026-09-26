@@ -18,6 +18,7 @@ from adversarial_ids.config.capabilities.high_stnum import HIGH_STNUM_CAPABILITY
 from adversarial_ids.config.capabilities.injection import INJECTION_CAPABILITY
 from adversarial_ids.config.capabilities.inverse_replay import INVERSE_REPLAY_CAPABILITY
 from adversarial_ids.config.capabilities.masquerade_fault import MASQUERADE_FAULT_CAPABILITY
+from adversarial_ids.config.capabilities.programmable import PROGRAMMABLE_CAPABILITY
 from adversarial_ids.config.capabilities.random_replay import RANDOM_REPLAY_CAPABILITY
 
 ALL_CAPABILITIES = (
@@ -32,6 +33,7 @@ ALL_CAPABILITIES = (
     DELAYED_REPLAY_BACKOFF_CAPABILITY,
     DELAYED_REPLAY_BATCH_DUMP_CAPABILITY,
     DELAYED_REPLAY_DOUBLE_DROP_CAPABILITY,
+    PROGRAMMABLE_CAPABILITY,
 )
 
 __all__ = ["ALL_CAPABILITIES"]
