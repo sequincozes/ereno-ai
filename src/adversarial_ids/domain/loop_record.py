@@ -84,6 +84,17 @@ class LoopRecord(BaseModel):
     round: int = Field(default=1, ge=1)
     parent_run_id: str | None = None
 
+    # Retomada da campanha (critério "retomada não duplica registros"). Mesma
+    # disciplina aditiva: um registro antigo carrega com os dois em None.
+    # ``max_rounds`` é o teto que a campanha pediu — sem ele, retomar uma
+    # campanha interrompida por orçamento teria de adivinhar até onde ela ia.
+    # ``retry_of`` aponta a rodada que falhou e que esta refaz: as duas têm o
+    # mesmo ``round`` e o mesmo pai, e o registro que falhou continua no ledger
+    # (append-only), então o elo explícito é o que distingue uma nova tentativa
+    # de uma duplicata.
+    max_rounds: int | None = Field(default=None, ge=1)
+    retry_of: str | None = None
+
     @model_validator(mode="after")
     def _first_round_has_no_parent(self) -> "LoopRecord":
         if (self.round == 1) != (self.parent_run_id is None):
@@ -91,4 +102,15 @@ class LoopRecord(BaseModel):
                 "A rodada 1 é a única sem parent_run_id "
                 f"(round={self.round}, parent_run_id={self.parent_run_id!r})."
             )
+        return self
+
+    @model_validator(mode="after")
+    def _resume_lineage_is_consistent(self) -> "LoopRecord":
+        if self.max_rounds is not None and self.round > self.max_rounds:
+            raise ValueError(
+                f"A rodada {self.round} passa do teto da campanha "
+                f"(max_rounds={self.max_rounds})."
+            )
+        if self.retry_of is not None and self.retry_of == self.run_id:
+            raise ValueError("Uma rodada não pode ser a nova tentativa de si mesma.")
         return self
