@@ -115,7 +115,24 @@ chegava ao gerador.
   `docs/pilot_e0.md` (a seção "O gerador não é determinístico" agora tem
   ressalva: vale só sem `randomSeed`).
 
-### 2.R — Modo de réplicas (varredura de seeds) **[decidido 26/09: incluir no plano]**
+### 2.R — Modo de réplicas (varredura de seeds) **[ENTREGUE 26/09]**
+
+**Uso:** `uv run adversarial-ids --engine intent --generator-mode jar --prompt
+"..." --replicates 5` (varre `42..46`) ou `--seeds 42,101,777`. O LLM é chamado
+uma vez; o resumo traz média ± desvio da métrica-objetivo.
+
+**Verificado (JAR + Groq, 26/09):** 3 réplicas (seeds 42/43/44) → **1 chamada de
+LLM**, três `content_hash` **distintos** (a seed chega ao gerador), as três
+chegaram ao FEEDBACK. O `masquerade_fault` deu recall 1.0 nas três (métrica não
+sensível para essa config; a variância aparece em configs evasivas). Correção
+embutida: o consumo do LLM de intent agora conta só na rodada/réplica que de fato
+chamou o LLM — antes, uma rodada que reusava a intenção somava de novo os tokens
+(bug latente também no round 2+ de campanha). 1497 testes passam.
+
+O texto abaixo é o desenho original.
+
+---
+
 
 Contrapartida da 2.0. A 2.0 tornou cada seed reprodutível; a 2.R usa isso para
 rodar **N seeds do mesmo experimento** e reportar a métrica-objetivo como
@@ -209,6 +226,6 @@ como dado, validado por schema nas duas pontas. Só depois de 2.1 provar o loop.
   `git stash` (ver memória `ereno-jar-origem`).
 - **2.0 (determinismo) ENTREGUE** — seed reprodutível verificada; JAR recompilado
   e trocado em `generator_runtime`.
-- Próximo passo: **2.1 (ataque programável, DSL de mutação)**, com **2.R (modo de
-  réplicas)** planejada e pronta para entrar quando quiser medir variância —
-  as duas são independentes.
+- **2.R (modo de réplicas) ENTREGUE** — `--replicates`/`--seeds`, 1 chamada de LLM
+  por lote, verificado com JAR + Groq.
+- Próximo passo: **2.1 (ataque programável, DSL de mutação)**.
