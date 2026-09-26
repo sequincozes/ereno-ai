@@ -134,6 +134,148 @@ def get_attack_capability(attack_key: str) -> AttackCapability:
         ) from None
 
 
+def _describe_value(value: Any) -> str:
+    """Nome do tipo como o pedido o expressa, para a mensagem de erro."""
+
+    if isinstance(value, bool):
+        return "booleano"
+    if isinstance(value, int):
+        return "inteiro"
+    if isinstance(value, float):
+        return "número"
+    if isinstance(value, str):
+        return "texto"
+    if isinstance(value, tuple):
+        return "lista"
+    return type(value).__name__
+
+
+def _type_mismatch(field: FieldCapability, value: Any) -> str | None:
+    """``None`` quando o valor tem o tipo que o campo declara.
+
+    ``bool`` é subclasse de ``int`` em Python, então ``isinstance(True, int)``
+    é verdadeiro — sem a checagem explícita, ``True`` passaria como valor de um
+    campo inteiro e chegaria ao JSON do ERENO como ``true``.
+    """
+
+    is_bool = isinstance(value, bool)
+    if field.value_type == "boolean":
+        return None if is_bool else f"esperava booleano, veio {_describe_value(value)}"
+    if field.value_type == "integer":
+        if is_bool or not isinstance(value, int):
+            return f"esperava inteiro, veio {_describe_value(value)}"
+        return None
+    if field.value_type == "number":
+        # Um inteiro é um número válido: o pedido diz "probabilidade 1", não
+        # "1.0", e recusar isso seria exigir sintaxe de ponto flutuante do texto.
+        if is_bool or not isinstance(value, (int, float)):
+            return f"esperava número, veio {_describe_value(value)}"
+        return None
+    if field.value_type == "string":
+        return None if isinstance(value, str) else f"esperava texto, veio {_describe_value(value)}"
+    if field.value_type == "integer_list":
+        if not isinstance(value, tuple) or not value:
+            return f"esperava lista de inteiros não vazia, veio {_describe_value(value)}"
+        if any(isinstance(item, bool) or not isinstance(item, int) for item in value):
+            return "esperava lista só de inteiros"
+        return None
+    return f"tipo de campo não suportado: {field.value_type!r}"
+
+
+def _out_of_bounds(field: FieldCapability, value: Any) -> str | None:
+    """``None`` quando o valor respeita ``choices``/``minimum``/``maximum``.
+
+    É o mesmo piso que protege a heurística de compilar o ataque para fora de
+    existência (invariante 3 do catálogo). Um valor ditado pelo usuário não
+    ganha licença para atravessá-lo: o gerador não ficaria mais permissivo só
+    porque o número veio do prompt em vez da escada de intensidade.
+    """
+
+    if field.choices is not None and value not in field.choices:
+        options = ", ".join(repr(choice) for choice in field.choices)
+        return f"valor fora das opções aceitas ({options})"
+
+    numbers = value if isinstance(value, tuple) else (value,)
+    if not all(isinstance(item, (int, float)) and not isinstance(item, bool) for item in numbers):
+        return None
+    for item in numbers:
+        if field.minimum is not None and item < field.minimum:
+            return f"{item} está abaixo do mínimo {field.minimum} do campo"
+        if field.maximum is not None and item > field.maximum:
+            return f"{item} está acima do máximo {field.maximum} do campo"
+    return None
+
+
+def _pinned_pair_is_inverted(pinned: dict[str, Any]) -> str | None:
+    """``min`` e ``max`` fixados no mesmo par precisam continuar sendo um intervalo.
+
+    Só o caso em que os **dois** limites vêm do pedido é decidível aqui — é uma
+    contradição do próprio texto ("entre 80 e 50 ms"), visível sem abrir a
+    baseline do ataque. O caso de um limite fixado contra o irmão vindo da
+    baseline precisa da config e fica no compilador
+    (``_assert_pinned_ranges``), que é quem a tem em mãos.
+    """
+
+    for path, value in pinned.items():
+        parent, _, leaf = path.rpartition(".")
+        if leaf != "min":
+            continue
+        sibling = f"{parent}.max" if parent else "max"
+        upper = pinned.get(sibling)
+        if upper is None:
+            continue
+        if isinstance(value, (int, float)) and isinstance(upper, (int, float)):
+            if value >= upper:
+                return (
+                    f"o intervalo pedido em {parent or leaf!r} está invertido: "
+                    f"min={value} precisa ser estritamente menor que max={upper}"
+                )
+    return None
+
+
+def validate_target_values(
+    capability: AttackCapability, intent: IntentSpec
+) -> dict[str, Any]:
+    """Valida os valores fixados contra o catálogo; devolve ``{caminho: valor}``.
+
+    Roda no mesmo portão determinístico que a allowlist de campos — o LLM
+    propõe o número, o catálogo decide se ele existe. O que **não** é decidido
+    aqui é tudo que depende da baseline do ataque (um limite fixado contra o
+    irmão que ninguém fixou); isso é do compilador.
+    """
+
+    pinned = {target.path: target.value for target in intent.restrictions.target_values}
+    if not pinned:
+        return {}
+
+    fields_by_path = {field.path: field for field in capability.fields}
+    problems: list[str] = []
+    for path in sorted(pinned):
+        field = fields_by_path[path]
+        complaint = _type_mismatch(field, pinned[path]) or _out_of_bounds(field, pinned[path])
+        if complaint:
+            problems.append(f"{path}: {complaint}")
+    if problems:
+        raise ValueError(
+            f"Valores fixados inválidos para {intent.base_attack!r}: "
+            + "; ".join(problems)
+        )
+
+    inverted = _pinned_pair_is_inverted(pinned)
+    if inverted:
+        raise ValueError(inverted)
+
+    budget = intent.restrictions.max_fields_changed
+    if len(pinned) > budget:
+        raise ValueError(
+            f"O pedido fixa {len(pinned)} campos, mas max_fields_changed é "
+            f"{budget} — um campo com valor fixado é um campo alterado. "
+            f"Use max_fields_changed >= {len(pinned)}."
+        )
+
+    return pinned
+
+
 def resolve_candidate_paths(intent: IntentSpec) -> tuple[AttackCapability, frozenset[str]]:
     """Valida a allowlist e devolve os campos editáveis capazes do efeito.
 
@@ -157,12 +299,15 @@ def resolve_candidate_paths(intent: IntentSpec) -> tuple[AttackCapability, froze
     known_paths = capability.editable_paths
     requested_paths = set(intent.restrictions.allowed_fields or ())
     forbidden_paths = set(intent.restrictions.forbidden_fields)
-    unknown_paths = (requested_paths | forbidden_paths) - known_paths
+    pinned_paths = {target.path for target in intent.restrictions.target_values}
+    unknown_paths = (requested_paths | forbidden_paths | pinned_paths) - known_paths
     if unknown_paths:
         fields = ", ".join(sorted(unknown_paths))
         raise ValueError(
             f"Campos fora da allowlist de {intent.base_attack!r}: {fields}."
         )
+
+    validate_target_values(capability, intent)
 
     candidates = {
         field.path for field in capability.fields_for_effect(intent.desired_effect)
@@ -170,7 +315,12 @@ def resolve_candidate_paths(intent: IntentSpec) -> tuple[AttackCapability, froze
     if requested_paths:
         candidates &= requested_paths
     candidates -= forbidden_paths
-    if not candidates:
+    # Um campo com valor fixado é sempre aplicado, carregue ele o efeito ou
+    # não: o pedido disse qual valor quer, o que é mais forte que a heurística
+    # que escolhe campos *capazes* do efeito. Por isso ele também salva o caso
+    # abaixo — um pedido inteiramente ditado não "removeu todos os campos",
+    # ele nomeou os campos um por um.
+    if not candidates and not pinned_paths:
         raise ValueError(
             "As restrições removem todos os campos capazes de produzir o efeito "
             f"{intent.desired_effect.value!r}."
