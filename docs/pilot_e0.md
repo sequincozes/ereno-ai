@@ -62,12 +62,22 @@ a substitui.
 **3. Deriva contra o ruído do gerador.** É a medida que justifica o piloto
 existir, e a que mais deu trabalho.
 
-## O gerador não é determinístico
+## O gerador não é determinístico (sem `randomSeed`)
 
-A mesma configuração, rodada duas vezes, produz **bytes diferentes** (medido em
-17/09/2026 no `random_replay`: dois `content_hash` distintos para o mesmo JSON).
-Consequência direta: "o hash da variante é diferente do hash da baseline" não é
-evidência de nada — seria diferente de qualquer jeito.
+> **Atualização (Fase 2.0, 26/09/2026):** isto valia porque os creators
+> sorteavam por `Math.random()`, fora da RNG semeada. A Fase 2.0 roteou esses
+> sorteios pela `ConfigLoader.RNG` e fez o `GeneratorRunner` gravar um
+> `randomSeed` no action config — com a seed fixa, a mesma config passa a
+> produzir **os mesmos bytes** (verificado: `seed=123` deu hash idêntico em duas
+> execuções). O texto abaixo descreve o comportamento **sem** `randomSeed`, que
+> continua sendo o default fora do pipeline intent-driven. Ver
+> `docs/phase2_plan.md`.
+
+A mesma configuração, rodada duas vezes **sem `randomSeed`**, produz **bytes
+diferentes** (medido em 17/09/2026 no `random_replay`: dois `content_hash`
+distintos para o mesmo JSON). Consequência direta: "o hash da variante é
+diferente do hash da baseline" não é evidência de nada — seria diferente de
+qualquer jeito.
 
 Por isso o piloto gera a baseline `--replicates` vezes (default 3) e mede a
 separação **entre réplicas da mesma config**. Isso é o ruído do gerador, e é o
