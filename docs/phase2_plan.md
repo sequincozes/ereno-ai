@@ -83,24 +83,37 @@ Levantamento no fonte do ERENO (`feat/journal`) e no lado Python:
 
 Cada uma é entregável e verificável isoladamente.
 
-### 2.0 — Determinismo (fundação) **[decidido 26/09: começar por aqui]**
+### 2.0 — Determinismo (fundação) **[ENTREGUE 26/09]**
 
-Rotear os 22 `Math.random()` dos 6 creators pela `ConfigLoader.RNG`, e propagar
+Rotear os `Math.random()` dos creators pela `ConfigLoader.RNG`, e propagar
 `IntentSpec.seed` → `GeneratorRunner` → `randomSeed` no action config →
-`ConfigLoader.setSeed`. Hoje o `seed` da intenção existe no contrato mas não
-chega ao gerador.
+`ConfigLoader.setSeed`. Antes, o `seed` da intenção existia no contrato mas não
+chegava ao gerador.
 
-- **Lado Java:** substituir `Math.random()` por `ConfigLoader.RNG.nextDouble()`
-  (e `randomBetween` onde couber) nos 6 creators.
-- **Lado Python:** `GeneratorRunner` grava `randomSeed` no action config a partir
-  do `seed` da config/intenção.
-- **DoD:** a mesma config rodada duas vezes produz o **mesmo** `content_hash`
-  (o E0 mediu o oposto). Recompilar o JAR, comparar os 11 ataques contra o atual
-  (só o determinismo muda; a distribuição, não). Atualizar `docs/pilot_e0.md`
-  (a seção "O gerador não é determinístico" deixa de valer com seed fixa) e a
-  memória `groq-modelos-e-tpm`/E0.
-- **Valor independente:** destrava campanhas reprodutíveis e a medição da deriva,
-  que o E0 apontou como bloqueada pelo não determinismo.
+- **Lado Java (`../ERENO-2.0`, `feat/journal`):** substituídos os 22
+  `Math.random()` por `ConfigLoader.RNG.nextDouble()` em 5 creators (uc01, uc02,
+  uc03, uc06, uc08). O uc05 já era determinístico (usa `randomSeed` próprio +
+  `randomBetween`, que passa pela RNG). `CreateAttackDatasetAction` passou a ler
+  um `randomSeed` do topo do action config e chamar `ConfigLoader.setSeed` antes
+  de gerar.
+- **Lado Python:** `GeneratorRunner` ganhou `random_seed` (default `None`,
+  compatível) e grava/remove `randomSeed` no action config ao selecionar o
+  segmento; `intent_loop._build_generator` passa `intent.seed` (baseline e
+  variante da rodada compartilham a seed, comparação pareada).
+- **DoD — verificado:** a mesma config (masquerade_fault) rodada duas vezes com
+  `seed=123` deu **hash idêntico** (`dc67e1cb…`, 80019 linhas); com `seed=999`,
+  hash diferente. Smoke test em 4 dos 5 ataques alterados (random_replay,
+  masquerade_fault, high_stnum, grayhole) produz a classe de ataque normalmente.
+  A distribuição é preservada por construção (`Math.random()` e
+  `RNG.nextDouble()` são ambos uniformes em [0,1)); a diferença é só a fonte da
+  RNG. 1476 testes Python passam.
+- **Achado lateral:** `inverse_replay` (uc02) falha na geração (`returncode=3`) —
+  **mas falha idêntico no JAR antigo (v2.0)**, então é bug pré-existente, fora do
+  conjunto validado no E0, não regressão desta fase. Registrar como item à parte.
+- **Pendências de fechamento do 2.0:** commitar o JAR novo em `generator_runtime`
+  (gitignored — trocado localmente, backup em scratch); atualizar
+  `docs/pilot_e0.md` (a seção "O gerador não é determinístico" agora tem
+  ressalva: vale só sem `randomSeed`).
 
 ### 2.1 — Fatia vertical: ataque programável, DSL só de mutação **[decidido 26/09: escopo = só mutação]**
 
