@@ -523,7 +523,10 @@ class IntentLoopOrchestrator:
                 persist_as="attack_candidate.json",
             )
             spec = resolved["spec"]
-            generator = self._build_generator(run_dir, spec)
+            # A seed da intenção chega ao JAR aqui (Fase 2.0): baseline e variante
+            # da mesma rodada compartilham a seed, isolando o efeito da config da
+            # variação de RNG. Só o modo jar a usa.
+            generator = self._build_generator(run_dir, spec, random_seed=intent.seed)
 
             trace_path = self._stage(
                 ctx, "ereno",
@@ -818,7 +821,9 @@ class IntentLoopOrchestrator:
     # ------------------------------------------------------------------ #
     # Núcleo (GeneratorRunner por execução, isolado por run_id)          #
     # ------------------------------------------------------------------ #
-    def _build_generator(self, run_dir: Path, spec: AttackSpec) -> GeneratorRunner:
+    def _build_generator(
+        self, run_dir: Path, spec: AttackSpec, *, random_seed: int | None = None
+    ) -> GeneratorRunner:
         cached_dataset = None
         if self.generator_mode == "cached":
             cached_dataset = self.cached_dataset_path or BASELINE_DATASET_PATH
@@ -837,6 +842,7 @@ class IntentLoopOrchestrator:
             timeout_seconds=GENERATOR_TIMEOUT_SECONDS,
             max_retries=GENERATOR_MAX_RETRIES,
             retry_backoff_seconds=GENERATOR_RETRY_BACKOFF_SECONDS,
+            random_seed=random_seed,
         )
 
     # ------------------------------------------------------------------ #
