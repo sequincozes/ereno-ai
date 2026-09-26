@@ -33,9 +33,19 @@ def append_loop_record(path: str | Path, record: LoopRecord) -> None:
 
     Nunca reescreve nem remove registros existentes — apenas relê o arquivo,
     anexa e grava de volta a lista completa (formato ``{"loop_records": [...]}``).
+
+    Recusa um ``run_id`` que já está no ledger. É a última linha de defesa da
+    retomada (``IntentLoopOrchestrator.resume_campaign``): uma rodada retomada
+    sempre nasce com ``run_id`` novo, então um repetido só pode ser o mesmo
+    registro gravado duas vezes.
     """
 
     records = load_loop_records(path)
+    if any(existing.run_id == record.run_id for existing in records):
+        raise ValueError(
+            f"run_id {record.run_id!r} já está no ledger {path}; um LoopRecord "
+            "é gravado uma única vez."
+        )
     records.append(record)
     save_json(
         path,
