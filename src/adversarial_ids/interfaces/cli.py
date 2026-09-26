@@ -36,6 +36,10 @@ from adversarial_ids.interfaces.experiment_runner import (
 )
 
 RunIntentLoop = Callable[..., tuple[LoopRecord, ...]]
+# Devolve um ReplicateResult (Fase 2.R). Tipado como Callable[..., object] para
+# não acoplar a CLI ao contrato de runtime do orquestrador — o handler só lê os
+# atributos que precisa.
+RunIntentReplicates = Callable[..., object]
 
 
 def _dashboard_app_path() -> Path:
@@ -141,6 +145,28 @@ def create_parser() -> argparse.ArgumentParser:
             "se ela falhou, roda a próxima se a campanha parou por orçamento ou "
             "interrupção, e não faz nada se a política de feedback a encerrou. "
             "Nenhuma rodada já gravada é reexecutada."
+        ),
+    )
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Apenas com --engine intent + --prompt: roda a MESMA intenção sob N "
+            "seeds (42, 43, …, 42+N-1) e reporta a métrica-objetivo como média ± "
+            "desvio (Fase 2.R). O LLM é chamado uma única vez para o lote; só a "
+            "geração varia. Só é significativo em --generator-mode jar. Exclusivo "
+            "com --seeds e --rounds."
+        ),
+    )
+    parser.add_argument(
+        "--seeds",
+        default=None,
+        metavar="A,B,C",
+        help=(
+            "Apenas com --engine intent + --prompt: lista explícita de seeds do "
+            "lote de réplicas (ex.: '42,101,777'), no lugar de --replicates."
         ),
     )
     parser.add_argument(
@@ -269,6 +295,7 @@ def _run_intent_engine(
     stderr: TextIO,
     run_intent_loop: RunIntentLoop | None,
     resume_intent_loop: RunIntentLoop | None,
+    run_intent_replicates: RunIntentReplicates | None,
     loop_records_path: Path,
     detector: str,
 ) -> int:
@@ -302,6 +329,15 @@ def _run_intent_engine(
             detector=detector,
         )
 
+    if args.replicates is not None or args.seeds is not None:
+        return _run_replicate_engine(
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            run_intent_replicates=run_intent_replicates,
+            detector=detector,
+        )
+
     if run_intent_loop is None:
         from adversarial_ids.agents.orchestrator.intent_live import (
             run_intent_loop as run_intent_loop,
@@ -323,6 +359,116 @@ def _run_intent_engine(
         return 1
 
     return _report_campaign(records, stdout=stdout)
+
+
+def _resolve_replicate_seeds(args: argparse.Namespace) -> list[int]:
+    """Resolve a lista de seeds do lote a partir de --replicates ou --seeds.
+
+    Levanta ``ValueError`` com mensagem acionável em qualquer entrada inválida
+    (as duas juntas, N não positivo, lista malformada ou com repetição).
+    """
+
+    if args.replicates is not None and args.seeds is not None:
+        raise ValueError("--replicates e --seeds são exclusivos; use só um.")
+    if args.rounds is not None:
+        raise ValueError(
+            "--rounds pertence à campanha (E10) e não se combina com réplicas; "
+            "uma réplica é a rodada 1 repetida sob outra seed."
+        )
+
+    if args.replicates is not None:
+        if args.replicates < 1:
+            raise ValueError(f"--replicates precisa ser >= 1 (veio {args.replicates}).")
+        # Varredura a partir da seed default do projeto (42), determinística.
+        return [42 + i for i in range(args.replicates)]
+
+    parts = [p.strip() for p in args.seeds.split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--seeds não pode ser vazio.")
+    try:
+        seeds = [int(p) for p in parts]
+    except ValueError as exc:
+        raise ValueError(f"--seeds só aceita inteiros separados por vírgula: {exc}") from exc
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(f"as seeds de --seeds precisam ser distintas: {seeds}.")
+    return seeds
+
+
+def _run_replicate_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    run_intent_replicates: RunIntentReplicates | None,
+    detector: str,
+) -> int:
+    try:
+        seeds = _resolve_replicate_seeds(args)
+    except ValueError as error:
+        print(f"Erro: {error}", file=stderr)
+        return 2
+
+    if args.generator_mode != "jar":
+        # Não é erro: o modo roda, mas em cached todo trace é o mesmo arquivo e as
+        # réplicas colapsam. Avisar é mais útil que recusar (o piloto faz igual).
+        print(
+            "Aviso: réplicas só divergem em --generator-mode jar; em "
+            f"{args.generator_mode!r} todos os traces são o mesmo arquivo e a "
+            "estatística será degenerada.",
+            file=stderr,
+        )
+
+    if run_intent_replicates is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            run_intent_replicates as run_intent_replicates,
+        )
+
+    try:
+        result = run_intent_replicates(
+            prompt=args.prompt,
+            seeds=seeds,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+            detector=detector,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao executar o lote de réplicas: {error}", file=stderr)
+        return 1
+
+    return _report_replicates(result, stdout=stdout)
+
+
+def _report_replicates(result, *, stdout: TextIO) -> int:
+    total = len(result.records)
+    for record in result.records:
+        _print_loop_record_summary(
+            record, stdout=stdout, round_label=f"Réplica seed={record.seed}"
+        )
+    print(f"\nLote de réplicas {result.batch_id}:", file=stdout)
+    print(
+        f"  {total} réplica(s), {result.llm_calls} chamada(s) de LLM, "
+        f"{len(result.objective_values)} com métrica-objetivo.",
+        file=stdout,
+    )
+    if result.mean is not None:
+        metric = result.objective_metric or "objetivo"
+        line = f"  {metric}: média {result.mean:.4f}"
+        if result.stdev is not None:
+            line += f" ± {result.stdev:.4f} (n={len(result.objective_values)})"
+        else:
+            line += " (uma medida só; sem desvio)"
+        print(line, file=stdout)
+    print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
+
+    has_failed_stage = any(
+        stage.status == LoopStageStatus.FAILED
+        for record in result.records
+        for stage in record.stages
+    )
+    return 1 if has_failed_stage else 0
 
 
 def _report_campaign(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> int:
@@ -417,6 +563,7 @@ def run_cli(
     stderr: TextIO = sys.stderr,
     run_intent_loop: RunIntentLoop | None = None,
     resume_intent_loop: RunIntentLoop | None = None,
+    run_intent_replicates: RunIntentReplicates | None = None,
     loop_records_path: Path = LOOP_RECORDS_PATH,
 ) -> int:
     args = create_parser().parse_args(argv)
@@ -446,6 +593,7 @@ def run_cli(
             stderr=stderr,
             run_intent_loop=run_intent_loop,
             resume_intent_loop=resume_intent_loop,
+            run_intent_replicates=run_intent_replicates,
             loop_records_path=loop_records_path,
             detector=detector,
         )
