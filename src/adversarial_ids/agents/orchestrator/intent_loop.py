@@ -75,6 +75,7 @@ consequência, uma campanha em modo cacheado para na rodada 2 com
 from __future__ import annotations
 
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
@@ -219,6 +220,39 @@ class _RoundContext:
         )
 
 
+@dataclass(frozen=True)
+class ReplicateResult:
+    """Resumo de um lote de réplicas (Fase 2.R): os registros e a estatística.
+
+    Runtime, não um contrato persistido — a estatística é derivável dos
+    ``LoopRecord``/``feedback.json`` do lote a qualquer momento, então não vira
+    um artefato próprio. ``objective_values`` traz só as réplicas que chegaram ao
+    FEEDBACK com uma métrica-objetivo; ``n_total`` conta todas, para que a
+    diferença revele quantas falharam ou não tinham métrica de evasão.
+    """
+
+    batch_id: str
+    records: tuple[LoopRecord, ...]
+    objective_metric: str | None
+    objective_values: tuple[float, ...]
+    n_total: int
+    llm_calls: int
+
+    @property
+    def mean(self) -> float | None:
+        from statistics import fmean
+
+        return fmean(self.objective_values) if self.objective_values else None
+
+    @property
+    def stdev(self) -> float | None:
+        from statistics import stdev
+
+        # Desvio amostral pede >= 2 pontos; com um só, o desvio é 0 por definição
+        # da amostra, mas reportá-lo como número esconderia que há uma medida só.
+        return stdev(self.objective_values) if len(self.objective_values) >= 2 else None
+
+
 class IntentLoopOrchestrator:
     """Controlador do pipeline intent-driven (E3), uma intenção por execução."""
 
@@ -300,7 +334,7 @@ class IntentLoopOrchestrator:
         ``run_campaign``.
         """
 
-        record, _decision = self._run_round(prompt, seed=seed)
+        record, _decision, _intent = self._run_round(prompt, seed=seed)
         return record
 
     def run_campaign(
@@ -336,6 +370,72 @@ class IntentLoopOrchestrator:
             raise ValueError(f"rounds precisa ser >= 1 (veio {rounds}).")
 
         return self._chain(prompt, seed=seed, first_round=1, max_rounds=rounds)
+
+    def run_replicates(
+        self, prompt: str, *, seeds: Sequence[int]
+    ) -> ReplicateResult:
+        """Roda a **mesma** intenção sob várias seeds de geração (Fase 2.R).
+
+        O ponto: entre réplicas só a geração muda; a intenção é a mesma. Então o
+        LLM é chamado **uma única vez** — na primeira réplica — e a ``IntentSpec``
+        resolvida é reusada nas demais, variando só a seed que vai ao gerador. N
+        réplicas custam 1 chamada de intent, não N (decisivo com o TPM da conta).
+
+        Cada réplica é um ``LoopRecord`` próprio, com sua ``seed`` e um
+        ``replicate_batch_id`` comum. Devolve um ``ReplicateResult`` com a
+        métrica-objetivo por réplica e a estatística do lote (média/desvio).
+
+        Só é fisicamente significativo em ``generator_mode="jar"``: em cached todo
+        trace é o mesmo arquivo e as réplicas colapsam — o chamador (CLI) avisa.
+        Nunca levanta por falha de estágio, como ``run``/``run_campaign``: uma
+        réplica que falha entra no lote com seu ``LoopStage`` de causa e fica de
+        fora da estatística.
+        """
+
+        if not seeds:
+            raise ValueError("run_replicates precisa de ao menos uma seed.")
+        if len(set(seeds)) != len(seeds):
+            raise ValueError(f"as seeds do lote precisam ser distintas: {list(seeds)}.")
+
+        batch_id = new_run_id()
+        records: list[LoopRecord] = []
+        values: list[float] = []
+        metric: str | None = None
+        base_intent: IntentSpec | None = None
+        llm_calls = 0
+
+        for index, seed in enumerate(seeds):
+            first = base_intent is None
+            note = None if first else (
+                f"Réplica {index + 1}/{len(seeds)} do lote {batch_id} sob seed "
+                f"{seed}: intenção reusada da primeira réplica, sem chamada de LLM."
+            )
+            record, decision, intent = self._run_round(
+                prompt,
+                intent_override=base_intent,
+                intent_note=note,
+                seed_override=seed,
+                replicate_batch_id=batch_id,
+            )
+            records.append(record)
+            # Só a primeira réplica chama o LLM; guarda a intenção para as demais.
+            # Se o próprio estágio INTENT falhou (intent None), a próxima tenta de
+            # novo — melhor que o lote inteiro herdar um None.
+            if first and intent is not None:
+                base_intent = intent
+                llm_calls += 1
+            if decision is not None and decision.objective_value is not None:
+                metric = decision.objective_metric
+                values.append(decision.objective_value)
+
+        return ReplicateResult(
+            batch_id=batch_id,
+            records=tuple(records),
+            objective_metric=metric,
+            objective_values=tuple(values),
+            n_total=len(records),
+            llm_calls=llm_calls,
+        )
 
     def resume_campaign(
         self, run_id: str, *, rounds: int | None = None
@@ -416,7 +516,7 @@ class IntentLoopOrchestrator:
         records: list[LoopRecord] = []
 
         for round_index in range(first_round, max_rounds + 1):
-            record, decision = self._run_round(
+            record, decision, _intent = self._run_round(
                 prompt,
                 seed=seed,
                 intent_override=next_intent,
@@ -464,12 +564,21 @@ class IntentLoopOrchestrator:
         max_rounds: int = 1,
         history: tuple[RoundOutcome, ...] = (),
         retry_of: str | None = None,
-    ) -> tuple[LoopRecord, FeedbackDecision | None]:
-        """Roda os sete estágios de uma rodada e devolve registro + decisão.
+        seed_override: int | None = None,
+        replicate_batch_id: str | None = None,
+    ) -> tuple[LoopRecord, FeedbackDecision | None, IntentSpec | None]:
+        """Roda os sete estágios de uma rodada e devolve registro + decisão + intenção.
 
         A decisão volta junto (em vez de ser relida do ``feedback.json``) para
         que ``run_campaign`` não dependa de I/O para saber se continua. É
-        ``None`` quando algum estágio falhou antes do FEEDBACK.
+        ``None`` quando algum estágio falhou antes do FEEDBACK. A intenção
+        resolvida volta também para que ``run_replicates`` reaproveite a mesma
+        ``IntentSpec`` entre réplicas sem uma segunda chamada de LLM; é ``None``
+        quando o próprio estágio INTENT falhou.
+
+        ``seed_override`` (Fase 2.R) troca a seed usada na geração e gravada no
+        registro, sem alterar a ``IntentSpec`` — "mesma intenção, seed de geração
+        diferente". Precede ``intent.seed``.
         """
 
         run_id = new_run_id()
@@ -489,6 +598,7 @@ class IntentLoopOrchestrator:
         record_seed = seed
         resolved: dict[str, Any] = {}
         decision: FeedbackDecision | None = None
+        intent: IntentSpec | None = None
 
         try:
             if intent_override is None:
@@ -508,7 +618,10 @@ class IntentLoopOrchestrator:
                         "nesta rodada."
                     ),
                 )
-            record_seed = intent.seed
+            # Fase 2.R: a seed de geração pode ser trocada por réplica sem mexer
+            # na IntentSpec. Precede intent.seed e é o que vai para o registro.
+            effective_seed = seed_override if seed_override is not None else intent.seed
+            record_seed = effective_seed
 
             def _compile_candidate() -> Any:
                 # Resolve o AttackSpec aqui (não antes): é o que amarra o
@@ -523,10 +636,10 @@ class IntentLoopOrchestrator:
                 persist_as="attack_candidate.json",
             )
             spec = resolved["spec"]
-            # A seed da intenção chega ao JAR aqui (Fase 2.0): baseline e variante
-            # da mesma rodada compartilham a seed, isolando o efeito da config da
-            # variação de RNG. Só o modo jar a usa.
-            generator = self._build_generator(run_dir, spec, random_seed=intent.seed)
+            # A seed chega ao JAR aqui (Fase 2.0): baseline e variante da mesma
+            # rodada compartilham a seed, isolando o efeito da config da variação
+            # de RNG. Em réplicas (2.R) é a seed varrida do lote. Só o modo jar a usa.
+            generator = self._build_generator(run_dir, spec, random_seed=effective_seed)
 
             trace_path = self._stage(
                 ctx, "ereno",
@@ -586,7 +699,13 @@ class IntentLoopOrchestrator:
             # abaixo do mesmo jeito.
             pass
 
-        usage = self._round_usage()
+        # O consumo do LLM de intent conta só quando o LLM foi de fato chamado
+        # nesta rodada (intent_override is None). Sem isso, uma rodada que reusa a
+        # intenção — rodada 2+ de campanha ou réplica 2+ de um lote — somaria de
+        # novo os tokens da última chamada (``last_usage`` fica setado), inflando
+        # o custo. É o que torna verdadeira a conta "1 chamada de LLM para N
+        # réplicas" (2.R).
+        usage = self._round_usage(include_intent=intent_override is None)
         record = LoopRecord(
             run_id=run_id,
             source_prompt=prompt,
@@ -599,6 +718,7 @@ class IntentLoopOrchestrator:
             parent_run_id=parent_run_id,
             max_rounds=max_rounds,
             retry_of=retry_of,
+            replicate_batch_id=replicate_batch_id,
         )
 
         if self.save_path is not None:
@@ -629,7 +749,7 @@ class IntentLoopOrchestrator:
             ),
         )
 
-        return record, decision
+        return record, decision, intent
 
     # ------------------------------------------------------------------ #
     # Estágio INTENT herdado (rodadas 2+) — nenhuma chamada de LLM        #
@@ -754,22 +874,22 @@ class IntentLoopOrchestrator:
 
         return usage if isinstance(usage, AgentUsage) else None
 
-    def _round_usage(self) -> AgentUsage | None:
-        """Soma o que os dois agentes gastaram nesta rodada.
+    def _round_usage(self, *, include_intent: bool = True) -> AgentUsage | None:
+        """Soma o que os agentes gastaram nesta rodada.
 
-        ``None`` quando nenhum dos dois informou: zero token é uma afirmação
-        sobre as chamadas, ``None`` é a confissão de que não se sabe — e um
-        orçamento comparado contra um zero inventado aprovaria qualquer coisa.
+        ``None`` quando nenhum informou: zero token é uma afirmação sobre as
+        chamadas, ``None`` é a confissão de que não se sabe — e um orçamento
+        comparado contra um zero inventado aprovaria qualquer coisa.
+
+        ``include_intent=False`` numa rodada que reusou a intenção (não chamou o
+        LLM de intent): ``intent_agent.last_usage`` ainda guarda o consumo da
+        última chamada real, e somá-lo aqui contaria o mesmo gasto de novo.
         """
 
-        reported = [
-            usage
-            for usage in (
-                self._usage_of(self.intent_agent),
-                self._usage_of(self.defender_agent),
-            )
-            if usage is not None
-        ]
+        candidates = [self._usage_of(self.defender_agent)]
+        if include_intent:
+            candidates.insert(0, self._usage_of(self.intent_agent))
+        reported = [usage for usage in candidates if usage is not None]
         if not reported:
             return None
 
