@@ -23,8 +23,13 @@ from adversarial_ids.config.settings import (
     MODEL_ID,
     TOTAL_ITERATIONS,
 )
+from adversarial_ids.agents.orchestrator.campaign_resume import (
+    CampaignResumeError,
+    plan_resume,
+)
 from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
+from adversarial_ids.shared.loop_record_store import load_loop_records
 from adversarial_ids.interfaces.experiment_runner import (
     ExperimentRunner,
     create_default_runner,
@@ -113,12 +118,29 @@ def create_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--rounds",
         type=int,
-        default=INTENT_LOOP_DEFAULT_ROUNDS,
+        # default=None (sentinela) pelo mesmo motivo de --detector: com
+        # --resume, "não passou a flag" quer dizer "o teto que a campanha
+        # gravou", não INTENT_LOOP_DEFAULT_ROUNDS.
+        default=None,
         help=(
             "Apenas com --engine intent: rodadas encadeadas pela política de "
             "feedback (E10). Da segunda em diante a intenção vem da política, "
             "não de uma nova chamada de LLM. Distinto de --iterations, que "
-            "pertence ao loop legado (--engine live/demo)."
+            "pertence ao loop legado (--engine live/demo). Default: "
+            f"{INTENT_LOOP_DEFAULT_ROUNDS}; com --resume, o teto que a campanha "
+            "gravou."
+        ),
+    )
+    parser.add_argument(
+        "--resume",
+        default=None,
+        metavar="RUN_ID",
+        help=(
+            "Apenas com --engine intent, no lugar de --prompt: retoma a campanha "
+            "a que RUN_ID pertence (qualquer rodada dela). Refaz a última rodada "
+            "se ela falhou, roda a próxima se a campanha parou por orçamento ou "
+            "interrupção, e não faz nada se a política de feedback a encerrou. "
+            "Nenhuma rodada já gravada é reexecutada."
         ),
     )
     parser.add_argument(
@@ -220,11 +242,23 @@ def _print_loop_record_summary(
         print(f"  total: {' · '.join(footer)}", file=stdout)
 
 
+def _round_label(record: LoopRecord, *, total: int) -> str | None:
+    # O número vem do registro, não da posição na lista: numa retomada a
+    # primeira rodada devolvida pode ser a 3ª da campanha.
+    if total == 1 and record.round == 1 and record.retry_of is None:
+        return None
+    label = f"Rodada {record.round}/{record.max_rounds or total}"
+    if record.retry_of is not None:
+        label += f", nova tentativa de {record.retry_of}"
+    return label
+
+
 def _print_campaign_summary(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> None:
     total = len(records)
-    for index, record in enumerate(records, start=1):
-        round_label = f"Rodada {index}/{total}" if total > 1 else None
-        _print_loop_record_summary(record, stdout=stdout, round_label=round_label)
+    for record in records:
+        _print_loop_record_summary(
+            record, stdout=stdout, round_label=_round_label(record, total=total)
+        )
     print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
 
 
@@ -234,18 +268,39 @@ def _run_intent_engine(
     stdout: TextIO,
     stderr: TextIO,
     run_intent_loop: RunIntentLoop | None,
+    resume_intent_loop: RunIntentLoop | None,
+    loop_records_path: Path,
     detector: str,
 ) -> int:
-    if not args.prompt:
+    if args.resume and args.prompt:
         print(
-            "Erro: --engine intent exige --prompt (a intenção em linguagem natural).",
+            "Erro: --resume e --prompt são exclusivos (a campanha retomada usa o "
+            "prompt que ela gravou).",
             file=stderr,
         )
         return 2
 
-    if args.rounds < 1:
+    if not args.prompt and not args.resume:
+        print(
+            "Erro: --engine intent exige --prompt (a intenção em linguagem natural) "
+            "ou --resume RUN_ID.",
+            file=stderr,
+        )
+        return 2
+
+    if args.rounds is not None and args.rounds < 1:
         print(f"Erro: --rounds precisa ser >= 1 (veio {args.rounds}).", file=stderr)
         return 2
+
+    if args.resume:
+        return _resume_intent_engine(
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            resume_intent_loop=resume_intent_loop,
+            loop_records_path=loop_records_path,
+            detector=detector,
+        )
 
     if run_intent_loop is None:
         from adversarial_ids.agents.orchestrator.intent_live import (
@@ -257,7 +312,7 @@ def _run_intent_engine(
             prompt=args.prompt,
             model_id=args.model_id,
             generator_mode=args.generator_mode,
-            rounds=args.rounds,
+            rounds=args.rounds if args.rounds is not None else INTENT_LOOP_DEFAULT_ROUNDS,
             detector=detector,
         )
     except KeyboardInterrupt:
@@ -267,6 +322,10 @@ def _run_intent_engine(
         print(f"Erro ao executar o loop intent-driven: {error}", file=stderr)
         return 1
 
+    return _report_campaign(records, stdout=stdout)
+
+
+def _report_campaign(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> int:
     _print_campaign_summary(records, stdout=stdout)
     has_failed_stage = any(
         stage.status == LoopStageStatus.FAILED
@@ -274,6 +333,59 @@ def _run_intent_engine(
         for stage in record.stages
     )
     return 1 if has_failed_stage else 0
+
+
+def _resume_intent_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    resume_intent_loop: RunIntentLoop | None,
+    loop_records_path: Path,
+    detector: str,
+) -> int:
+    # Resolvido aqui, antes de montar os agentes: uma campanha que a política
+    # já encerrou não tem nada a retomar, e descobrir isso não deveria exigir
+    # GROQ_API_KEY. O orquestrador resolve de novo sobre o mesmo ledger — este
+    # é só o aviso antecipado.
+    try:
+        point = plan_resume(
+            load_loop_records(loop_records_path), args.resume, rounds=args.rounds
+        )
+    except CampaignResumeError as error:
+        print(f"Erro: {error}", file=stderr)
+        return 2
+
+    print(f"Retomada de {args.resume}: {point.reason}", file=stdout)
+    if point.action == "done":
+        print("Nada a retomar; nenhum registro novo.", file=stdout)
+        return 0
+
+    # Sem --detector, a campanha segue com o detector que ela já treinava —
+    # o default de ambiente só vale quando nenhuma rodada chegou a treinar.
+    resolved_detector = args.detector or point.detector or detector
+
+    if resume_intent_loop is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            resume_intent_loop as resume_intent_loop,
+        )
+
+    try:
+        records = resume_intent_loop(
+            run_id=args.resume,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+            rounds=args.rounds,
+            detector=resolved_detector,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao retomar o loop intent-driven: {error}", file=stderr)
+        return 1
+
+    return _report_campaign(records, stdout=stdout)
 
 
 def _resolve_detector(detector: str | None, *, stderr: TextIO) -> str | None:
@@ -304,6 +416,8 @@ def run_cli(
     stdout: TextIO = sys.stdout,
     stderr: TextIO = sys.stderr,
     run_intent_loop: RunIntentLoop | None = None,
+    resume_intent_loop: RunIntentLoop | None = None,
+    loop_records_path: Path = LOOP_RECORDS_PATH,
 ) -> int:
     args = create_parser().parse_args(argv)
 
@@ -331,6 +445,8 @@ def run_cli(
             stdout=stdout,
             stderr=stderr,
             run_intent_loop=run_intent_loop,
+            resume_intent_loop=resume_intent_loop,
+            loop_records_path=loop_records_path,
             detector=detector,
         )
 
