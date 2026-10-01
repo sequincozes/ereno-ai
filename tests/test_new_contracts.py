@@ -423,7 +423,7 @@ def test_selection_manifest_rejects_selected_feature_outside_candidates():
 
 
 def test_selection_manifest_rejects_feature_scores_when_strategy_is_none():
-    with pytest.raises(ValidationError, match="só é preenchido quando"):
+    with pytest.raises(ValidationError, match="fica vazio quando"):
         _selection_manifest(feature_scores={"num": 0.1})
 
 

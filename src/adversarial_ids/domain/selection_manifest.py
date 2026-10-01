@@ -40,14 +40,18 @@ class SelectionManifest(BaseModel):
 
     schema_version: Literal[1] = 1
 
-    # -- Seleção de features (mutual information) -------------------------- #
-    feature_selection: Literal["none", "mutual_info"] = "none"
+    # -- Seleção de features ------------------------------------------------ #
+    feature_selection: Literal["none", "mutual_info", "rfe"] = "none"
     feature_selection_top_k: int | None = Field(default=None, gt=0)
     feature_selection_min_score: float | None = None
     candidate_features: tuple[str, ...] = Field(min_length=1)
     selected_features: tuple[str, ...] = Field(min_length=1)
-    # Só preenchido quando feature_selection="mutual_info" — estratégia
-    # "none" não calcula pontuação nenhuma (ver FeatureSelector.fit).
+    # Vazio só quando feature_selection="none"; as outras duas pontuam todas
+    # as candidatas. **A escala depende da estratégia**, e é o próprio
+    # ``feature_selection`` que diz qual: em "mutual_info" é informação mútua
+    # com o rótulo e MAIOR é melhor; em "rfe" é o ranking de eliminação, com
+    # 1 para as mantidas, e MENOR é melhor. Ordenar este dicionário sem olhar
+    # a estratégia produz o ranking invertido em um dos dois casos.
     feature_scores: dict[str, float] = Field(default_factory=dict)
 
     # -- Undersampling da partição de treino -------------------------------- #
@@ -76,19 +80,23 @@ class SelectionManifest(BaseModel):
         if self.feature_selection == "none":
             if self.feature_scores:
                 raise ValueError(
-                    "feature_scores só é preenchido quando feature_selection='mutual_info'."
+                    "feature_scores fica vazio quando feature_selection='none' — "
+                    "nenhuma pontuação é calculada."
                 )
         elif set(self.feature_scores) != set(self.candidate_features):
             raise ValueError(
                 "feature_scores deve cobrir exatamente candidate_features quando "
-                "feature_selection='mutual_info' (faltam "
+                f"feature_selection={self.feature_selection!r} (faltam "
                 f"{sorted(set(self.candidate_features) - set(self.feature_scores))!r}, sobram "
                 f"{sorted(set(self.feature_scores) - set(self.candidate_features))!r})."
             )
         return self
 
     @model_validator(mode="after")
-    def _mutual_info_requires_a_stopping_criterion(self) -> "SelectionManifest":
+    def _the_strategy_requires_its_own_stopping_criterion(self) -> "SelectionManifest":
+        """Cada estratégia para por um motivo diferente, e o manifest precisa
+        registrar qual foi — senão não dá para reproduzir o corte."""
+
         if self.feature_selection == "mutual_info" and (
             self.feature_selection_top_k is None and self.feature_selection_min_score is None
         ):
@@ -96,6 +104,18 @@ class SelectionManifest(BaseModel):
                 "feature_selection='mutual_info' exige feature_selection_top_k ou "
                 "feature_selection_min_score registrado no manifest."
             )
+        if self.feature_selection == "rfe":
+            if self.feature_selection_top_k is None:
+                raise ValueError(
+                    "feature_selection='rfe' exige feature_selection_top_k: o RFE "
+                    "para por número de features, não por limiar."
+                )
+            if self.feature_selection_min_score is not None:
+                raise ValueError(
+                    "feature_selection='rfe' não usa feature_selection_min_score — "
+                    "a pontuação é um ranking de eliminação, e um limiar sobre ela "
+                    "descreveria um corte que não aconteceu."
+                )
         return self
 
     @model_validator(mode="after")
