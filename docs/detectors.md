@@ -34,6 +34,21 @@ detector.
 | `decision_tree` | `DecisionTreeClassifier` | `none` | Gini | sim | muito baixo |
 | `svm_linear` | `LinearSVC` (liblinear) | `standard` | `\|coef_\|` | não | médio, escala bem |
 | `svm_rbf` | `SVC(kernel="rbf")` | `standard` | **nenhuma** | não | **O(n²)–O(n³) em linhas de treino** |
+| `xgboost` | `XGBClassifier` | `none` | **gain** | sim | baixo (`n_jobs=-1`) |
+
+`xgboost` (épico E9) depende de um **extra opcional**:
+
+```bash
+uv sync --extra dev --extra dashboard --extra xgboost
+```
+
+`uv sync` sincroniza *exatamente* os extras pedidos — pedir só `--extra xgboost`
+remove os demais do ambiente. O import é preguiçoso: `core/detectors.py`
+continua importável sem o pacote, e só construir o detector falha, com a
+instrução de instalação na mensagem. `scripts/compare_detectors.py` isola
+falha por detector, então sem o extra o comparativo ainda sai com os outros
+quatro e o `xgboost` aparece com `status="failed"` e a razão — omissão visível,
+não silenciosa.
 
 ### Por que quatro chaves e não uma chave `svm` com parâmetro de kernel
 
@@ -155,17 +170,24 @@ resultado válido de investigar, mas não é "comparação justa" concluída.
 ## Importâncias: mesmo formato, significados diferentes
 
 `DetectionReport.top_features` mantém o formato congelado da issue #15
-(`{"feature": str, "importance": float}`) para os quatro detectores, mas o
+(`{"feature": str, "importance": float}`) para os cinco detectores, mas o
 número **não é comparável entre eles**:
 
-- **Gini** (RF/DT): soma 1 sobre as features.
+- **Gini** (RF/DT): soma 1 sobre as features, medindo redução de impureza.
+- **Gain** (XGBoost): a melhora média de perda que os splits daquela feature
+  trouxeram. É o caso mais traiçoeiro dos quatro, porque o XGBoost publica isso
+  no **mesmo atributo** (`feature_importances_`) que as árvores do
+  scikit-learn: o código que lê os dois é o mesmo ramo em `_raw_importances`, e
+  o que os separa é só o `importance_kind`. O `importance_type="gain"` é fixado
+  no registro em vez de herdado porque o default do `XGBClassifier` é `None` —
+  resolve para "gain" hoje, mas é default do pacote, não compromisso dele.
 - **`|coef_|`** (SVM linear): está na unidade do espaço já padronizado — só é
   interpretável *porque* o detector pediu `scaler="standard"`. Sem escala, a
   feature de maior amplitude receberia o menor coeficiente e o ranking diria
   o contrário do que a fronteira de decisão realmente usa.
 - **Nenhuma** (SVM RBF): `top_features` vem vazio por construção.
 
-`DetectorManifest.importance_kind` é o campo que diz qual dos três está em
+`DetectorManifest.importance_kind` é o campo que diz qual dos quatro está em
 jogo — comparar ranking de features entre detectores só é honesto depois de
 olhar esse campo.
 
@@ -176,7 +198,8 @@ evidências por feature. É menos evidência, não uma falha — o guardrail
 continua valendo, e nenhuma evidência inventada passa.
 
 SHAP segue a mesma disciplina: `shap.TreeExplainer` só sabe ler modelo baseado
-em árvore, então `get_shap_importances` devolve `[]` para os dois SVMs pelo
+em árvore — o que inclui o XGBoost — então `get_shap_importances` devolve `[]`
+para os dois SVMs pelo
 mesmo caminho best-effort de quando o pacote `shap` está ausente — nunca um
 explicador errado aplicado a um modelo que ele não sabe ler.
 
@@ -267,15 +290,19 @@ run dirs byte a byte, este é o campo a excluir.
   vencedor automaticamente exigiria decidir com que frequência recomparar, e
   isso é política, não medição.
 - **Balanceamento por `class_weight`**: exposto como hiperparâmetro
-  sobrescrevível nos quatro registros, mas `None` por default — mexer no
+  sobrescrevível nos quatro registros do scikit-learn (o XGBoost usa
+  `scale_pos_weight`, que não está exposto), mas `None` por default — mexer no
   default mudaria o caminho `random_forest`, que precisa continuar idêntico
   ao de antes do E8. A alavanca de desbalanço deste repositório é o
   undersampling do E7 (ver `docs/feature_selection.md`).
-- **Detectores fora do scikit-learn** (XGBoost, uma rede rasa): `DetectorSpec`
-  já é um registro extensível e `DetectorLike` é o protocolo que o
-  `IdsEvaluator` de fato consome, mas cada nova chave exige uma entrada no
-  `Literal` de `domain/detector_manifest.py::DetectorKey` — de propósito: o
-  vocabulário de detectores é contrato, não configuração livre.
+- **Detectores fora do scikit-learn**: o XGBoost entrou (E9) e provou o
+  caminho — `DetectorSpec` é um registro extensível, `DetectorLike` é o
+  protocolo que o `IdsEvaluator` consome, e uma dependência opcional cabe com
+  import preguiçoso. Cada chave nova continua exigindo uma entrada no `Literal`
+  de `domain/detector_manifest.py::DetectorKey` e nas duas tabelas ao lado dele
+  — de propósito: o vocabulário de detectores é contrato, não configuração
+  livre, e o registro valida a própria sincronia na importação (inclusive a
+  **ordem**, que foi o que pegou a entrada do XGBoost fora de lugar).
 - **Explicação para modelos não-árvore**: `KernelExplainer`/`LinearExplainer`
   do SHAP cobririam os SVMs, mas o primeiro custa ordens de grandeza mais que
   o `TreeExplainer` já usado. Fora deste épico; hoje o SVM RBF simplesmente

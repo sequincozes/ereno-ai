@@ -321,7 +321,7 @@ def test_only_the_requested_detectors_run_and_duplicates_collapse(tmp_path):
 def test_unknown_detector_is_rejected_before_any_training(tmp_path):
     dataset = str(_labeled_csv(tmp_path / "b.csv"))
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        compare_detectors(dataset, dataset, detectors=["random_forest", "xgboost"])
+        compare_detectors(dataset, dataset, detectors=["random_forest", "catboost"])
 
 
 def test_an_empty_detector_list_is_rejected(tmp_path):

@@ -595,7 +595,7 @@ def test_detector_manifest_records_a_scaler_disagreeing_with_the_recommendation(
 
 def test_detector_manifest_rejects_an_unregistered_detector_key():
     with pytest.raises(ValidationError):
-        _detector_manifest(detector="xgboost", model_name="xgboost")
+        _detector_manifest(detector="catboost", model_name="catboost")
 
 
 def test_detector_manifest_requires_a_non_empty_trained_feature_space():

@@ -746,7 +746,7 @@ def test_unknown_detector_is_rejected_when_the_orchestrator_is_built(tmp_path):
     # Erro de configuração do chamador, não falha de estágio: tem que estourar
     # na construção, antes de qualquer geração de dataset.
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        _orchestrator(tmp_path, _StubIntentAgent(_intent()), detector="xgboost")
+        _orchestrator(tmp_path, _StubIntentAgent(_intent()), detector="catboost")
 
 
 # --------------------------------------------------------------------------- #

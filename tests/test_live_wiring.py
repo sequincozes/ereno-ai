@@ -175,7 +175,7 @@ def test_create_default_runner_rejects_an_unknown_detector():
     from adversarial_ids.core.detectors import DetectorError
 
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        create_default_runner("live", detector="xgboost")
+        create_default_runner("live", detector="catboost")
 
 
 def test_create_default_runner_demo_rejects_a_detector_choice():

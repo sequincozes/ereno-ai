@@ -11,6 +11,8 @@ consistente com essas declarações. A integração com o pipeline de dados
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pandas as pd
 import pytest
 
@@ -65,9 +67,9 @@ def test_default_detector_is_random_forest():
 
 def test_unknown_detector_key_is_rejected():
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        detector_spec("xgboost")
+        detector_spec("catboost")
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        Detector("xgboost")
+        Detector("catboost")
 
 
 def test_only_svm_detectors_ask_for_standard_scaling():
@@ -147,7 +149,7 @@ def test_same_seed_gives_the_same_predictions(key):
 # --------------------------------------------------------------------------- #
 # Importâncias — significado diferente por detector, formato igual             #
 # --------------------------------------------------------------------------- #
-@pytest.mark.parametrize("key", ("random_forest", "decision_tree", "svm_linear"))
+@pytest.mark.parametrize("key", ("random_forest", "decision_tree", "svm_linear", "xgboost"))
 def test_detectors_with_importances_rank_the_informative_feature_first(key):
     X, y = _separable_frame()
     detector = Detector(key).fit(X, y)
@@ -240,3 +242,49 @@ def test_resolved_scaler_is_required_so_a_scaled_run_cannot_be_recorded_as_unsca
     X, y = _separable_frame()
     with pytest.raises(TypeError, match="resolved_scaler"):
         Detector("svm_linear").fit(X, y).manifest()
+
+
+# --------------------------------------------------------------------------- #
+# XGBoost (épico E9)                                                           #
+# --------------------------------------------------------------------------- #
+def test_xgboost_importances_are_gain_not_gini():
+    """Os dois leem ``feature_importances_``; não medem a mesma coisa.
+
+    É o caso mais traiçoeiro do catálogo — mesmo nome de atributo das árvores
+    do scikit-learn, outra escala (melhora de perda contra redução de
+    impureza). Comparar ranking entre eles sem olhar ``importance_kind`` é o
+    erro que este campo existe para impedir.
+    """
+
+    assert detector_spec("xgboost").importance_kind == "gain"
+    assert detector_spec("random_forest").importance_kind == "gini"
+
+
+def test_xgboost_pins_the_importance_type_instead_of_inheriting_it():
+    """O default do XGBClassifier é ``None``, que hoje resolve para "gain" —
+    mas é default do pacote, não compromisso dele. Sem fixar, o
+    ``importance_kind`` do manifest seria uma afirmação sobre a versão
+    instalada."""
+
+    assert detector_spec("xgboost").defaults["importance_type"] == "gain"
+
+
+def test_xgboost_is_explainable_by_shap_and_needs_no_scaling():
+    spec = detector_spec("xgboost")
+
+    assert spec.supports_shap is True
+    assert spec.requires_scaling is False
+    assert recommended_scaler("xgboost") == "none"
+
+
+def test_importing_the_registry_does_not_require_the_optional_extra():
+    """``core.detectors`` precisa importar sem o xgboost instalado: ele é um
+    extra opcional, e um import no topo derrubaria a CLI e a suíte inteiras em
+    qualquer ambiente sem ele."""
+
+    import adversarial_ids.core.detectors as module
+
+    assert "xgboost" not in {name for name in dir(module)} - {"_build_xgboost"}
+    source = Path(module.__file__).read_text(encoding="utf-8")
+    header = source[: source.index("def _build_xgboost")]
+    assert "import xgboost" not in header and "from xgboost" not in header
