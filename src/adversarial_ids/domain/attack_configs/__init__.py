@@ -37,6 +37,7 @@ from adversarial_ids.domain.attack_configs.masquerade_fault import (
 from adversarial_ids.domain.attack_configs.programmable import (
     MutationRule,
     ProgrammableConfig,
+    RuleCondition,
 )
 from adversarial_ids.domain.attack_configs.random_replay import RandomReplayConfig
 from adversarial_ids.domain.attack_configs.ranges import (
@@ -93,4 +94,7 @@ __all__ = [
     "DelayedReplayBackoffConfig",
     "DelayedReplayBatchDumpConfig",
     "DelayedReplayDoubleDropConfig",
+    "ProgrammableConfig",
+    "MutationRule",
+    "RuleCondition",
 ]
