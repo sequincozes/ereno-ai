@@ -38,6 +38,7 @@ from adversarial_ids.domain.feedback_decision import FeedbackDecision
 from adversarial_ids.core.detectors import DetectorError
 from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
+from adversarial_ids.domain.generator_manifest import GeneratorManifest
 from adversarial_ids.domain.selection_manifest import SelectionManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.shared.loop_event_store import (
@@ -387,6 +388,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
         "feature_manifest.json",
         "selection_manifest.json",
         "detector_manifest.json",
+        "generator_manifest.json",
         "defense_plan.json",
         "defense_rules.json",
         "feedback.json",
@@ -434,6 +436,16 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
     assert selection.selected_features == selection.candidate_features
     assert selection.fitted_rows_before_undersampling == 14
     assert selection.fitted_rows_after_undersampling == 14
+
+    # O manifest do gerador é o único a montante do detector: de onde o trace
+    # veio. Em cached ele precisa dizer que nenhum simulador rodou e que o trace
+    # NÃO varia com a config — é o que impede ler um platô de campanha como
+    # resultado experimental.
+    generator = GeneratorManifest.model_validate(load_json(run_dir / "generator_manifest.json"))
+    assert generator.generator == "cached"
+    assert generator.simulator == "none"
+    assert generator.produces_per_config_variation is False
+    assert generator.attack_key == "masquerade_fault"
 
     # O manifest do detector (E8) é um DetectorManifest válido e descreve o
     # detector default. trained_rows tem que bater com o que o E7 entregou ao
