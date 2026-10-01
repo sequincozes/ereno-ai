@@ -11,7 +11,7 @@ documentava essa fronteira desde o E6.
 
 - `core/feature_selector.py::FeatureSelector` — seleção de features por
   mutual information (`sklearn.feature_selection.mutual_info_classif`).
-- `core/undersampler.py::RandomUndersampler` — balanceamento de classes da
+- `core/undersamplers.py` + `core/undersampling_policy.py` — balanceamento de classes da
   partição de treino por reamostragem aleatória sem reposição.
 - `domain/selection_manifest.py::SelectionManifest` — contrato congelado que
   registra o que as duas estratégias decidiram, persistido como
@@ -34,7 +34,7 @@ explicitamente por uma delas.
    linhas, e a classe minoritária de ataque não deve perder peso na
    pontuação de relevância antes mesmo de decidir quais features sobrevivem.
 2. **Undersampling depois**, só no espaço de features já reduzido
-   (`RandomUndersampler.fit_resample(X_train, y_train)`) — nunca em
+   (`fit_resample(X_train, y_train)` do undersampler resolvido) — nunca em
    `X_test`/`y_test`, nem em nenhum dataset passado a `evaluate_variant`:
    reamostrar o conjunto de avaliação distorceria a própria métrica que se
    quer medir (a distribuição real de ataque vs. normal é o que o detector
@@ -97,16 +97,94 @@ invertido em um dos dois casos. É a mesma disciplina de
 `DetectorManifest.importance_kind` (ver `docs/detectors.md`): formato igual,
 significado diferente, e um campo que diz qual.
 
-## `RandomUndersampler` — reamostragem aleatória
+## Undersamplers — registro por chave
 
-- `strategy="none"` (default): devolve `X`/`y` inalterados.
-- `strategy="random"`: para cada classe acima do tamanho da classe
-  minoritária, sub-amostra sem reposição até igualar a minoritária,
-  determinístico por `random_state` (mesmo `random_state=42` do
-  `IdsEvaluator`, reaproveitado — não é um parâmetro novo e independente).
-  Não usa `imbalanced-learn`: a estratégia é simples o bastante para
-  `numpy`/`pandas` puros, evitando puxar mais uma dependência para um MVP
-  que já tem 11 ataques + scikit-learn.
+`core/undersamplers.py` é o terceiro registro do mesmo formato (detectores no
+E8, geradores a montante): um `Literal` no domínio
+(`domain/undersampling.py::UndersamplerKey`), um `UndersamplerSpec` por chave,
+e checagem de sincronia na importação.
+
+| chave | o que faz | precisa de `target_ratio` |
+|---|---|---|
+| `none` (default) | devolve `X`/`y` inalterados, sem copiar | não |
+| `random` | sub-amostra cada classe até o tamanho da minoritária | não |
+| `ratio` | sub-amostra cada classe até `target_ratio ×` a minoritária | **sim** |
+
+Tudo determinístico por `random_state` (o mesmo `42` do `IdsEvaluator`,
+reaproveitado — não é um parâmetro novo e independente). Nenhuma estratégia usa
+`imbalanced-learn`: reamostragem sem reposição e sem substituto sintético é
+simples o bastante para `numpy`/`pandas` puros. Um undersampler que precise de
+vizinhança (NearMiss, Tomek) entra como uma chave a mais, e aí a dependência é
+dele.
+
+`random` e `ratio` são a **mesma** classe com `target_ratio` 1.0 e N —
+balancear até a minoritária é o caso particular de reduzir até uma razão. Isto
+é descrição, não arquitetura aspiracional, e há um teste que mantém as duas
+idênticas em `target_ratio=1.0`; a costura que o registro abre vale para a
+estratégia que não for um teto por classe.
+
+### Por que `ratio` existe
+
+Balancear até a classe minoritária num trace cuja prevalência de ataque pode
+ser de 1% (o piso do E4) descarta ~99% das linhas benignas: o detector passa a
+treinar num mundo que não existe, e a conta é paga em falso positivo sobre o
+tráfego real. `ratio` limita o desequilíbrio em vez de eliminá-lo. Com 990
+benignas e 10 de ataque, `random` deixa 10 benignas e `ratio=5.0` deixa 50.
+
+## Quem decide o undersampler — `config` vs. `policy`
+
+A caixa do Pre-Processor no diagrama do journal prevê undersamplers
+"intent-driven" e "policy-driven" — nomes que não descrevem algoritmos, e sim
+**quem decide**. Até aqui nada decidia nada: a estratégia era uma env var lida
+uma vez. `core/undersampling_policy.py::decide_undersampling` é o decisor, e
+tem exatamente dois modos:
+
+- **`config`** — `UNDERSAMPLING_MODE` é `none`/`random`/`ratio`: a estratégia
+  está fixada e o desequilíbrio observado **não participa** da escolha (mas é
+  medido e registrado mesmo assim, para quem for ler o resultado depois).
+- **`policy`** — `UNDERSAMPLING_MODE=policy`: a regra declarada em
+  `UndersamplingPolicy` resolve. Abaixo de `max_imbalance_ratio` (default
+  10:1) não se reamostra nada; acima dele a maioria é reduzida a
+  `target_ratio` (default 3.0) vezes a minoritária. Determinística, e a razão
+  vai por escrito para o manifest.
+
+### O que foi deliberadamente deixado de fora
+
+Não existe decisor `feedback` nem `intent`, e a recusa é **estrutural**:
+
+```python
+def decide_undersampling(*, class_counts, mode, policy) -> UndersamplingDecision
+```
+
+Não há parâmetro por onde um `DetectionReport`, uma `Metrics` ou um
+`IntentSpec` entrem — e isso não é economia de argumentos, é a regra. Dois
+motivos, e os dois valem independentemente:
+
+1. Um laço que ajusta o próprio pré-processamento até a métrica melhorar deixa
+   de medir o que o detector enfrenta: o número reportado passa a ser
+   propriedade conjunta do ataque e do balanceamento escolhido para favorecê-lo,
+   e nenhuma rodada volta a ser comparável com outra.
+2. Deixar a intenção do atacante configurar o treino do defensor é o Red Team
+   enfraquecendo o detector por um caminho que não é o ataque.
+
+`tests/test_undersampling_policy.py` tem um teste que inspeciona a assinatura
+e falha se um parâmetro desses aparecer. É a mesma figura do E10 com o sinal
+trocado: lá a política determinística substitui uma segunda chamada de LLM;
+aqui ela substitui uma otimização que ninguém pediu.
+
+### Configuração
+
+| env var | default | efeito |
+|---|---|---|
+| `UNDERSAMPLING_MODE` | `none` | `none`/`random`/`ratio`/`policy` |
+| `UNDERSAMPLING_TARGET_RATIO` | `3.0` | teto alvo de `ratio` e da política |
+| `UNDERSAMPLING_MAX_IMBALANCE` | `10.0` | acima disso a política reamostra |
+
+Um modo desconhecido falha quando o `IdsEvaluator` é **construído**, e não no
+meio de um treino — que é onde um modo digitado errado custaria uma geração
+inteira para aparecer. `target_ratio > max_imbalance_ratio` também é recusado
+na construção: a política estaria corrigindo para um desequilíbrio que ela
+própria declara intolerável.
 
 ## Contrato de saída — `SelectionManifest`
 
@@ -119,7 +197,12 @@ significado diferente, e um campo que diz qual.
 - `feature_scores` — vazio só quando `feature_selection="none"`; preenchido por
   `mutual_info` e por `rfe` com escalas **opostas** (ver acima),
   cobre exatamente `candidate_features`;
-- `undersampling`/`undersampling_random_state` — a estratégia e a seed;
+- `undersampling`/`undersampling_random_state` — a estratégia **resolvida** (
+  nunca `"policy"`, que é um decisor e não um undersampler) e a seed;
+- `undersampling_decided_by`/`undersampling_decision_reason`/
+  `undersampling_observed_imbalance`/`undersampling_target_ratio` — quem
+  escolheu, por quê, sobre que medida, e com que teto. Sem eles, um run com a
+  política ligada é indistinguível de um run configurado à mão;
 - `class_counts_before`/`class_counts_after` — contagem por rótulo
   **original** (não o código do `LabelEncoder`), antes/depois do
   undersampling;
@@ -132,7 +215,11 @@ Validadores impõem: `selected_features` é subconjunto de
 e completo quando `"mutual_info"`; `mutual_info` sem `top_k` nem `min_score`
 é rejeitado (o manifest não pode fingir que houve corte sem dizer qual);
 linhas depois do undersampling nunca aumentam, e `undersampling="none"` não
-pode mudar a contagem; a soma de `class_counts_before`/`class_counts_after`
+pode mudar a contagem; `ratio` exige `undersampling_target_ratio` e as outras
+duas o recusam (registrá-lo descreveria um corte que não aconteceu);
+`undersampling_decided_by="policy"` exige a razão e o desequilíbrio observado
+— uma política que decide sem dizer por quê é indistinguível de um default, e
+é justamente essa distinção que o artefato existe para preservar; a soma de `class_counts_before`/`class_counts_after`
 bate com `fitted_rows_before_undersampling`/`fitted_rows_after_undersampling`
 quando as contagens são informadas.
 
@@ -165,7 +252,8 @@ Critério de pronto do E7: "estratégias configuráveis com ablação".
 - as duas estratégias compõem: seleção reduz colunas, undersampling reduz
   linhas do que sobrou, na ordem descrita acima.
 
-`tests/test_feature_selector.py` e `tests/test_undersampler.py` cobrem os
+`tests/test_feature_selector.py`, `tests/test_undersamplers.py` e
+`tests/test_undersampling_policy.py` cobrem os
 dois componentes isolados (contrato fit/transform, erros, determinismo,
 preservação de ordem de colunas); `tests/test_new_contracts.py` cobre cada
 validador de consistência interna do `SelectionManifest`;
@@ -184,7 +272,15 @@ validador de consistência interna do `SelectionManifest`;
   que o `Literal` de `strategy` era mesmo extensível sem quebrar contrato: a
   única mudança no `SelectionManifest` foi o vocabulário e um validador por
   estratégia.
-- **Estratégias de undersampling mais ricas** (ex.: NearMiss, Tomek links) e
-  **outros critérios de seleção** (ex.: importância do próprio modelo) seguem
-  fora — a segunda, aliás, é a que o RFE evita de propósito, pelo motivo
-  explicado acima.
+- **Undersamplers policy-driven**: ~~fora de escopo~~ — **entregue**. A caixa
+  passou a ter um decisor declarado, e o `SelectionManifest` passou a registrar
+  quem escolheu e por quê.
+- **Estratégias de undersampling baseadas em vizinhança** (NearMiss, Tomek
+  links) seguem fora: entram como chave a mais no registro, com a dependência
+  que elas pedirem.
+- **Outros critérios de seleção** (ex.: importância do próprio modelo) seguem
+  fora — esse, aliás, é o que o RFE evita de propósito, pelo motivo explicado
+  acima.
+- **Undersampler decidido pelo laço ou pela intenção**: fora de escopo **e
+  recusado por desenho**, não adiado. Ver "O que foi deliberadamente deixado de
+  fora".
