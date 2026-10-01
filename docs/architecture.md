@@ -1,198 +1,156 @@
-# Arquitetura do sistema
+# Arquitetura — os cinco agentes do pipeline intent-driven
 
-> **Nota de desatualização**: este documento descreve um estado anterior ao
-> workflow Agno Team e ao pipeline intent-driven (E1–E10), ambos já
-> implementados e wired end-to-end. Para a arquitetura atual, ver `CLAUDE.md`
-> (visão geral das duas pipelines), `docs/feedback_policy.md` (política E10) e
-> `docs/attack_capabilities.md` (catálogo de capacidades por ataque). Reescrever
-> este arquivo é trabalho separado — não incluído aqui.
+Esta é a arquitetura alvo do ERENO-AI e o que o código implementa hoje. Ela
+corrige uma ausência do diagrama que circulava até 01/10/2026: o **Defender** é
+a quinta caixa, entre o Detector e a realimentação — não um detalhe do bloco de
+feedback.
 
-## Visão geral
+## O desenho
 
-O Laboratório Inteligente avalia um IDS baseado em Random Forest sobre tráfego
-sintético de Smart Grids. O desenho alvo possui um Strategist que propõe
-alterações, um núcleo que gera/avalia datasets e um Analyst que interpreta as
-métricas. CLI e dashboard são camadas de apresentação.
+```mermaid
+flowchart LR
+    I[Injector Agent<br/>intent-driven · model-driven · data-driven]
+    G[Generator Agent<br/>cached · ereno · …]
+    P[Pre-Processor Agent<br/>undersamplers · feature selectors · …]
+    D[Detector Agent<br/>random forest · decision tree · SVM · …]
+    B[Defender Agent<br/>validação por evidência · playbooks IEC-61850]
+    F[(output · performance · feedback)]
 
-No estado atual, as interfaces operam sobre um histórico golden. Strategist e
-Analyst reais estão implementados, mas o workflow Agno Team que deve encadeá-los
-ainda não está disponível.
+    I -- Attack Pattern --> G
+    G -- Trace --> P
+    P -- Model --> D
+    D -- Detection Report --> B
+    B -- Defense Plan --> F
+    F -- FeedbackDecision --> I
+```
+
+## Por que o Defender é uma caixa, e não parte do feedback
+
+O bloco de feedback é **determinístico**: `core/feedback_policy.py` lê o
+`DetectionReport` e o `DefensePlan` da rodada e deriva a intenção da próxima
+sem chamar LLM nenhuma (epic E10). O Defender é outra coisa — é um **agente**,
+com modelo, prompt e validador próprios, que produz um artefato que ninguém
+mais produz:
+
+- `agents/defender/` gera um `DefensePlan` a partir do `DetectionReport`;
+- `agents/defender/tools.py::validate_plan_against_report` recusa o plano que
+  invente chave de métrica ou de feature, altere um valor, aponte para outro
+  relatório, ou declare uma prioridade que o relatório não sustenta;
+- `core/defense_rules.py`, sobre o catálogo de `config/defense_techniques.py`,
+  pergunta a pergunta seguinte: cada técnica recomendada **responde** à
+  evidência que ela mesma cita? O resultado é persistido como
+  `DefenseRuleReport`/`defense_rules.json`.
+
+Colapsar isso em "(output, performance, feedback)" apagaria o único estágio do
+pipeline em que uma saída de LLM é confrontada com a realidade medida **e** com
+um catálogo de contramedidas — e é metade do argumento Red×Blue do projeto. Ver
+`docs/defender_validation.md`.
+
+## Os estágios, e o que cada um produz
+
+| estágio | produz | determinístico? |
+|---|---|---|
+| `intent` | `IntentSpec` | não — é o LLM, atrás de dois portões |
+| `compiler` | `AttackCandidate` (o *Attack Pattern*) | sim |
+| `generator` | o trace (CSV) | sim, dado o backend e a seed |
+| `preprocess` | `DatasetBundle` | sim |
+| `detector` | `DetectionReport` | sim |
+| `defender` | `DefensePlan` + `DefenseRuleReport` | não — é o LLM, atrás do validador |
+| `feedback` | `FeedbackDecision` | sim |
+
+Só **dois** estágios chamam uma LLM, e os dois têm um portão determinístico
+logo atrás. É o guardrail central do projeto: o modelo produz a intenção ou o
+plano de defesa; todo o resto é Python que decide se aquilo é executável.
+
+### Nota sobre os nomes (`schema_version` 2)
+
+Até a v1 do `LoopRecord`, `generator` nomeava a etapa de **compilação** e
+`ereno` a de geração — um estágio com o nome de um backend dentro de uma
+arquitetura de backends plugáveis. Na v2 são `compiler` e `generator`. Ledgers
+da v1 são recusados com a razão; eles vivem em `outputs/`, que é descartável.
+
+## O que é plugável hoje, e o que não é
+
+| caixa | estratégias registradas | como se escolhe |
+|---|---|---|
+| Injector | `intent` (e o loop legado Strategist, em pipeline separado) | `--engine` |
+| Generator | `cached`, `jar` | `--generator-mode`, registro em `core/generators.py` |
+| Pre-Processor | seletor `none`/`mutual_info`; undersampler `none`/`random` | env var, **desligados** por default |
+| Detector | `random_forest`, `decision_tree`, `svm_linear`, `svm_rbf` | `--detector`, registro em `core/detectors.py` |
+| Defender | um | — |
+
+Duas observações honestas sobre esta tabela:
+
+**O Injector não é um registro.** `--engine demo|live|intent` troca o pipeline
+inteiro, não uma estratégia de injeção atrás de um contrato comum. Unificar
+intent-driven, model-driven e data-driven sob uma interface só é trabalho de
+desenho, não de refactor.
+
+**O Pre-Processor não decide nada.** Chamá-lo de *agente* sugere algo que
+escolhe o undersampler e o seletor conforme o caso; hoje são
+`FEATURE_SELECTION_MODE` e `UNDERSAMPLING_MODE`, chaves de ambiente desligadas
+por padrão. A ressalva vale mais que a lacuna: um laço que ajusta o próprio
+pré-processamento até a métrica melhorar deixa de medir o que o detector
+enfrenta. Se essa caixa virar decisória, a decisão precisa ser auditável e
+ficar fora do que o laço otimiza.
+
+## Proveniência de uma rodada
+
+Quatro manifests gravados lado a lado no diretório da execução respondem, dos
+artefatos e sem reexecutar nada, de onde cada número veio:
+
+| arquivo | responde |
+|---|---|
+| `generator_manifest.json` | de onde o trace veio, com que seed, se ele **varia com a config** |
+| `feature_manifest.json` (E6) | como as features foram preparadas, sobre quais linhas |
+| `selection_manifest.json` (E7) | quais sobreviveram, antes e depois do undersampling |
+| `detector_manifest.json` (E8) | qual modelo aprendeu, com quais hiperparâmetros e qual escala |
+
+Ao lado deles, `dataset_bundle.json` diz *o que está* no trace e
+`detection_report.json` *quão bem* o detector foi. A divisão é proposital: os
+manifests descrevem o processo, os relatórios descrevem o resultado, e só os
+dois juntos tornam uma diferença entre execuções atribuível a alguma coisa.
 
 ## Princípios
 
 - separação entre domínio, núcleo, agentes e interfaces;
-- modelos Pydantic como contratos entre membros;
-- interfaces dependentes de uma porta, não de detalhes do Agno;
+- modelos Pydantic como contratos entre as camadas;
+- interfaces dependem de uma porta (`ExperimentRunner`), não de detalhes do Agno;
 - modo cacheado para reprodutibilidade sem Java;
 - fixtures e stubs identificados explicitamente como recursos de teste;
 - segredos mantidos fora do versionamento.
 
-## Fluxo atual
-
-```mermaid
-flowchart TD
-    U[Usuário] --> I[CLI ou Dashboard]
-    I --> F[create_default_runner]
-    F --> C[CachedHistoryRunner]
-    C --> G[data/iteration_history.json]
-    G --> R[list de IterationRecord]
-    R --> I
-```
-
-Esse fluxo não chama agentes, Groq ou Java. O golden foi produzido previamente
-pelo script cacheado usando stubs determinísticos.
-
-## Fluxo alvo, ainda pendente
-
-```mermaid
-flowchart TD
-    U[CLI ou Dashboard] --> A[WorkflowAdapter]
-    A --> W[Workflow do M3]
-    W --> S[Strategist]
-    S --> E[Gerador e avaliação]
-    E --> M[Metrics]
-    M --> N[Analyst]
-    N --> R[IterationRecord]
-    R --> W
-    W --> A
-```
-
-O diagrama acima representa a integração planejada, não uma funcionalidade já
-disponível. A futura função pública deverá aceitar `iterations`, `model_id` e
-`generator_mode` e devolver registros compatíveis com `IterationRecord`.
-
-## Componentes
-
-### Domain
-
-| Tipo | Responsabilidade | Campos principais |
-|---|---|---|
-| `AttackConfig` | Configuração validada do ataque sintético | `fault`, `cbStatus`, `ttlMsValues`, `analog`, `trapArea` |
-| `Metrics` | Resultado da avaliação do IDS | F1, precisão, recall, TP, FP, FN, TN e importâncias |
-| `AnalystOutput` | Saída estruturada e validada do Blue Team | iteração, features, diagnóstico, mitigações e severidade |
-| `IterationRecord` | Unidade do histórico | iteração, configuração, métricas, saídas dos agentes e timestamp |
-
-`analyst_output` já utiliza `AnalystOutput | None`. `strategist_output` ainda é
-um dicionário opcional enquanto o contrato definitivo do Strategist não está
-integrado.
-
-### Agents
-
-#### Strategist
-
-`agents/strategist/agent.py` cria um `agno.agent.Agent` com modelo Groq. Ele
-recebe prompt, configuração, métricas e histórico e devolve texto com mudanças
-aplicáveis. O contrato tipado `StrategistOutput` planejado ainda não existe.
-
-#### Analyst
-
-`agents/analyst/agent.py` cria um agente Agno/Groq com saída
-`AnalystOutput`. As ferramentas selecionam importâncias, calculam severidade e
-rejeitam features ou valores sem respaldo nas métricas. O golden continua
-contendo uma saída compatível produzida por `FakeAnalyst`.
-
-#### Orchestrator
-
-`agents/orchestrator/workflow.py` é placeholder. O contrato de integração já
-existe em `interfaces/experiment_runner.py`:
-
-```python
-runner.run(
-    iterations=...,
-    model_id=...,
-    generator_mode=...,
-) -> list[IterationRecord]
-```
-
-`WorkflowAdapter` normaliza dicionários ou modelos retornados pelo workflow real
-(`agents/orchestrator/live.py::run_live_workflow`). `create_default_runner(engine)`
-é o único ponto de troca: `demo` (default) devolve o runner golden; `live` embrulha
-o loop real no `WorkflowAdapter`.
-
-### Dataset e avaliação
-
-`GeneratorRunner` oferece:
-
-- `cached`: copia `data/baseline_dataset.csv`, sem subprocesso Java;
-- `jar`: grava a configuração, executa o JAR e copia o dataset gerado.
-
-`IdsEvaluator` usa pandas e scikit-learn para treinar o Random Forest no
-baseline, transformar features e produzir métricas. A matriz binária é
-persistida como `tn`, `fp`, `fn` e `tp`.
-
-### Interfaces
-
-#### CLI
-
-`interfaces/cli.py` interpreta argumentos, chama `ExperimentRunner`, trata
-interrupções/erros e apresenta um resumo. Não cria agentes nem calcula métricas.
-
-#### Dashboard
-
-`interfaces/dashboard/app.py` guarda registros em `st.session_state` e apresenta
-F1, matriz, diferenças de `AttackConfig`, tabela e saída do Analista. As funções
-de preparação são transformações de apresentação e possuem testes próprios.
-
 ## Modos de execução
 
-| Modo | Implementação atual | Dependências | Finalidade |
-|---|---|---|---|
-| Golden cacheado | CLI e dashboard | Python e fixture | Demo previsível |
-| Pipeline cacheado com stubs | `generate_golden_history.py` | Seed, pandas e scikit-learn | Regenerar golden |
-| ERENO `jar` | `GeneratorRunner` | Java e JAR externo | Gerar novo dataset |
-| Workflow real (Agno Team) | `live.py` via `--engine live` (route mode) | Agno, Groq, Strategist e Analyst | Loop completo |
-| Workflow real (direto) | `--engine live --orchestration direct` | Agno, Groq | Fallback sem time |
+| modo | como se chama | dependências |
+|---|---|---|
+| Golden cacheado | `--engine demo` (default) | nenhuma além do Python |
+| Loop legado Strategist↔Analyst | `--engine live` | Agno, Groq |
+| Loop legado sem time Agno | `--engine live --orchestration direct` | Agno, Groq |
+| Pipeline intent-driven | `--engine intent --prompt "..."` | Agno, Groq |
+| Geração física | `--generator-mode jar` | Java + o JAR do ERENO |
 
-## Configuração
-
-`config/settings.py` carrega `.env` antes de avaliar configurações. Os principais
-valores são:
-
-- `GROQ_API_KEY`: credencial consumida pelo cliente Groq;
-- `MODEL_ID`: modelo padrão da CLI;
-- `GENERATOR_MODE`: `cached` ou `jar`;
-- `RANDOM_SEED=42`: reprodutibilidade do avaliador;
-- caminhos de inputs, outputs, seed, golden e runtime.
-
-Argumentos da CLI sobrescrevem modelo, iterações e modo no contrato da
-interface. No runner golden, o modelo não altera resultados.
+Os três primeiros produzem `IterationRecord`; o intent-driven produz
+`LoopRecord`, que é outro contrato e não passa pelo `ExperimentRunner`.
 
 ## Dependências externas
 
-| Dependência | Uso |
+| dependência | uso |
 |---|---|
-| Agno | abstração dos agentes e futura equipe |
-| Groq | inferência dos agentes Strategist e Analyst reais |
-| pandas | datasets e tabelas do dashboard |
-| scikit-learn | Random Forest e métricas |
+| Agno | abstração dos agentes e do time |
+| Groq | inferência dos agentes reais |
+| pandas | datasets e tabelas |
+| scikit-learn | detectores, preprocessamento e métricas |
 | Pydantic | contratos do domínio |
-| Streamlit | dashboard acadêmico |
-| SHAP | explicações opcionais de importância de features |
-| Java/JAR ERENO | geração fora do modo cacheado |
+| Streamlit (`--extra dashboard`) | dashboards |
+| SHAP (`--extra shap`) | explicações opcionais, só para detectores de árvore |
+| Java + JAR do ERENO | geração fora do modo cacheado |
 
 ## Decisões arquiteturais
 
 - layout `src/` evita imports acidentais da raiz;
-- instalação editável mantém entry point e pacote alinhados;
-- `ExperimentRunner` desacopla interfaces do workflow ainda instável;
-- o golden permite demonstração antes da integração dos agentes;
-- Streamlit utiliza somente dependências já declaradas;
-- código de apresentação não treina modelos nem executa agentes.
-
-## Limitações e evolução
-
-Concluído na integração da Fase 2:
-
-- Strategist, avaliação e Analyst reais encadeados (`live.py`);
-- loop real persistido como `IterationRecord`;
-- `create_default_runner()` liga `demo`/`live` ao `WorkflowAdapter`;
-- execução ao vivo no dashboard e modo `jar` pela CLI;
-- agentes reais compostos num `agno.team.Team` em modo `route`
-  (`build_agno_team` + `TeamStrategist`/`TeamAnalyst`): o líder encaminha ao
-  membro e o orquestrador recupera a saída estruturada de `member_responses`,
-  mantendo o núcleo determinístico entre as duas chamadas do time. É o default de
-  `--engine live`; `--orchestration direct` mantém o encadeamento sem time.
-
-Ainda em aberto:
-
-- atualizar docstrings antigas que ainda atribuem lógica à CLI.
+- `ExperimentRunner` desacopla as interfaces do workflow;
+- o golden permite demonstrar e testar sem Groq nem Java;
+- código de apresentação não treina modelos nem executa agentes;
+- cada estratégia plugável (gerador, detector) é um registro por chave com
+  manifesto por execução, e não uma cadeia de `if`.
