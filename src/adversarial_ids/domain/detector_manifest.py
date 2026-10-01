@@ -17,10 +17,13 @@ escala e o mesmo espaço de features; com ele, a comparação é auditável a
 partir dos artefatos em disco, sem reexecutar nada.
 
 ``importance_kind`` existe porque ``DetectionReport.top_features`` **não
-significa a mesma coisa** entre detectores: importância Gini (RF/DT) e módulo
-do coeficiente linear (SVM linear) são escalas diferentes, e o SVM RBF não
-expõe importância nenhuma. Comparar ranking de features entre detectores só é
-honesto depois de olhar este campo.
+significa a mesma coisa** entre detectores: importância Gini (RF/DT), ganho de
+perda (XGBoost) e módulo do coeficiente linear (SVM linear) são três escalas
+diferentes, e o SVM RBF não expõe importância nenhuma. O caso do XGBoost é o
+mais traiçoeiro dos quatro: ele também publica ``feature_importances_``, com o
+mesmo nome de atributo das árvores do scikit-learn, medindo outra coisa.
+Comparar ranking de features entre detectores só é honesto depois de olhar
+este campo.
 """
 
 from __future__ import annotations
@@ -33,11 +36,17 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # o domínio não depende do core — é o core que valida seu registro contra este
 # contrato na importação, nunca o contrário. Consequência prática: a CLI lista
 # as opções de ``--detector`` sem arrastar o scikit-learn para o import.
-DetectorKey = Literal["random_forest", "decision_tree", "svm_linear", "svm_rbf"]
+DetectorKey = Literal[
+    "random_forest",
+    "decision_tree",
+    "svm_linear",
+    "svm_rbf",
+    "xgboost",
+]
 
 DETECTOR_KEYS: tuple[str, ...] = get_args(DetectorKey)
 
-ImportanceKind = Literal["gini", "linear_coef", "none"]
+ImportanceKind = Literal["gini", "gain", "linear_coef", "none"]
 
 # Qual tipo de importância cada detector é capaz de produzir. Um par
 # (detector, importance_kind) fora desta tabela é um manifest que descreve um
@@ -48,11 +57,16 @@ _IMPORTANCE_KIND_BY_DETECTOR: dict[str, str] = {
     "decision_tree": "gini",
     "svm_linear": "linear_coef",
     "svm_rbf": "none",
+    # Gain, não Gini: o XGBoost pontua uma feature pela melhora de perda que os
+    # splits dela trouxeram, não pela redução de impureza. Os dois são
+    # "feature_importances_" na API do sklearn e NÃO são a mesma escala — é
+    # exatamente a confusão que este campo existe para tornar visível.
+    "xgboost": "gain",
 }
 
 # Só modelos baseados em árvore são explicáveis por ``shap.TreeExplainer`` —
 # o caminho best-effort que ``IdsEvaluator.get_shap_importances`` usa.
-_TREE_DETECTORS = frozenset({"random_forest", "decision_tree"})
+_TREE_DETECTORS = frozenset({"random_forest", "decision_tree", "xgboost"})
 
 
 class DetectorManifest(BaseModel):

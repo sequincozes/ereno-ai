@@ -60,7 +60,7 @@ def test_detector_manifest_is_none_before_training():
 
 def test_unknown_detector_is_rejected_at_construction():
     with pytest.raises(DetectorError, match="Detector desconhecido"):
-        _evaluator(detector="xgboost")
+        _evaluator(detector="catboost")
 
 
 def test_invalid_scaler_is_rejected_at_construction():

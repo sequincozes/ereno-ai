@@ -26,6 +26,11 @@ Detectores registrados
 - ``svm_rbf``: ``SVC(kernel="rbf")``. É o "SVM" da literatura de IDS, mas
   custa O(n²)-O(n³) no número de linhas de treino e **não** expõe importância
   de feature nenhuma (ver ``importance_kind``).
+- ``xgboost``: ``XGBClassifier`` (épico E9). Gradient boosting — a referência
+  prática em dados tabulares. Depende de um extra opcional, então é importado
+  preguiçosamente: o módulo continua importável sem ele. Publica
+  ``feature_importances_`` com o mesmo nome das árvores do sklearn, mas a
+  escala é **ganho de perda**, não Gini (``importance_kind="gain"``).
 
 Por que quatro chaves e não uma chave ``svm`` com um parâmetro de kernel: o
 kernel muda tanto o custo quanto a capacidade de explicação do detector, e
@@ -58,6 +63,27 @@ from sklearn.tree import DecisionTreeClassifier
 from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS, DetectorManifest
 
 DEFAULT_DETECTOR_KEY = "random_forest"
+
+
+def _build_xgboost(**kwargs: Any) -> Any:
+    """Constrói o ``XGBClassifier`` importando-o só na hora (épico E9).
+
+    O XGBoost é um extra opcional (``uv sync --extra xgboost``), como o SHAP:
+    importá-lo no topo deste módulo faria ``core.detectors`` — e com ele a CLI,
+    os testes e o pipeline inteiro — deixar de importar em qualquer ambiente
+    que não o tenha. O roadmap condicionava o E9 a "o custo da dependência não
+    ameaçar o release"; um import preguiçoso é o que cumpre essa condição.
+    """
+
+    try:
+        from xgboost import XGBClassifier
+    except ImportError as exc:  # pragma: no cover - depende do ambiente
+        raise DetectorError(
+            "O detector 'xgboost' precisa do pacote xgboost, que é um extra "
+            "opcional: rode `uv sync --extra xgboost` (junto com os extras que "
+            "você já usa, porque `uv sync` sincroniza exatamente os pedidos)."
+        ) from exc
+    return XGBClassifier(**kwargs)
 
 
 class DetectorError(ValueError):
@@ -156,6 +182,29 @@ _REGISTRY: dict[str, DetectorSpec] = {
         # cache_size acima do default (200 MB) porque o gargalo do libsvm
         # nesse volume é o kernel cache; não muda o modelo, só o tempo.
         defaults={"C": 1.0, "gamma": "scale", "class_weight": None, "cache_size": 500.0},
+    ),
+    "xgboost": DetectorSpec(
+        key="xgboost",
+        requires_scaling=False,
+        importance_kind="gain",
+        supports_shap=True,
+        build=_build_xgboost,
+        # ``importance_type`` é fixado em vez de herdado: o default do
+        # XGBClassifier é ``None``, que *hoje* resolve para "gain" mas é um
+        # default do pacote, não um compromisso dele. Deixá-lo implícito faria
+        # ``importance_kind="gain"`` do manifest ser uma afirmação sobre a
+        # versão instalada. ``eval_metric`` fixado silencia o aviso de
+        # mudança de default sem alterar o modelo (não há early stopping aqui).
+        defaults={
+            "n_estimators": 100,
+            "max_depth": 6,
+            "learning_rate": 0.3,
+            "subsample": 1.0,
+            "colsample_bytree": 1.0,
+            "n_jobs": -1,
+            "importance_type": "gain",
+            "eval_metric": "logloss",
+        },
     ),
 }
 
@@ -337,7 +386,11 @@ class Detector:
         return ranking[:top_n]
 
     def _raw_importances(self) -> Any | None:
-        if self.importance_kind == "gini":
+        # "gini" (RF/DT) e "gain" (XGBoost) leem o MESMO atributo e medem
+        # coisas diferentes — redução de impureza contra melhora de perda. O
+        # ramo é comum de propósito: quem separa as duas é o
+        # ``importance_kind`` gravado no manifest, não uma leitura diferente.
+        if self.importance_kind in ("gini", "gain"):
             return getattr(self._estimator, "feature_importances_", None)
 
         if self.importance_kind == "linear_coef":

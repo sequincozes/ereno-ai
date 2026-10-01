@@ -20,6 +20,7 @@ dependencies = [
 [project.optional-dependencies]
 dashboard = ["streamlit"]
 shap = ["shap"]
+xgboost = ["xgboost"]
 dev = ["pytest"]
 
 [project.scripts]
