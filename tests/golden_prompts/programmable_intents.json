@@ -1,0 +1,244 @@
+[
+  {
+    "id": "prog-01",
+    "category": "valid",
+    "source": "llm",
+    "prompt": "Reescreva o número de sequência das mensagens GOOSE, mas só naquelas em que o disjuntor está aberto. Deixe as outras intactas.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "add",
+        "rules.r0.field": "sqNum",
+        "rules.r0.value": 1,
+        "rules.r0.fraction": 1,
+        "rules.r0.when.cmp": "eq",
+        "rules.r0.when.field": "cbStatus",
+        "rules.r0.when.value": 0
+      },
+      "max_fields_changed": 7,
+      "seed": 42
+    },
+    "note": "Seleção: 'só naquelas em que' virou when, não um ataque novo. Sete caminhos fixados — é o payload mais longo que o modelo produz, e o que às vezes ele achata (ver docs/programmable_attack.md)."
+  },
+  {
+    "id": "prog-02",
+    "category": "valid",
+    "source": "llm",
+    "prompt": "Empurre o relógio de cada mensagem GOOSE 20 milissegundos para a frente. Não é para reenviar nada, é a própria mensagem que sai com o horário adiantado.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "mimic_normal_traffic",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "add",
+        "rules.r0.field": "timestamp",
+        "rules.r0.value": 0.02,
+        "rules.r0.fraction": 1,
+        "rules.r0.when.cmp": "always"
+      },
+      "max_fields_changed": 5,
+      "seed": 42
+    },
+    "note": "Atraso: 20 ms viraram 0.02 s, a conversão que o catálogo pede. Sem op 'delay' — ela não existe, e o modelo não a procurou."
+  },
+  {
+    "id": "prog-03",
+    "category": "valid",
+    "source": "llm",
+    "prompt": "Quero que as mensagens cheguem fora de ordem: recue o horário de cerca de um terço delas em 30 milissegundos, sem reenviar mensagem antiga nenhuma.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "add",
+        "rules.r0.field": "timestamp",
+        "rules.r0.value": -0.03,
+        "rules.r0.fraction": 0.33,
+        "rules.r0.when.cmp": "always"
+      },
+      "max_fields_changed": 5,
+      "seed": 42
+    },
+    "note": "Reordenação é o MESMO add do prog-02 com o operando negativo — o fluxo escrito é ordenado por timestamp, então recuar o relógio é tirar de ordem. 'cerca de um terço' virou fraction 0.33."
+  },
+  {
+    "id": "prog-04",
+    "category": "valid",
+    "source": "llm",
+    "prompt": "Faça cada mensagem de GOOSE aparecer três vezes na captura, em vez de uma só.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "duplicate",
+        "rules.r0.field": "cbStatus",
+        "rules.r0.value": 2,
+        "rules.r0.fraction": 1
+      },
+      "max_fields_changed": 4,
+      "seed": 42
+    },
+    "note": "Três vezes = duas cópias extras. O 'field' que o modelo preencheu é inócuo e fica no fixture de propósito: as ops de cardinalidade o ignoram, e é isso que se quer fixar — que preenchê-lo não quebra nada."
+  },
+  {
+    "id": "prog-05",
+    "category": "valid",
+    "source": "hand",
+    "prompt": "Some com 40% das mensagens, sem mexer em campo nenhum delas.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "drop",
+        "rules.r0.fraction": 0.4
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "note": "Único eixo não exercitado contra o LLM real — escrito à mão, daí source=hand. Descarte derruba a prevalência da classe e conversa com o piso de 1% do gate E4."
+  },
+
+  {
+    "id": "prog-invalid-01",
+    "category": "invalid",
+    "source": "hand",
+    "prompt": "Mude o sqNum nas mensagens em que o stNum for aproximadamente 5.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": { "rules.r0.when.cmp": "approx" },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "fora das opções",
+    "note": "Comparador que o pedido sugere mas a gramática não tem. Recusado, não aproximado para 'eq'."
+  },
+  {
+    "id": "prog-invalid-02",
+    "category": "invalid",
+    "source": "hand",
+    "prompt": "Reescreva o tamanho do quadro das mensagens.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": { "rules.r0.field": "frameLen" },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "fora das opções",
+    "note": "Campo real do quadro GOOSE, mas fora da allowlist do creator Java. O portão Python recusa antes de a geração falhar."
+  },
+  {
+    "id": "prog-invalid-03",
+    "category": "invalid",
+    "source": "hand",
+    "prompt": "Atrase as mensagens em 30, na unidade que você achar melhor.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": { "rules.r0.when.unit": "ms" },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "fora da allowlist",
+    "note": "Caminho plausível que não existe — a regra não tem campo de unidade, o tempo é sempre em segundos."
+  },
+  {
+    "id": "prog-invalid-04",
+    "category": "invalid",
+    "source": "hand",
+    "prompt": "Some 1 ao sqNum em metade das mensagens com o disjuntor fechado, mudando no máximo dois campos.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "add",
+        "rules.r0.field": "sqNum",
+        "rules.r0.value": 1,
+        "rules.r0.fraction": 0.5,
+        "rules.r0.when.cmp": "eq"
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "expected_error": "max_fields_changed >= 5",
+    "note": "Autorar uma regra custa vários caminhos de uma vez; a cota do próprio pedido não cabe neles. O erro diz o número a usar."
+  },
+  {
+    "id": "prog-invalid-05",
+    "category": "invalid",
+    "source": "hand",
+    "prompt": "Mute 150% das mensagens.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "target_values": { "rules.r0.fraction": 1.5 },
+      "max_fields_changed": 1,
+      "seed": 42
+    },
+    "expected_error": "acima do máximo",
+    "note": "Fração fora de [0,1]; não é clampada para 1.0."
+  },
+
+  {
+    "id": "prog-incoherent-01",
+    "category": "incoherent",
+    "source": "hand",
+    "prompt": "Dobre o relógio das mensagens, multiplicando o timestamp por 2.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "lower_f1",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "scale",
+        "rules.r0.field": "timestamp",
+        "rules.r0.value": 2
+      },
+      "max_fields_changed": 3,
+      "seed": 42
+    },
+    "expected_error": "campo de tempo",
+    "note": "'scale' e 'timestamp' são legais cada um na sua allowlist; juntos, não. Escalar um relógio absoluto realoca a mensagem em vez de deslocá-la."
+  },
+  {
+    "id": "prog-incoherent-02",
+    "category": "incoherent",
+    "source": "hand",
+    "prompt": "Repita cada mensagem umas vinte e cinco vezes.",
+    "payload": {
+      "objective": "assess_ids_robustness",
+      "base_attack": "programmable",
+      "desired_effect": "increase_attack_activity",
+      "intensity": "medium",
+      "target_values": {
+        "rules.r0.op": "duplicate",
+        "rules.r0.value": 25
+      },
+      "max_fields_changed": 2,
+      "seed": 42
+    },
+    "expected_error": "cópias extras",
+    "note": "'value' não tem faixa no catálogo, porque serve a set/scale também — o teto de cópias só pode ser checado sabendo que a op é 'duplicate'."
+  }
+]
