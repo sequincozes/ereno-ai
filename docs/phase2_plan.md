@@ -253,12 +253,25 @@ consegue expressá-la.
   dos outros ataques verificada por CRC: das 281 classes do JAR, só
   `ProgrammableCreatorC.class` mudou. Detalhe em `docs/programmable_attack.md`.
 
-### 2.3 — Prompt/TPM, validação e release
+### 2.3 — Prompt/TPM, validação e release **[ENTREGUE 01/10]**
 
-- Entrada compacta do programável no catálogo do IntentAgent (a gramática, não a
-  enumeração de campos) — orçar tokens desde o 2.1.
-- Golden prompts do ataque programável (`tests/golden_prompts/`).
-- Validação com LLM real (`openai/gpt-oss-120b`), espaçada pelo TPM.
+Os dois primeiros itens saíram dentro da 2.2, por necessidade: a validação com
+LLM real estourou o TPM e só coube depois de compactar o catálogo.
+
+- ~~Entrada compacta do programável no catálogo do IntentAgent~~ — feita na 2.2
+  (instruções 23448 → 20063 caracteres).
+- ~~Validação com LLM real (`openai/gpt-oss-120b`)~~ — feita na 2.2, quatro
+  eixos, todos exatos.
+- **Golden prompts** (`tests/golden_prompts/programmable_intents.json`): 12
+  entradas em **três** categorias, não duas. Os outros ataques só precisam de
+  `valid`/`invalid` porque neles todo pedido impossível morre nos portões da
+  intenção — a impossibilidade é sempre de um campo só. No programável existe uma
+  terceira: `op=scale` e `field=timestamp` passam campo a campo e a combinação
+  não existe, então quem recusa é o schema, dentro do compilador. A categoria
+  `incoherent` fixa essa divisão de trabalho em teste e não só em prosa.
+  As cinco entradas `valid` marcadas `source: "llm"` são os payloads que o modelo
+  real produziu, não payloads inventados — é o que torna a validação repetível
+  sem gastar Groq a cada `pytest`.
 - `docs/programmable_attack.md`; tag `intent-driven-v0.3.0`.
 
 ## Riscos
@@ -297,5 +310,9 @@ consegue expressá-la.
   `target_values` como argumentos de topo da ferramenta e a Groq recusa a chamada
   (`tool_use_failed`). É maquinário da Fase 1 e serialização do modelo, não a
   gramática — ver `docs/programmable_attack.md`.
-- Próximo passo: **2.3 (golden prompts, tag `intent-driven-v0.3.0`)** — a
-  validação com LLM real e a compactação do catálogo já saíram na 2.2.
+- **2.3 (golden prompts + release) ENTREGUE** — `programmable_intents.json` com
+  12 entradas em três categorias (`valid`/`invalid`/`incoherent`), as cinco
+  válidas vindas dos payloads reais do modelo. Tag `intent-driven-v0.3.0`.
+- **Fase 2 fechada.** Aberto: o modelo às vezes achata `target_values` quando o
+  pedido fixa ~7 caminhos (ver acima), e `inverse_replay` (uc02) segue com o bug
+  de geração pré-existente, de fora da fase.
