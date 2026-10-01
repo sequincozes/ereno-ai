@@ -22,7 +22,7 @@ O mesmo desenho em Mermaid, para quem prefere editar texto:
 flowchart LR
     I[Injector Agent<br/>intent-driven · model-driven · data-driven]
     G[Generator Agent<br/>cached · ereno · …]
-    P[Pre-Processor Agent<br/>undersamplers · feature selectors · …]
+    P[Pre-Processor Agent<br/>undersamplers · feature selectors · …<br/>escolha: config ou política declarada]
     D[Detector Agent<br/>random forest · decision tree · SVM · …]
     B[Defender Agent<br/>validação por evidência · playbooks IEC-61850]
     F[(output · performance · feedback)]
@@ -86,7 +86,7 @@ da v1 são recusados com a razão; eles vivem em `outputs/`, que é descartável
 |---|---|---|
 | Injector | `intent` (e o loop legado Strategist, em pipeline separado) | `--engine` |
 | Generator | `cached`, `jar` | `--generator-mode`, registro em `core/generators.py` |
-| Pre-Processor | seletor `none`/`mutual_info`; undersampler `none`/`random` | env var, **desligados** por default |
+| Pre-Processor | seletor `none`/`mutual_info`/`rfe`; undersampler `none`/`random`/`ratio` | env var **ou** política declarada; **desligados** por default |
 | Detector | `random_forest`, `decision_tree`, `svm_linear`, `svm_rbf` | `--detector`, registro em `core/detectors.py` |
 | Defender | um | — |
 
@@ -97,13 +97,21 @@ inteiro, não uma estratégia de injeção atrás de um contrato comum. Unificar
 intent-driven, model-driven e data-driven sob uma interface só é trabalho de
 desenho, não de refactor.
 
-**O Pre-Processor não decide nada.** Chamá-lo de *agente* sugere algo que
-escolhe o undersampler e o seletor conforme o caso; hoje são
-`FEATURE_SELECTION_MODE` e `UNDERSAMPLING_MODE`, chaves de ambiente desligadas
-por padrão. A ressalva vale mais que a lacuna: um laço que ajusta o próprio
-pré-processamento até a métrica melhorar deixa de medir o que o detector
-enfrenta. Se essa caixa virar decisória, a decisão precisa ser auditável e
-ficar fora do que o laço otimiza.
+**O Pre-Processor decide metade.** O undersampler tem um decisor de verdade
+desde 01/10: `UNDERSAMPLING_MODE=policy` entrega a escolha a uma regra
+declarada (`core/undersampling_policy.py`) que resolve a estratégia a partir do
+desequilíbrio da partição de treino, e grava quem decidiu, sobre que medida e
+por quê no `SelectionManifest`. O seletor de features continua sendo só
+`FEATURE_SELECTION_MODE`, uma chave de ambiente.
+
+A condição que a ressalva impunha foi cumprida à letra — a decisão é auditável
+e fica **fora** do que o laço otimiza, e isso é estrutural, não documental:
+`decide_undersampling(*, class_counts, mode, policy)` não tem por onde receber
+um `DetectionReport`, uma `Metrics` ou um `IntentSpec`, e um teste verifica a
+assinatura. Não existe decisor `feedback` nem `intent`, e não é adiamento: um
+laço que ajusta o próprio pré-processamento até a métrica melhorar deixa de
+medir o que o detector enfrenta, e deixar a intenção do atacante configurar o
+treino do defensor é enfraquecer o detector por um caminho que não é o ataque.
 
 ## Proveniência de uma rodada
 

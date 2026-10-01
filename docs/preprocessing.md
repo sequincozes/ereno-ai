@@ -178,7 +178,7 @@ baseline já está em disco para diagnóstico.
 
 - **Undersampling e seleção de features (E7)**: consomem
   `FeatureManifest.feature_columns` como ponto de partida; não implementados
-  aqui — ver `core/feature_selector.py`, `core/undersampler.py` e
+  aqui — ver `core/feature_selector.py`, `core/undersamplers.py` e
   `docs/feature_selection.md`.
 - **Detector interface RF/DT/SVM (E8)**: ~~fora de escopo~~ — **entregue**.
   `scaler="standard"` deixou de ser só uma preparação para o futuro: os dois

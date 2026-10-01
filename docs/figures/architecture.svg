@@ -50,24 +50,29 @@
 
   <!-- ================= Pre-Processor ================= -->
   <rect class="agent" x="712" y="40" width="268" height="206" fill="#2a9150" stroke="#1a6135"/>
-  <text class="agent-name" x="846" y="68">Pre-Processor Agent</text>
-  <rect class="inner" x="730" y="82" width="114" height="150" fill="#d6f0de" stroke="#1a6135"/>
-  <text class="item" x="787" y="101" font-weight="700">Undersamplers</text>
-  <rect class="inner" x="740" y="110" width="94" height="26" fill="#ffffff" stroke="#1a6135"/>
-  <text class="item"  x="787" y="128">Random</text>
-  <rect class="inner" x="740" y="144" width="94" height="26" fill="#ffffff" stroke="#1a6135"/>
-  <text class="item"  x="787" y="162">None</text>
-  <rect class="inner" x="740" y="178" width="94" height="26" fill="#bfe6cc" stroke="#1a6135"/>
-  <text class="item"  x="787" y="196">…</text>
+  <text class="agent-name" x="846" y="64">Pre-Processor Agent</text>
+  <text class="artifact" x="846" y="79" font-size="11" font-weight="400">escolha: config · policy declarada</text>
+  <rect class="inner" x="730" y="86" width="114" height="146" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="787" y="103" font-weight="700">Undersamplers</text>
+  <rect class="inner" x="740" y="108" width="94" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="787" y="125">None</text>
+  <rect class="inner" x="740" y="136" width="94" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="787" y="153">Random</text>
+  <rect class="inner" x="740" y="164" width="94" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="787" y="181">Ratio</text>
+  <rect class="inner" x="740" y="192" width="94" height="24" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item"  x="787" y="209">…</text>
 
-  <rect class="inner" x="856" y="82" width="110" height="150" fill="#d6f0de" stroke="#1a6135"/>
-  <text class="item" x="911" y="101" font-weight="700">Feature Selectors</text>
-  <rect class="inner" x="866" y="110" width="90" height="26" fill="#ffffff" stroke="#1a6135"/>
-  <text class="item"  x="911" y="128">Filter (MI)</text>
-  <rect class="inner" x="866" y="144" width="90" height="26" fill="#ffffff" stroke="#1a6135"/>
-  <text class="item"  x="911" y="162">Wrapper (RFE)</text>
-  <rect class="inner" x="866" y="178" width="90" height="26" fill="#bfe6cc" stroke="#1a6135"/>
-  <text class="item"  x="911" y="196">…</text>
+  <rect class="inner" x="856" y="86" width="110" height="146" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="911" y="103" font-weight="700">Feature Selectors</text>
+  <rect class="inner" x="866" y="108" width="90" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="911" y="125">None</text>
+  <rect class="inner" x="866" y="136" width="90" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="911" y="153">Filter (MI)</text>
+  <rect class="inner" x="866" y="164" width="90" height="24" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="911" y="181">Wrapper (RFE)</text>
+  <rect class="inner" x="866" y="192" width="90" height="24" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item"  x="911" y="209">…</text>
 
   <rect x="1000" y="128" width="88" height="34" rx="9" fill="#1a1a1a"/>
   <text class="artifact" x="1044" y="150">Model</text>
