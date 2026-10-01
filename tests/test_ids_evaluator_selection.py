@@ -163,3 +163,98 @@ def test_feature_selection_and_undersampling_compose(tmp_path):
     # funcionando (mesmo espaço de colunas dos dois lados).
     metrics = evaluator.evaluate_variant(str(dataset))
     assert metrics["used_features"] == ["signal"]
+
+
+# --------------------------------------------------------------------------- #
+# Quem decidiu o undersampler também vai para o manifest                       #
+# --------------------------------------------------------------------------- #
+def test_the_default_run_records_the_decision_as_coming_from_configuration(tmp_path):
+    dataset = _labeled_csv(tmp_path / "baseline.csv")
+    evaluator = _evaluator()
+    evaluator.train_baseline(str(dataset))
+
+    manifest = evaluator.selection_manifest
+    assert manifest.undersampling_decided_by == "config"
+    # Mesmo sem política, o desequilíbrio é medido e registrado: é o número que
+    # permite julgar depois se a escolha fixa cabia naquele dataset.
+    assert manifest.undersampling_observed_imbalance == pytest.approx(3.0)
+
+
+def test_ratio_undersampling_caps_the_imbalance_instead_of_erasing_it(tmp_path):
+    # 60 normal / 20 ataque -> treino 42/14 -> teto 1.5x = 21 normal.
+    dataset = _labeled_csv(tmp_path / "baseline.csv")
+    evaluator = _evaluator(undersampling="ratio", undersampling_target_ratio=1.5)
+    evaluator.train_baseline(str(dataset))
+
+    manifest = evaluator.selection_manifest
+    assert manifest.undersampling == "ratio"
+    assert manifest.undersampling_target_ratio == 1.5
+    assert manifest.class_counts_after["normal"] == 21
+    assert manifest.class_counts_after["attack_label"] == 14
+
+
+def test_policy_mode_leaves_a_tolerable_imbalance_untouched(tmp_path):
+    # 3:1 está abaixo do teto default (10:1) — a política decide não mexer, e
+    # isso é uma decisão registrada, não a ausência de uma.
+    dataset = _labeled_csv(tmp_path / "baseline.csv")
+    evaluator = _evaluator(undersampling="policy")
+    evaluator.train_baseline(str(dataset))
+
+    manifest = evaluator.selection_manifest
+    assert manifest.undersampling == "none"
+    assert manifest.undersampling_decided_by == "policy"
+    assert "dentro do teto declarado" in manifest.undersampling_decision_reason
+    assert manifest.fitted_rows_before_undersampling == manifest.fitted_rows_after_undersampling
+
+
+def test_policy_mode_resamples_when_the_imbalance_crosses_the_declared_ceiling(tmp_path):
+    dataset = _labeled_csv(tmp_path / "baseline.csv", n_normal=200, n_attack=10)
+    evaluator = _evaluator(
+        undersampling="policy",
+        undersampling_max_imbalance=5.0,
+        undersampling_target_ratio=2.0,
+    )
+    evaluator.train_baseline(str(dataset))
+
+    manifest = evaluator.selection_manifest
+    assert manifest.undersampling == "ratio"
+    assert manifest.undersampling_decided_by == "policy"
+    assert manifest.undersampling_target_ratio == 2.0
+    assert manifest.class_counts_after["normal"] == 2 * manifest.class_counts_after["attack_label"]
+
+
+def test_policy_mode_never_touches_the_test_partition(tmp_path):
+    # O invariante do E7 vale igual quando é a política que decide: o conjunto
+    # de avaliação continua com a distribuição real, ou a métrica deixaria de
+    # medir o que o detector enfrenta.
+    dataset = _labeled_csv(tmp_path / "baseline.csv", n_normal=200, n_attack=10)
+
+    baseline = _evaluator()
+    baseline.train_baseline(str(dataset))
+    with_policy = _evaluator(
+        undersampling="policy", undersampling_max_imbalance=5.0, undersampling_target_ratio=2.0
+    )
+    with_policy.train_baseline(str(dataset))
+
+    assert with_policy.selection_manifest.undersampling == "ratio"
+    assert (
+        baseline.evaluate_variant(str(dataset))["dataset_rows"]
+        == with_policy.evaluate_variant(str(dataset))["dataset_rows"]
+        == 210
+    )
+
+
+def test_an_unknown_undersampling_mode_fails_when_the_evaluator_is_built(tmp_path):
+    # E não no meio de um treino, que é onde um modo digitado errado custaria
+    # uma geração inteira para aparecer.
+    with pytest.raises(ValueError, match="undersampling inválido"):
+        _evaluator(undersampling="smote")
+
+
+def test_a_target_ratio_above_the_declared_ceiling_fails_early():
+    with pytest.raises(Exception, match="não pode ser maior que"):
+        _evaluator(
+            undersampling="policy",
+            undersampling_max_imbalance=2.0,
+            undersampling_target_ratio=8.0,
+        )

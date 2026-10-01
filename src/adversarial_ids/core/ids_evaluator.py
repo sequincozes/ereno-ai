@@ -17,15 +17,29 @@ from adversarial_ids.config.settings import (
     FEATURE_SELECTION_TOP_K,
     PREPROCESSOR_MODE,
     PROTOCOL_FEATURES_MODE,
+    UNDERSAMPLING_MAX_IMBALANCE,
     UNDERSAMPLING_MODE,
+    UNDERSAMPLING_TARGET_RATIO,
 )
 from adversarial_ids.core.detectors import Detector, recommended_scaler
 from adversarial_ids.core.feature_selector import FeatureSelector
 from adversarial_ids.core.preprocessor import FeaturePreprocessor, always_drop_for
-from adversarial_ids.core.undersampler import RandomUndersampler
+from adversarial_ids.core.undersampling_policy import (
+    UNDERSAMPLING_MODES,
+    decide_undersampling,
+)
+from adversarial_ids.core.undersamplers import (
+    UndersamplerLike,
+    build_undersampler,
+    class_counts,
+)
 from adversarial_ids.domain.detector_manifest import DetectorManifest
 from adversarial_ids.domain.feature_manifest import FeatureManifest
 from adversarial_ids.domain.selection_manifest import SelectionManifest
+from adversarial_ids.domain.undersampling import (
+    UndersamplingDecision,
+    UndersamplingPolicy,
+)
 
 
 class IdsEvaluator:
@@ -69,14 +83,17 @@ class IdsEvaluator:
       antes do split — reproduz o comportamento anterior ao E6, só para
       comparar métricas antes/depois da correção (ver ``docs/preprocessing.md``).
 
-    Undersampling e seleção de features (épico E7, ``core/undersampler.py`` e
-    ``core/feature_selector.py``): rodam **depois** do preprocessador, só
+    Undersampling e seleção de features (épico E7, ``core/undersamplers.py``
+    e ``core/feature_selector.py``): rodam **depois** do preprocessador, só
     sobre a partição de treino já transformada — nesta ordem: seleção de
     features primeiro (mutual information é mais estável com mais linhas, e
     a classe minoritária de ataque ainda não perdeu peso), undersampling só
     depois, no espaço já reduzido. Ambos default ``"none"`` — comportamento
     idêntico a antes do E7 até alguém optar explicitamente por uma
-    estratégia (ver ``docs/feature_selection.md``).
+    estratégia (ver ``docs/feature_selection.md``). ``undersampling='policy'``
+    não é uma estratégia, e sim um decisor: a regra declarada em
+    ``core/undersampling_policy.py`` resolve qual estratégia roda a partir
+    do desequilíbrio do treino — nunca de uma métrica do detector.
 
     Escala (E6 × E8): ``scaler=None`` (default) delega ao detector — os SVMs
     pedem ``"standard"``, as árvores ``"none"``. Passar ``scaler="none"`` ou
@@ -108,6 +125,8 @@ class IdsEvaluator:
         feature_selection_top_k: int | None = FEATURE_SELECTION_TOP_K,
         feature_selection_min_score: float | None = FEATURE_SELECTION_MIN_SCORE,
         undersampling: str = UNDERSAMPLING_MODE,
+        undersampling_max_imbalance: float = UNDERSAMPLING_MAX_IMBALANCE,
+        undersampling_target_ratio: float = UNDERSAMPLING_TARGET_RATIO,
         detector: str = DETECTOR_MODE,
         detector_hyperparameters: Mapping[str, Any] | None = None,
         scaler: str | None = DETECTOR_SCALER,
@@ -146,7 +165,24 @@ class IdsEvaluator:
         self.feature_selection = feature_selection
         self.feature_selection_top_k = feature_selection_top_k
         self.feature_selection_min_score = feature_selection_min_score
+        # ``undersampling`` é o **modo** configurado, que pode ser "policy" —
+        # um decisor, não uma estratégia. A estratégia que de fato rodou sai de
+        # ``decide_undersampling`` em ``train_baseline`` e vai para o manifest.
+        # Validado aqui para um modo inválido falhar na construção do
+        # avaliador, e não no meio de um treino.
+        if undersampling not in UNDERSAMPLING_MODES:
+            raise ValueError(
+                f"undersampling inválido: {undersampling!r}. "
+                f"Use um de {list(UNDERSAMPLING_MODES)!r}."
+            )
         self.undersampling = undersampling
+        # Construída aqui pelo mesmo motivo: uma razão alvo maior que o teto
+        # declarado é erro de configuração, e tem que aparecer antes de rodar.
+        self.undersampling_policy = UndersamplingPolicy(
+            max_imbalance_ratio=undersampling_max_imbalance,
+            target_ratio=undersampling_target_ratio,
+        )
+        self._undersampling_decision: UndersamplingDecision | None = None
 
         # Épico E8 — detector plugável. ``n_estimators`` é um hiperparâmetro
         # exclusivo do Random Forest: continua aceito na assinatura (é anterior
@@ -183,7 +219,7 @@ class IdsEvaluator:
         self.label_column: str | None = None
         self.preprocessor: FeaturePreprocessor | None = None
         self.feature_selector: FeatureSelector | None = None
-        self.undersampler: RandomUndersampler | None = None
+        self.undersampler: UndersamplerLike | None = None
         self._class_counts_before_undersampling: dict[str, int] | None = None
         self._class_counts_after_undersampling: dict[str, int] | None = None
         self._fitted_rows_before_undersampling: int | None = None
@@ -221,6 +257,14 @@ class IdsEvaluator:
         return self.preprocessor.manifest() if self.preprocessor is not None else None
 
     @property
+    def undersampling_decision(self) -> UndersamplingDecision | None:
+        """Qual estratégia rodou, decidida por quem e por quê (``None`` antes
+        de ``train_baseline``). Também vai inteira para o ``SelectionManifest``;
+        exposta aqui para quem precisa da decisão sem o resto do manifest."""
+
+        return self._undersampling_decision
+
+    @property
     def selection_manifest(self) -> SelectionManifest | None:
         """Manifest de seleção de features + undersampling ajustado (E7).
 
@@ -231,11 +275,13 @@ class IdsEvaluator:
         """
         if (
             self.feature_selector is None
+            or self._undersampling_decision is None
             or self._fitted_rows_before_undersampling is None
             or self._fitted_rows_after_undersampling is None
         ):
             return None
 
+        decision = self._undersampling_decision
         return SelectionManifest(
             feature_selection=self.feature_selection,
             feature_selection_top_k=self.feature_selection_top_k,
@@ -243,7 +289,11 @@ class IdsEvaluator:
             candidate_features=tuple(self.feature_selector.candidate_features),
             selected_features=tuple(self.feature_selector.selected_features),
             feature_scores=self.feature_selector.scores,
-            undersampling=self.undersampling,
+            undersampling=decision.strategy,
+            undersampling_decided_by=decision.decided_by,
+            undersampling_target_ratio=decision.target_ratio,
+            undersampling_observed_imbalance=decision.observed_imbalance,
+            undersampling_decision_reason=decision.reason,
             undersampling_random_state=self.random_state,
             class_counts_before=self._class_counts_before_undersampling or {},
             class_counts_after=self._class_counts_after_undersampling or {},
@@ -315,7 +365,7 @@ class IdsEvaluator:
         # Épico E7 — seleção de features primeiro (ajustada sobre TODO o
         # treino, antes de qualquer undersampling), undersampling depois, só
         # no espaço já reduzido. Nunca sobre X_test/y_test: ver docstring da
-        # classe e de core/undersampler.py.
+        # classe e de core/undersamplers.py.
         self.feature_selector = FeatureSelector(
             strategy=self.feature_selection,
             top_k=self.feature_selection_top_k,
@@ -325,19 +375,30 @@ class IdsEvaluator:
         X_train = self.feature_selector.fit_transform(X_train, y_train)
         X_test = self.feature_selector.transform(X_test)
 
-        self.undersampler = RandomUndersampler(
-            strategy=self.undersampling, random_state=self.random_state
-        )
         self._fitted_rows_before_undersampling = len(X_train)
         self._class_counts_before_undersampling = {
             self.class_mapping.get(int(label), str(label)): count
-            for label, count in RandomUndersampler.class_counts(y_train).items()
+            for label, count in class_counts(y_train).items()
         }
+        # A decisão vê a contagem de classes do TREINO e a política declarada,
+        # e nada mais — nem métrica, nem intenção. Ver o docstring de
+        # core/undersampling_policy.py para por que essa assinatura é o
+        # guardrail, e não uma economia de argumentos.
+        self._undersampling_decision = decide_undersampling(
+            class_counts=self._class_counts_before_undersampling,
+            mode=self.undersampling,
+            policy=self.undersampling_policy,
+        )
+        self.undersampler = build_undersampler(
+            self._undersampling_decision.strategy,
+            random_state=self.random_state,
+            target_ratio=self._undersampling_decision.target_ratio,
+        )
         X_train, y_train = self.undersampler.fit_resample(X_train, y_train)
         self._fitted_rows_after_undersampling = len(X_train)
         self._class_counts_after_undersampling = {
             self.class_mapping.get(int(label), str(label)): count
-            for label, count in RandomUndersampler.class_counts(y_train).items()
+            for label, count in class_counts(y_train).items()
         }
 
         print(f"[IDS] Colunas removidas: {self.removed_columns}")
@@ -345,7 +406,9 @@ class IdsEvaluator:
         print(
             f"[IDS] Treino: {self._fitted_rows_before_undersampling} -> "
             f"{self._fitted_rows_after_undersampling} linhas após undersampling "
-            f"({self.undersampling})"
+            f"({self._undersampling_decision.strategy}, decidido por "
+            f"{self._undersampling_decision.decided_by}: "
+            f"{self._undersampling_decision.reason})"
         )
         print(f"[IDS] Detector: {self.detector.key} (escala: {self.scaler})")
 

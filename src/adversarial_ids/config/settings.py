@@ -209,7 +209,7 @@ PREPROCESSOR_MODE = os.getenv("PREPROCESSOR_MODE", "modular").strip().lower()
 # Undersampling + seleção de features (épico E7): consomem
 # FeatureManifest.feature_columns (E6) como ponto de partida, não fazem
 # parte do FeaturePreprocessor — ver core/feature_selector.py e
-# core/undersampler.py. Default "none" nos dois: comportamento idêntico a
+# core/undersamplers.py. Default "none" nos dois: comportamento idêntico a
 # antes do E7 existir, até alguém optar explicitamente por uma estratégia.
 # Sobrescreva com as env vars abaixo.
 # ------------------------------------------------------------
@@ -224,7 +224,16 @@ FEATURE_SELECTION_MIN_SCORE = (
     float(_feature_selection_min_score_raw) if _feature_selection_min_score_raw else None
 )
 
+# "none"/"random"/"ratio" fixam a estratégia; "policy" delega a escolha à
+# regra declarada em core/undersampling_policy.py, que decide a partir do
+# desequilíbrio da partição de TREINO — nunca de uma métrica do detector.
 UNDERSAMPLING_MODE = os.getenv("UNDERSAMPLING_MODE", "none").strip().lower()
+
+# Parâmetros da política (só têm efeito em UNDERSAMPLING_MODE=policy, e
+# UNDERSAMPLING_TARGET_RATIO também em "ratio"): acima de que desequilíbrio
+# reamostrar, e até que razão reduzir. 1.0 = equilíbrio total.
+UNDERSAMPLING_MAX_IMBALANCE = float(os.getenv("UNDERSAMPLING_MAX_IMBALANCE", "10.0"))
+UNDERSAMPLING_TARGET_RATIO = float(os.getenv("UNDERSAMPLING_TARGET_RATIO", "3.0"))
 
 # ------------------------------------------------------------
 # Detector plugável (épico E8): qual modelo o IdsEvaluator treina —
