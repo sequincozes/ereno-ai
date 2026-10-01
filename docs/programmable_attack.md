@@ -152,6 +152,11 @@ mensagem corrente.
   e o limite de cópias do `duplicate`, a capacidade (só fraction com efeito), a
   autoração de comportamento/seleção/atraso via `target_values`, o nunca-clampar,
   e o determinismo.
+- `tests/test_intent_golden_prompts_programmable.py` — os quatro eixos da
+  gramática como golden prompts, com os payloads que o LLM real produziu, mais
+  os pedidos recusados: cinco nos portões da intenção e dois só no schema
+  (a categoria `incoherent`, que existe porque aqui a impossibilidade pode estar
+  na combinação de dois campos legais).
 - `tests/test_attack_capabilities_catalog.py` / `test_intent_loop_orchestrator.py`
   — o programmable passa as seis invariantes do catálogo e os sete estágios em
   cached mode como qualquer ataque.
