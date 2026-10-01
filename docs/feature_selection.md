@@ -45,7 +45,7 @@ O modelo só é treinado depois dos dois passos; `evaluate_variant` e
 `feature_selector.transform` (nunca undersampling) — o mesmo espaço de
 colunas que o modelo aprendeu.
 
-## `FeatureSelector` — mutual information
+## `FeatureSelector` — filter-based e wrapper-based
 
 - `strategy="none"` (default): mantém todas as features candidatas, na
   ordem que o preprocessador produziu. `scores` fica `{}` — a estratégia
@@ -59,7 +59,43 @@ colunas que o modelo aprendeu.
   informados). `selected_features` preserva a ordem original das colunas
   candidatas, não a ordem de ranking — mantém o layout estável para o
   modelo treinado. Levanta `FeatureSelectorError` se nada sobreviver ao
-  corte.
+  corte. É **filter-based**: pontua os dados contra o rótulo sem treinar
+  modelo nenhum.
+- `strategy="rfe"`: **wrapper-based**. Treina um modelo, descarta a feature
+  menos importante, retreina, e repete até sobrarem `top_k`
+  (`sklearn.feature_selection.RFE`). Exige `top_k` — o critério de parada do
+  RFE é um número de features, não um limiar — e **recusa** `min_score`, que
+  não tem significado sobre um ranking de eliminação. `top_k` acima do número
+  de candidatas mantém todas em vez de falhar: "quero as 20 melhores de 12" é
+  um pedido que se atende.
+
+### Por que o RFE não usa o detector que vai treinar
+
+Seria o wrapper de manual, e quebraria a garantia do E8. Os cinco detectores
+são comparáveis **porque o pipeline a montante deles é idêntico**
+(`docs/detectors.md`); se a seleção usasse cada detector como seu próprio
+avaliador, cada um treinaria sobre um espaço de features diferente e a
+comparação deixaria de medir o detector para medir a seleção. O estimador do
+RFE é fixo, barato e independente do detector — uma árvore de profundidade 8.
+Decisão de desenho, não limitação.
+
+Custo: o RFE treina uma vez por feature eliminada. O que o torna viável é o
+estimador ser barato, não o conjunto ser pequeno — trocá-lo por um ensemble
+multiplicaria o custo pelo número de features.
+
+### As duas pontuações são opostas
+
+`scores` é preenchido pelas duas estratégias e **a escala depende de qual**:
+
+| estratégia | o que o número é | direção |
+|---|---|---|
+| `mutual_info` | informação mútua com o rótulo | **maior** é melhor |
+| `rfe` | ranking de eliminação (`1` = mantida) | **menor** é melhor |
+
+Ordenar `feature_scores` sem olhar `feature_selection` produz o ranking
+invertido em um dos dois casos. É a mesma disciplina de
+`DetectorManifest.importance_kind` (ver `docs/detectors.md`): formato igual,
+significado diferente, e um campo que diz qual.
 
 ## `RandomUndersampler` — reamostragem aleatória
 
@@ -80,7 +116,8 @@ colunas que o modelo aprendeu.
 - `feature_selection`/`feature_selection_top_k`/`feature_selection_min_score`
   — a estratégia e o(s) critério(s) de corte usados;
 - `candidate_features`/`selected_features` — antes/depois da seleção;
-- `feature_scores` — só preenchido quando `feature_selection="mutual_info"`,
+- `feature_scores` — vazio só quando `feature_selection="none"`; preenchido por
+  `mutual_info` e por `rfe` com escalas **opostas** (ver acima),
   cobre exatamente `candidate_features`;
 - `undersampling`/`undersampling_random_state` — a estratégia e a seed;
 - `class_counts_before`/`class_counts_after` — contagem por rótulo
@@ -143,7 +180,11 @@ validador de consistência interna do `SelectionManifest`;
   `DetectorManifest.trained_features`/`trained_rows` batem com
   `SelectionManifest.selected_features`/`fitted_rows_after_undersampling`.
   Ver `docs/detectors.md`.
+- **Seleção wrapper-based (RFE)**: ~~fora de escopo~~ — **entregue**, e provou
+  que o `Literal` de `strategy` era mesmo extensível sem quebrar contrato: a
+  única mudança no `SelectionManifest` foi o vocabulário e um validador por
+  estratégia.
 - **Estratégias de undersampling mais ricas** (ex.: NearMiss, Tomek links) e
-  **outros critérios de seleção** (ex.: RFE, importância do próprio modelo)
-  não são deste épico — `strategy` nos dois componentes já é um `Literal`
-  extensível para isso, sem quebrar o contrato existente.
+  **outros critérios de seleção** (ex.: importância do próprio modelo) seguem
+  fora — a segunda, aliás, é a que o RFE evita de propósito, pelo motivo
+  explicado acima.

@@ -8,6 +8,7 @@ reproduzível dado o mesmo ``random_state``.
 
 from __future__ import annotations
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -140,3 +141,105 @@ def test_transform_keeps_only_selected_columns():
 
     assert list(transformed.columns) == selector.selected_features
     assert len(transformed) == len(train)
+
+
+# --------------------------------------------------------------------------- #
+# RFE — seleção wrapper-based                                                 #
+# --------------------------------------------------------------------------- #
+def _informative_frame(n: int = 200):
+    """Uma coluna que determina o rótulo, três de ruído independente."""
+
+    rng = np.random.default_rng(0)
+    signal = rng.normal(size=n)
+    X = pd.DataFrame(
+        {
+            "noise_a": rng.normal(size=n),
+            "signal": signal,
+            "noise_b": rng.normal(size=n),
+            "noise_c": rng.normal(size=n),
+        }
+    )
+    return X, pd.Series((signal > 0).astype(int))
+
+
+def test_rfe_requires_top_k():
+    """O critério de parada do RFE é um número de features, não um limiar."""
+
+    with pytest.raises(FeatureSelectorError, match="exige top_k"):
+        FeatureSelector(strategy="rfe")
+
+
+def test_rfe_rejects_min_score():
+    """A pontuação do RFE é ranking de eliminação; um limiar sobre ela
+    descreveria um corte que não aconteceu."""
+
+    with pytest.raises(FeatureSelectorError, match="não aceita min_score"):
+        FeatureSelector(strategy="rfe", top_k=2, min_score=0.1)
+
+
+def test_rfe_keeps_the_feature_that_determines_the_label():
+    X, y = _informative_frame()
+
+    selector = FeatureSelector(strategy="rfe", top_k=1).fit(X, y)
+
+    assert selector.selected_features == ["signal"]
+
+
+def test_rfe_scores_are_a_ranking_where_lower_is_better():
+    """Oposto do mutual_info, e é a razão de o manifest dizer qual estratégia
+    produziu a pontuação: ordenar sem olhar inverte o ranking."""
+
+    X, y = _informative_frame()
+
+    selector = FeatureSelector(strategy="rfe", top_k=1).fit(X, y)
+
+    assert selector.scores["signal"] == 1.0
+    assert set(selector.scores) == set(X.columns)
+    assert all(score > 1.0 for name, score in selector.scores.items() if name != "signal")
+
+
+def test_rfe_preserves_candidate_column_order_not_ranking_order():
+    X, y = _informative_frame()
+
+    selector = FeatureSelector(strategy="rfe", top_k=3).fit(X, y)
+
+    assert selector.selected_features == [
+        column for column in X.columns if column in set(selector.selected_features)
+    ]
+
+
+def test_rfe_top_k_above_the_candidate_count_keeps_everything():
+    """"Quero as 20 melhores de 4" é um pedido satisfeito por manter as 4 —
+    o RFE do sklearn recusaria, e derrubar a execução por contagem seria pior
+    do que atendê-lo."""
+
+    X, y = _informative_frame()
+
+    selector = FeatureSelector(strategy="rfe", top_k=99).fit(X, y)
+
+    assert selector.selected_features == list(X.columns)
+
+
+def test_rfe_is_deterministic_for_the_same_seed():
+    X, y = _informative_frame()
+
+    first = FeatureSelector(strategy="rfe", top_k=2, random_state=7).fit(X, y)
+    second = FeatureSelector(strategy="rfe", top_k=2, random_state=7).fit(X, y)
+
+    assert first.selected_features == second.selected_features
+    assert first.scores == second.scores
+
+
+def test_rfe_fit_never_sees_more_than_what_it_is_given():
+    """Mesma disciplina anti-leakage do E6/E7: ``transform`` só recorta, nunca
+    reavalia — um conjunto de teste diferente não muda a seleção."""
+
+    X, y = _informative_frame()
+    selector = FeatureSelector(strategy="rfe", top_k=2).fit(X, y)
+    chosen = list(selector.selected_features)
+
+    other = X.sample(frac=1.0, random_state=99).reset_index(drop=True)
+    transformed = selector.transform(other)
+
+    assert list(transformed.columns) == chosen
+    assert selector.selected_features == chosen
