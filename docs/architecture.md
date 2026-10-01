@@ -7,6 +7,17 @@ feedback.
 
 ## O desenho
 
+![Arquitetura de cinco agentes do ERENO-AI](figures/architecture.svg)
+
+A fonte é `docs/figures/architecture.svg` — versionada, editável como texto e
+exportável para PNG/PDF. As pontas de seta são polígonos explícitos em vez de
+`marker-end`: nem todo renderizador (svglib, parte dos pipelines de
+LaTeX/Inkscape) desenha markers, e uma figura de artigo precisa sobreviver ao
+renderizador de quem a abrir. A caixa `Mininet` aparece tracejada e em cinza
+porque está **registrada como ausente** — é backend previsto, não implementado.
+
+O mesmo desenho em Mermaid, para quem prefere editar texto:
+
 ```mermaid
 flowchart LR
     I[Injector Agent<br/>intent-driven · model-driven · data-driven]
