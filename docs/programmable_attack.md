@@ -175,6 +175,34 @@ mensagem corrente.
 - **Regressão dos outros ataques:** comparados os CRCs das 281 classes
   `br/ufu/facom/ereno/**` entre o JAR da 2.1 e o da 2.2 — **só
   `ProgrammableCreatorC.class` difere**.
+- **LLM real (`openai/gpt-oss-120b`, 01/10), um prompt por eixo da gramática.**
+  Em todos os quatro o modelo escolheu `base_attack=programmable` sozinho:
+
+  | prompt (resumido) | autorado |
+  |---|---|
+  | "reescreva o sqNum só nas mensagens com o disjuntor aberto" | `when.field=cbStatus`, `when.cmp=eq`, `when.value=0`, `add sqNum`, `fraction=1.0` |
+  | "empurre o relógio 20 ms para a frente, sem reenviar nada" | `op=add`, `field=timestamp`, `value=0.02`, `fraction=1.0` |
+  | "mensagens fora de ordem: recue ~um terço delas em 30 ms" | `op=add`, `field=timestamp`, `value=-0.03`, `fraction=0.33` |
+  | "cada mensagem três vezes em vez de uma" | `op=duplicate`, `value=2`, `fraction=1.0` |
+
+  Os dois eixos de temporização saíram exatos, com a conversão ms→s e o sinal
+  certos, e sem o modelo procurar uma op `delay`/`reorder` que não existe.
+
+## Limitação aberta: o modelo às vezes achata `target_values`
+
+No prompt de seleção — o que fixa **sete** caminhos, mais que qualquer outro — o
+modelo emitiu os caminhos como argumentos de topo da ferramenta, ao lado de um
+`target_values: null`, e a Groq recusou a chamada inteira
+(`tool_use_failed: additionalProperties ... not allowed`). Aconteceu em 2 de 3
+tentativas desse prompt; nas outras o mesmo prompt nesteou certo e produziu a
+linha da tabela acima.
+
+É serialização do modelo, não a gramática: a assinatura de `submit_intent_spec`
+tipa `target_values` como dict e os outros três prompts (4 a 5 caminhos) nestearam
+certo. É também maquinário da **Fase 1**, não da 2.2 — só que a 2.2 torna comum
+fixar muitos caminhos de uma vez, que é quando aparece. Um aviso explícito na
+descrição do parâmetro não eliminou o caso. Opções, se virar incômodo: uma
+retentativa em `tool_use_failed`, ou menos caminhos por chamada.
 
 ## Nota de manutenção
 

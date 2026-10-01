@@ -235,11 +235,17 @@ absoluto: realocam a mensagem em vez de deslocá-la) — uma coerência *entre* 
 da mesma regra, que vive no schema, porque nenhuma allowlist campo-a-campo
 consegue expressá-la.
 
-- **Custo de prompt:** +971 caracteres no catálogo e +649 no `intent.md`
-  (~+405 tokens, est. ~7,2k/8k TPM). Para pagar parte disso, a descrição da
-  gramática passou a ser escrita uma vez: `rules.r1.*` referencia `rules.r0.*`
-  em vez de repetir o texto (o portão não lê descrição, então os slots seguem
-  idênticos onde importa). Sem isso, a fase teria custado ~+340 tokens a mais.
+- **Custo de prompt, e o teto estourado.** A fase somou ~1,6k caracteres ao
+  prompt, e a validação com LLM real bateu no TPM de 8000 da conta: uma
+  requisição medida em **8467 tokens**, HTTP 413. Espaçar não resolve quando uma
+  requisição sozinha passa do limite — e das quatro chamadas, duas passaram em
+  8461 e 8059, ou seja, o teto vinha sendo vencido por sorte. Obrigou a puxar a
+  compactação do catálogo (item da 2.3) para agora: campos idênticos em mais de
+  um ataque viraram uma seção compartilhada citada por caminho, rótulos de efeito
+  viraram `ev`/`at`/`ev+at` e os de tipo `num`/`int`/`bool`/`str`/`int[]`.
+  Instruções de **23448 → 20063 caracteres**; medido depois: 7300, 7414 e 7508
+  tokens nos mesmos prompts. É a mesma troca que `_render_effects` já fazia —
+  dizer uma vez, com legenda, e deixar o portão ser a autoridade.
 - **DoD atingida (JAR, seed 4242):** seleção + atraso caiu só nas mensagens
   selecionadas (mínimo de `timestamp - t` exatamente 0.02 nelas, 0.00 nas
   demais); `duplicate value=2` deu exatamente 3× as linhas; `drop fraction=0.4`
@@ -283,7 +289,13 @@ consegue expressá-la.
   Groq. Ver `docs/programmable_attack.md`.
 - **2.2 (seleção + temporização) ENTREGUE** — `when` por slot, `t`/`timestamp` na
   allowlist (atraso e reordenação são o mesmo `add` com sinal), `drop`/`duplicate`
-  para cardinalidade. Verificado com o JAR em quatro configs; falta a validação
-  com LLM real, que é da 2.3.
-- Próximo passo: **2.3 (golden prompts, validação com LLM real, tag
-  `intent-driven-v0.3.0`)**.
+  para cardinalidade. Verificado com o JAR em quatro configs **e com LLM real nos
+  quatro eixos da gramática** (o modelo escolheu `programmable` sozinho e autorou
+  a regra esperada em cada um). A compactação do catálogo que a 2.3 previa veio
+  junto, por necessidade: sem ela a validação não cabia no TPM.
+- **Aberto:** com sete caminhos fixados de uma vez, o modelo às vezes emite os
+  `target_values` como argumentos de topo da ferramenta e a Groq recusa a chamada
+  (`tool_use_failed`). É maquinário da Fase 1 e serialização do modelo, não a
+  gramática — ver `docs/programmable_attack.md`.
+- Próximo passo: **2.3 (golden prompts, tag `intent-driven-v0.3.0`)** — a
+  validação com LLM real e a compactação do catálogo já saíram na 2.2.
