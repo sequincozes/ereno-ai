@@ -68,31 +68,103 @@ def _render_effects(field) -> str:
 
     effects = frozenset(field.effects)
     if effects == _EVASION:
-        return "evasão"
+        return "ev"
     if effects == _ACTIVITY:
-        return "atividade"
+        return "at"
     if effects == _EVASION | _ACTIVITY:
-        return "evasão, atividade"
+        return "ev+at"
     # Um quarto conjunto surgiria só se o catálogo mudasse; então o nome longo
     # é o correto — melhor um campo verboso que um rótulo que mente.
     return ", ".join(sorted(e.value for e in field.effects))
 
 
-def _render_capability(capability: AttackCapability) -> str:
+#: Nome curto do tipo. Mesma troca dos rótulos de efeito: a legenda do
+#: catálogo devolve o nome inteiro, e o portão não lê o texto do prompt.
+_SHORT_TYPE = {
+    "number": "num",
+    "integer": "int",
+    "boolean": "bool",
+    "string": "str",
+    "integer_list": "int[]",
+}
+
+
+def _field_line(field) -> str:
+    kind = _SHORT_TYPE.get(field.value_type, field.value_type)
+    return (
+        f"  - `{field.path}` {kind}{_render_domain(field)} · "
+        f"{_render_effects(field)} — {field.description}"
+    )
+
+
+def _signature(field) -> tuple[str, ...]:
+    """Tudo que a linha do campo diz. Dois campos com a mesma assinatura são a
+    mesma entrada do catálogo aparecendo em ataques diferentes — e só então
+    podem ser descritos uma vez. Efeitos e faixa entram na assinatura porque
+    um mesmo caminho pode carregar efeitos diferentes em outro ataque, e aí o
+    texto compartilhado mentiria sobre o portão."""
+
+    return (
+        field.path,
+        field.value_type,
+        _render_domain(field),
+        _render_effects(field),
+        field.description,
+    )
+
+
+def _shared_fields(catalog: dict[str, AttackCapability]) -> dict[tuple[str, ...], object]:
+    """Campos que aparecem, idênticos, em mais de um ataque.
+
+    As quatro variantes de ``delayed_replay`` e os dois replays repetem oito
+    campos palavra por palavra. Descrevê-los uma vez num glossário e deixar
+    cada ataque citar só o caminho corta ~2,7k caracteres do prompt sem tirar
+    nada do que o portão aceita — a mesma troca que ``_render_effects`` já faz
+    com os nomes de efeito.
+    """
+
+    seen: dict[tuple[str, ...], list] = {}
+    for capability in catalog.values():
+        for field in capability.fields:
+            seen.setdefault(_signature(field), []).append(field)
+    return {sig: fields[0] for sig, fields in seen.items() if len(fields) > 1}
+
+
+def _render_shared(shared: dict[tuple[str, ...], object]) -> str:
+    lines = [
+        "### Campos compartilhados",
+        "",
+        "Os ataques abaixo citam estes caminhos pelo nome; a linha completa "
+        "(tipo, faixa e efeitos) é esta aqui e vale igual em todos eles.",
+        "",
+    ]
+    lines.extend(_field_line(field) for field in shared.values())
+    return "\n".join(lines)
+
+
+def _render_capability(
+    capability: AttackCapability,
+    shared: dict[tuple[str, ...], object] | None = None,
+) -> str:
     spec = get_attack_spec(capability.attack_key)
     objectives = ", ".join(sorted(o.value for o in capability.supported_objectives))
+    shared = shared or {}
 
     lines = [
         f"### `{capability.attack_key}` — `{capability.capability_id}`",
         f"- {spec.description} Classe no dataset: `{spec.label}`. "
         f"Objetivos: {objectives}.",
-        "- Campos (caminho — tipo [faixa] · efeitos):",
     ]
-    for field in capability.fields:
-        lines.append(
-            f"  - `{field.path}` — {field.value_type}{_render_domain(field)} · "
-            f"{_render_effects(field)} — {field.description}"
-        )
+
+    common = [f for f in capability.fields if _signature(f) in shared]
+    own = [f for f in capability.fields if _signature(f) not in shared]
+
+    if common:
+        paths = ", ".join(f"`{field.path}`" for field in common)
+        lines.append(f"- Campos compartilhados (ver a seção acima): {paths}.")
+    if own:
+        lines.append("- Campos próprios:")
+        lines.extend(_field_line(field) for field in own)
     return "\n".join(lines)
 
 
@@ -119,18 +191,25 @@ def build_capability_context(
         "intenção antes do compilador — nunca invente um ataque ou um caminho "
         "de campo que não esteja listado aqui.",
         "",
-        "Legenda dos campos: `[a..b]` é a faixa aceita (um lado vazio = sem "
-        "limite daquele lado), e `[x|y]` são os únicos valores aceitos — um "
-        "valor fixado fora disso é rejeitado. Os efeitos após `·`: `evasão` = "
-        "o campo serve a `lower_f1`, `lower_recall` e `mimic_normal_traffic`; "
-        "`atividade` = serve a `increase_attack_activity`.",
+        "Legenda de cada campo (`caminho tipo[faixa] · efeitos — significado`): "
+        "tipo é `num`/`int`/`bool`/`str`/`int[]`; `[a..b]` é a faixa aceita (um "
+        "lado vazio = sem limite daquele lado) e `[x|y]` são os únicos valores "
+        "aceitos — um valor fixado fora disso é rejeitado; e os efeitos são `ev` "
+        "(o campo serve a `lower_f1`, `lower_recall` e `mimic_normal_traffic`), "
+        "`at` (serve a `increase_attack_activity`) ou `ev+at` (serve aos dois).",
         "",
     ]
+
+    shared = _shared_fields(catalog)
+    if shared:
+        sections.append(_render_shared(shared))
+        sections.append("")
+
     for attack_key in list_attack_keys():
         capability = by_attack_key.get(attack_key)
         if capability is None:
             continue
-        sections.append(_render_capability(capability))
+        sections.append(_render_capability(capability, shared))
         sections.append("")
 
     return "\n".join(sections).rstrip() + "\n"
