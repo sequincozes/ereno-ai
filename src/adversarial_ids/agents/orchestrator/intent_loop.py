@@ -110,7 +110,12 @@ from adversarial_ids.core.detection_reporter import build_detection_report
 from adversarial_ids.core.defense_rules import evaluate_plan_rules
 from adversarial_ids.core.detectors import detector_spec
 from adversarial_ids.core.feedback_policy import decide_feedback
-from adversarial_ids.core.generator_runner import GeneratorRunner
+from adversarial_ids.core.generators import (
+    GeneratorLike,
+    GeneratorRequest,
+    build_generator,
+    manifest_for,
+)
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
 from adversarial_ids.core.intent_compiler import compile_attack_candidate
 from adversarial_ids.domain.dataset_bundle import DatasetBundle
@@ -120,6 +125,7 @@ from adversarial_ids.domain.feedback_decision import FeedbackDecision, RoundOutc
 from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.loop_event import LoopEvent
 from adversarial_ids.domain.run_usage import AgentUsage
+from adversarial_ids.domain.generator_manifest import GENERATOR_KEYS
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json, save_json
 from adversarial_ids.shared.loop_event_store import (
@@ -134,7 +140,9 @@ from adversarial_ids.shared.loop_record_store import (
 from adversarial_ids.shared.redaction import redact
 from adversarial_ids.shared.run_id import new_run_id
 
-_VALID_GENERATOR_MODES = ("cached", "jar")
+# Vocabulário de geradores: vem do registro, para a CLI e o orquestrador
+# nunca aceitarem uma chave que não constrói nada.
+_VALID_GENERATOR_MODES = GENERATOR_KEYS
 
 
 @runtime_checkable
@@ -645,6 +653,22 @@ class IntentLoopOrchestrator:
                 ctx, "ereno",
                 lambda: generator.generate_dataset(candidate.config, iteration=1),
             )
+            # Quarto manifest da rodada, ao lado de feature/selection/detector —
+            # e o único a montante do detector: de onde este trace veio. Sem
+            # ele, "qual gerador produziu estes números" só existe na linha de
+            # comando que alguém digitou, e some junto com o terminal. O nome do
+            # estágio continua "ereno" por compatibilidade com os LoopRecords já
+            # gravados; quem diz o simulador de verdade é o manifest.
+            save_json(
+                run_dir / "generator_manifest.json",
+                manifest_for(
+                    self.generator_mode,
+                    attack_key=spec.key,
+                    segment_name=spec.segment_name,
+                    random_seed=effective_seed,
+                    duration_seconds=ctx.stages[-1].duration_seconds,
+                ).model_dump(mode="json"),
+            )
 
             dataset_bundle = self._stage(
                 ctx, "preprocess",
@@ -790,7 +814,7 @@ class IntentLoopOrchestrator:
     # ------------------------------------------------------------------ #
     def _run_detector(
         self,
-        generator: GeneratorRunner,
+        generator: GeneratorLike,
         spec: AttackSpec,
         dataset_bundle: DatasetBundle,
         run_dir: Path,
@@ -939,31 +963,40 @@ class IntentLoopOrchestrator:
         return plan
 
     # ------------------------------------------------------------------ #
-    # Núcleo (GeneratorRunner por execução, isolado por run_id)          #
+    # Núcleo (um gerador por execução, isolado por run_id)                #
     # ------------------------------------------------------------------ #
     def _build_generator(
         self, run_dir: Path, spec: AttackSpec, *, random_seed: int | None = None
-    ) -> GeneratorRunner:
-        cached_dataset = None
-        if self.generator_mode == "cached":
-            cached_dataset = self.cached_dataset_path or BASELINE_DATASET_PATH
-        return GeneratorRunner(
-            runtime_dir=GENERATOR_RUNTIME_DIR,
-            output_dataset_path=GENERATOR_OUTPUT_DATASET_PATH,
-            run_command=GENERATOR_RUN_COMMAND,
-            suggested_config_path=str(run_dir / "attack_config.json"),
-            action_config_relative_path=GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
-            benign_action_config_relative_path=(
-                GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH
-            ),
-            benign_seed_path=BASELINE_DATASET_PATH,
+    ) -> GeneratorLike:
+        """Resolve o backend de geração pela chave e o constrói.
+
+        ``options`` reúne o que é específico do backend ERENO (runtime, comando,
+        timeouts); o que é genérico — qual ataque, qual segmento, qual semente —
+        são campos do ``GeneratorRequest``. Um backend que não seja o ERENO lê
+        outras chaves de ``options`` e entra sem passar por aqui.
+        """
+
+        request = GeneratorRequest(
+            attack_key=spec.key,
             segment_name=spec.segment_name,
-            cached_dataset_path=cached_dataset,
-            timeout_seconds=GENERATOR_TIMEOUT_SECONDS,
-            max_retries=GENERATOR_MAX_RETRIES,
-            retry_backoff_seconds=GENERATOR_RETRY_BACKOFF_SECONDS,
             random_seed=random_seed,
+            options={
+                "runtime_dir": GENERATOR_RUNTIME_DIR,
+                "output_dataset_path": GENERATOR_OUTPUT_DATASET_PATH,
+                "run_command": GENERATOR_RUN_COMMAND,
+                "suggested_config_path": str(run_dir / "attack_config.json"),
+                "action_config_relative_path": GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
+                "benign_action_config_relative_path": (
+                    GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH
+                ),
+                "benign_seed_path": BASELINE_DATASET_PATH,
+                "cached_dataset_path": self.cached_dataset_path or BASELINE_DATASET_PATH,
+                "timeout_seconds": GENERATOR_TIMEOUT_SECONDS,
+                "max_retries": GENERATOR_MAX_RETRIES,
+                "retry_backoff_seconds": GENERATOR_RETRY_BACKOFF_SECONDS,
+            },
         )
+        return build_generator(self.generator_mode, request)
 
     # ------------------------------------------------------------------ #
     # Runner de estágio — mede duração, persiste artefato, registra falha #

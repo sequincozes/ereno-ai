@@ -46,7 +46,7 @@ from adversarial_ids.config.settings import (
     OUTPUTS_DIR,
     PROMPT_PATH,
 )
-from adversarial_ids.core.generator_runner import GeneratorRunner
+from adversarial_ids.core.generators import GeneratorLike, GeneratorRequest, build_generator
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
 from adversarial_ids.domain import IterationRecord, Metrics
 from adversarial_ids.domain.strategist_output import StrategistOutput
@@ -257,35 +257,40 @@ def _build_team(
 # --------------------------------------------------------------------------- #
 # Núcleo                                                                        #
 # --------------------------------------------------------------------------- #
-def _build_generator(generator_mode: str, spec: AttackSpec) -> GeneratorRunner:
-    """Constrói o ``GeneratorRunner`` no modo pedido (``cached`` ou ``jar``).
+def _build_generator(generator_mode: str, spec: AttackSpec) -> GeneratorLike:
+    """Resolve o backend de geração pela chave e o constrói.
 
-    No modo ``jar`` o runner seleciona o segmento do ataque (``spec.segment_name``)
-    no action config a cada geração, então trocar de ataque é só trocar a ``spec``.
+    Mesmo registro que o pipeline intent-driven usa
+    (``core/generators.py``) — os dois caminhos precisam concordar sobre quais
+    geradores existem, ou ``--generator-mode`` significaria coisas diferentes
+    conforme o ``--engine``.
+
+    No modo ``jar`` o backend seleciona o segmento do ataque
+    (``spec.segment_name``) no action config a cada geração, então trocar de
+    ataque é só trocar a ``spec``.
     """
 
-    if generator_mode not in ("cached", "jar"):
-        raise ValueError(
-            f"generator_mode inválido: {generator_mode!r}. Use 'cached' ou 'jar'."
-        )
-
-    cached_dataset = BASELINE_DATASET_PATH if generator_mode == "cached" else None
-
-    return GeneratorRunner(
-        runtime_dir=GENERATOR_RUNTIME_DIR,
-        output_dataset_path=GENERATOR_OUTPUT_DATASET_PATH,
-        run_command=GENERATOR_RUN_COMMAND,
-        suggested_config_path=str(OUTPUTS_DIR / "suggested_attack_config.json"),
-        action_config_relative_path=GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
-        benign_action_config_relative_path=(
-            GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH
+    return build_generator(
+        generator_mode,
+        GeneratorRequest(
+            attack_key=spec.key,
+            segment_name=spec.segment_name,
+            options={
+                "runtime_dir": GENERATOR_RUNTIME_DIR,
+                "output_dataset_path": GENERATOR_OUTPUT_DATASET_PATH,
+                "run_command": GENERATOR_RUN_COMMAND,
+                "suggested_config_path": str(OUTPUTS_DIR / "suggested_attack_config.json"),
+                "action_config_relative_path": GENERATOR_ACTION_CONFIG_RELATIVE_PATH,
+                "benign_action_config_relative_path": (
+                    GENERATOR_BENIGN_ACTION_CONFIG_RELATIVE_PATH
+                ),
+                "benign_seed_path": BASELINE_DATASET_PATH,
+                "cached_dataset_path": BASELINE_DATASET_PATH,
+                "timeout_seconds": GENERATOR_TIMEOUT_SECONDS,
+                "max_retries": GENERATOR_MAX_RETRIES,
+                "retry_backoff_seconds": GENERATOR_RETRY_BACKOFF_SECONDS,
+            },
         ),
-        benign_seed_path=BASELINE_DATASET_PATH,
-        segment_name=spec.segment_name,
-        cached_dataset_path=cached_dataset,
-        timeout_seconds=GENERATOR_TIMEOUT_SECONDS,
-        max_retries=GENERATOR_MAX_RETRIES,
-        retry_backoff_seconds=GENERATOR_RETRY_BACKOFF_SECONDS,
     )
 
 
