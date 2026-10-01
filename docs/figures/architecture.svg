@@ -1,0 +1,132 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1560 330" width="1560" height="330" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title>ERENO-AI — arquitetura de cinco agentes</title>
+  <desc>Injector, Generator, Pre-Processor, Detector e Defender em série, com realimentação do feedback para o Injector.</desc>
+
+  <defs>
+    <style>
+      .agent      { rx: 14; ry: 14; stroke-width: 3; }
+      .inner      { rx: 8;  ry: 8;  stroke-width: 1.5; }
+      .agent-name { font-size: 16px; font-weight: 700; fill: #ffffff; text-anchor: middle; }
+      .item       { font-size: 12.5px; fill: #1a1a1a; text-anchor: middle; }
+      .artifact   { font-size: 12px; font-weight: 600; fill: #ffffff; text-anchor: middle; }
+      .edge       { stroke: #1a1a1a; stroke-width: 2; fill: none; }
+      .head       { fill: #1a1a1a; stroke: none; }
+      .note       { font-size: 11.5px; fill: #555; text-anchor: middle; font-style: italic; }
+    </style>
+  </defs>
+
+  <rect width="1560" height="330" fill="#ffffff"/>
+
+  <!-- ================= Injector ================= -->
+  <rect class="agent" x="24" y="40" width="208" height="206" fill="#e8463c" stroke="#b5241c"/>
+  <text class="agent-name" x="128" y="68">Injector Agent</text>
+  <rect class="inner" x="46" y="84"  width="164" height="30" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item"  x="128" y="104">Intent-Driven</text>
+  <rect class="inner" x="46" y="124" width="164" height="30" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item"  x="128" y="144">Model-Driven</text>
+  <rect class="inner" x="46" y="164" width="164" height="30" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item"  x="128" y="184">Data-Driven</text>
+  <rect class="inner" x="46" y="204" width="164" height="26" fill="#f6b4ae" stroke="#b5241c"/>
+  <text class="item"  x="128" y="222">…</text>
+
+  <rect x="252" y="128" width="104" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="304" y="144">Attack</text>
+  <text class="artifact" x="304" y="157">Pattern</text>
+
+  <!-- ================= Generator ================= -->
+  <rect class="agent" x="376" y="40" width="208" height="206" fill="#1f6fc4" stroke="#124a87"/>
+  <text class="agent-name" x="480" y="68">Generator Agent</text>
+  <rect class="inner" x="398" y="84"  width="164" height="30" fill="#cfe3f7" stroke="#124a87"/>
+  <text class="item"  x="480" y="104">ERENO (jar)</text>
+  <rect class="inner" x="398" y="124" width="164" height="30" fill="#cfe3f7" stroke="#124a87"/>
+  <text class="item"  x="480" y="144">Cached replay</text>
+  <rect class="inner" x="398" y="164" width="164" height="30" fill="#e7eef6" stroke="#8fa9c4" stroke-dasharray="5 4"/>
+  <text class="item"  x="480" y="184" fill="#5c6b7a">Mininet</text>
+  <rect class="inner" x="398" y="204" width="164" height="26" fill="#aecdee" stroke="#124a87"/>
+  <text class="item"  x="480" y="222">…</text>
+
+  <rect x="604" y="128" width="88" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="648" y="150">Trace</text>
+
+  <!-- ================= Pre-Processor ================= -->
+  <rect class="agent" x="712" y="40" width="268" height="206" fill="#2a9150" stroke="#1a6135"/>
+  <text class="agent-name" x="846" y="68">Pre-Processor Agent</text>
+  <rect class="inner" x="730" y="82" width="114" height="150" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="787" y="101" font-weight="700">Undersamplers</text>
+  <rect class="inner" x="740" y="110" width="94" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="787" y="128">Random</text>
+  <rect class="inner" x="740" y="144" width="94" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="787" y="162">None</text>
+  <rect class="inner" x="740" y="178" width="94" height="26" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item"  x="787" y="196">…</text>
+
+  <rect class="inner" x="856" y="82" width="110" height="150" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="911" y="101" font-weight="700">Feature Selectors</text>
+  <rect class="inner" x="866" y="110" width="90" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="911" y="128">Filter (MI)</text>
+  <rect class="inner" x="866" y="144" width="90" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item"  x="911" y="162">Wrapper (RFE)</text>
+  <rect class="inner" x="866" y="178" width="90" height="26" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item"  x="911" y="196">…</text>
+
+  <rect x="1000" y="128" width="88" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="1044" y="150">Model</text>
+
+  <!-- ================= Detector ================= -->
+  <rect class="agent" x="1108" y="40" width="186" height="206" fill="#8c6bc8" stroke="#5c3f95"/>
+  <text class="agent-name" x="1201" y="68">Detector Agent</text>
+  <rect class="inner" x="1126" y="84"  width="150" height="28" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item"  x="1201" y="103">Random Forest</text>
+  <rect class="inner" x="1126" y="118" width="150" height="28" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item"  x="1201" y="137">XGBoost</text>
+  <rect class="inner" x="1126" y="152" width="150" height="28" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item"  x="1201" y="171">SVM (linear/RBF)</text>
+  <rect class="inner" x="1126" y="186" width="150" height="28" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item"  x="1201" y="205">Decision Tree</text>
+
+  <rect x="1314" y="128" width="96" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="1362" y="144">Detection</text>
+  <text class="artifact" x="1362" y="157">Report</text>
+
+  <!-- ================= Defender ================= -->
+  <rect class="agent" x="1430" y="40" width="106" height="206" fill="#e08c18" stroke="#9c5f05"/>
+  <text class="agent-name" x="1483" y="68">Defender</text>
+  <rect class="inner" x="1442" y="84"  width="82" height="42" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item"  x="1483" y="100">Evidence</text>
+  <text class="item"  x="1483" y="116">validator</text>
+  <rect class="inner" x="1442" y="134" width="82" height="42" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item"  x="1483" y="150">IEC-61850</text>
+  <text class="item"  x="1483" y="166">playbooks</text>
+  <rect class="inner" x="1442" y="184" width="82" height="42" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item"  x="1483" y="200">Rule</text>
+  <text class="item"  x="1483" y="216">evaluation</text>
+
+  <!-- ================= Arestas em série ================= -->
+  <line class="edge" x1="232" y1="145" x2="243" y2="145"/>
+  <polygon class="head" points="243,140 250,145 243,150"/>
+  <line class="edge" x1="356" y1="145" x2="367" y2="145"/>
+  <polygon class="head" points="367,140 374,145 367,150"/>
+  <line class="edge" x1="584" y1="145" x2="595" y2="145"/>
+  <polygon class="head" points="595,140 602,145 595,150"/>
+  <line class="edge" x1="692" y1="145" x2="703" y2="145"/>
+  <polygon class="head" points="703,140 710,145 703,150"/>
+  <line class="edge" x1="980" y1="145" x2="991" y2="145"/>
+  <polygon class="head" points="991,140 998,145 991,150"/>
+  <line class="edge" x1="1088" y1="145" x2="1099" y2="145"/>
+  <polygon class="head" points="1099,140 1106,145 1099,150"/>
+  <line class="edge" x1="1294" y1="145" x2="1305" y2="145"/>
+  <polygon class="head" points="1305,140 1312,145 1305,150"/>
+  <line class="edge" x1="1410" y1="145" x2="1421" y2="145"/>
+  <polygon class="head" points="1421,140 1428,145 1421,150"/>
+
+  <!-- ================= Realimentação ================= -->
+  <rect x="640" y="276" width="286" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="783" y="297">Defense Plan · metrics · FeedbackDecision</text>
+
+  <path class="edge" d="M 1483 246 L 1483 293 L 935 293"/>
+  <polygon class="head" points="935,288 928,293 935,298"/>
+  <path class="edge" d="M 638 293 L 128 293 L 128 255"/>
+  <polygon class="head" points="123,255 128,248 133,255"/>
+
+  <text class="note" x="783" y="324">o laço de realimentação é política determinística — nenhuma LLM decide a próxima rodada</text>
+</svg>
