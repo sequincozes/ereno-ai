@@ -207,11 +207,45 @@ ponta.
   regras, gera um trace, passa os gates do E4 e produz um `DetectionReport`. O
   loop fecha.
 
-### 2.2 — Alargar a DSL (fora do escopo do primeiro corte)
+### 2.2 — Alargar a DSL: seleção e temporização **[ENTREGUE 01/10]**
 
-Regras de **seleção** (probabilidade, condição sobre `stNum`/`cbStatus`) e de
-**temporização** (atraso, descarte, duplicação, reordenação). Cada tipo entra
-como dado, validado por schema nas duas pontas. Só depois de 2.1 provar o loop.
+Regras de **seleção** (condição sobre um campo da mensagem) e de
+**temporização** (atraso, descarte, duplicação, reordenação), cada tipo como
+dado validado por schema nas duas pontas.
+
+**Seleção** entrou como um bloco `when = {field, cmp, value}` em cada slot, com
+`cmp ∈ {always, eq, ne, gt, lt, gte, lte}`. A condição é lida da mensagem
+**original**, antes de qualquer mutação — qual mensagem uma regra mira não pode
+depender do que o slot anterior já mudou, ou a ordem dos slots viraria parte do
+comportamento. O `when` é obrigatório no schema e o baseline traz `cmp="always"`:
+`target_values` aplica valor a caminho existente e não cria chave que falta, então
+um `when` opcional nunca seria autorável, e um default não-neutro mudaria o ataque
+default.
+
+**Temporização não ganhou op própria, e esse é o achado da fase.** O fluxo escrito
+não está na ordem em que o creator emite: as mensagens saem por um
+`PriorityQueue<EthernetFrame>` ordenado por `timestamp`, e os deltas
+(`timestampDiff`, `tDiff`, `delay`) são calculados nessa ordem. Qualquer buffer ou
+troca de posição no creator seria apagado pela fila. Logo o relógio *é* a ordem:
+com `t`/`timestamp` (em segundos) na allowlist de campos mutáveis, **atrasar é
+`add` com operando positivo e reordenar é o mesmo `add` com operando negativo**.
+Só sobraram como ops novas as que mexem na *cardinalidade* e não no relógio:
+`drop` e `duplicate`. `set`/`scale` são recusados nos campos de tempo (relógio
+absoluto: realocam a mensagem em vez de deslocá-la) — uma coerência *entre* campos
+da mesma regra, que vive no schema, porque nenhuma allowlist campo-a-campo
+consegue expressá-la.
+
+- **Custo de prompt:** +971 caracteres no catálogo e +649 no `intent.md`
+  (~+405 tokens, est. ~7,2k/8k TPM). Para pagar parte disso, a descrição da
+  gramática passou a ser escrita uma vez: `rules.r1.*` referencia `rules.r0.*`
+  em vez de repetir o texto (o portão não lê descrição, então os slots seguem
+  idênticos onde importa). Sem isso, a fase teria custado ~+340 tokens a mais.
+- **DoD atingida (JAR, seed 4242):** seleção + atraso caiu só nas mensagens
+  selecionadas (mínimo de `timestamp - t` exatamente 0.02 nelas, 0.00 nas
+  demais); `duplicate value=2` deu exatamente 3× as linhas; `drop fraction=0.4`
+  deixou exatamente 60%; e a config de mutação só reproduziu a 2.1. Regressão
+  dos outros ataques verificada por CRC: das 281 classes do JAR, só
+  `ProgrammableCreatorC.class` mudou. Detalhe em `docs/programmable_attack.md`.
 
 ### 2.3 — Prompt/TPM, validação e release
 
@@ -247,4 +281,9 @@ como dado, validado por schema nas duas pontas. Só depois de 2.1 provar o loop.
 - **2.1 (ataque programável, DSL de mutação) ENTREGUE** — `programmable` (uc11)
   ponta a ponta, autoração de regras via `target_values`, verificado com JAR +
   Groq. Ver `docs/programmable_attack.md`.
-- Próximo passo: **2.2 (alargar a DSL: seleção + temporização)**.
+- **2.2 (seleção + temporização) ENTREGUE** — `when` por slot, `t`/`timestamp` na
+  allowlist (atraso e reordenação são o mesmo `add` com sinal), `drop`/`duplicate`
+  para cardinalidade. Verificado com o JAR em quatro configs; falta a validação
+  com LLM real, que é da 2.3.
+- Próximo passo: **2.3 (golden prompts, validação com LLM real, tag
+  `intent-driven-v0.3.0`)**.
