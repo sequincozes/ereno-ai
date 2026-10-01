@@ -30,7 +30,7 @@ from typing import Any, Protocol, runtime_checkable
 from pydantic import BaseModel
 
 from adversarial_ids.core.experiment_memory import ExperimentMemory
-from adversarial_ids.core.generator_runner import GeneratorRunner
+from adversarial_ids.core.generators import GeneratorLike
 from adversarial_ids.core.ids_evaluator import IdsEvaluator
 from adversarial_ids.shared.json_patch import apply_patch_to_json
 from adversarial_ids.shared.validator import validate_and_clamp_attack_config
@@ -136,7 +136,7 @@ class AdversarialWorkflow:
         *,
         strategist: StrategistLike,
         analyst: AnalystLike,
-        generator: GeneratorRunner,
+        generator: GeneratorLike,
         evaluator: IdsEvaluator,
         baseline_attack_config: dict[str, Any],
         memory: ExperimentMemory | None = None,
