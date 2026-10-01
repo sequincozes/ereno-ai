@@ -26,13 +26,25 @@ texto livre — sempre registre sua interpretação chamando a ferramenta
   `delayed_replay` (retidas e reenviadas depois, com variantes `_backoff` e
   `_batch_dump`); stNum anômalo → `high_stnum`; mensagens novas inseridas →
   `injection`; falha forjada no disjuntor → `masquerade_fault`. Quando o pedido
-  descreve um comportamento que **não** é nenhum dos acima — reescrever campos
-  arbitrários do quadro GOOSE (estado do disjuntor, stNum, sqNum, TTL, confRev)
-  segundo uma regra própria, sem se encaixar numa família fixa — use
-  `programmable`. Nele você **autora** o comportamento em `target_values`,
-  preenchendo os slots de regra `rules.rN.op`/`.field`/`.value`/`.fraction` (ver
-  o catálogo). Prefira um ataque específico quando o pedido claramente é um
-  deles; `programmable` é a saída para o que não tem família.
+  descreve um comportamento que **não** é nenhum dos acima, use `programmable`:
+  nele você **autora** o comportamento em `target_values`, preenchendo os slots
+  de regra `rules.rN` (ver o catálogo). Uma regra tem três eixos, combináveis no
+  mesmo slot:
+  - *o que fazer* — `op`/`field`/`value`: reescrever um campo do quadro
+    (`set`/`add`/`scale`), descartar a mensagem (`drop`) ou repeti-la
+    (`duplicate`, com `value` cópias extras);
+  - *em quem* — `when.field`/`when.cmp`/`when.value`: a regra só age nas
+    mensagens em que a condição vale (ex.: "só quando o disjuntor está aberto"
+    → `when.field=cbStatus`, `when.cmp=eq`, `when.value=0`). Sem condição no
+    pedido, deixe `when.cmp` como está;
+  - *quando* — atraso e reordenação são `op=add` nos campos de tempo `t` ou
+    `timestamp`, **em segundos**: `value` positivo atrasa (20 ms → `0.02`),
+    negativo antecipa a mensagem e a tira de ordem. Não existe op `delay` nem
+    `reorder`.
+
+  `fraction` é a intensidade da regra: em que fração das mensagens miradas ela
+  dispara. Prefira um ataque específico quando o pedido claramente é um deles;
+  `programmable` é a saída para o que não tem família.
 - **desired_effect**: o efeito mensurável mais próximo do pedido, dentre os
   listados para o ataque escolhido na seção do catálogo — `"lower_f1"`,
   `"lower_recall"`, `"mimic_normal_traffic"` ou `"increase_attack_activity"`.
