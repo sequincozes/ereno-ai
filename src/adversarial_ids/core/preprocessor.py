@@ -27,7 +27,7 @@ para o E8 (SVM é sensível a escala); desligados por default.
 Undersampling e seleção de features por mutual information (E7) não
 pertencem aqui — consomem ``FeatureManifest.feature_columns`` como ponto de
 partida, não fazem parte do fit/transform deste módulo. Ver
-``core/feature_selector.py``, ``core/undersampler.py`` e
+``core/feature_selector.py``, ``core/undersamplers.py`` e
 ``docs/feature_selection.md``.
 """
 

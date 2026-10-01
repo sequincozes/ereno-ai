@@ -3,7 +3,7 @@
 Fecha a etapa D36-46 ("mesmo split/protocolo para todos os detectores") que o
 E6 e o E7 vinham anunciando: o preparo de features
 (``core/preprocessor.py``), a seleção e o undersampling
-(``core/feature_selector.py``/``core/undersampler.py``) já eram
+(``core/feature_selector.py``/``core/undersamplers.py``) já eram
 detector-agnósticos; o que faltava era o próprio detector deixar de ser um
 ``RandomForestClassifier`` embutido em ``core/ids_evaluator.py``.
 
