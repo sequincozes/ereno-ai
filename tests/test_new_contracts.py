@@ -156,7 +156,7 @@ def _selection_manifest(**overrides: object) -> SelectionManifest:
             seed=42,
             stages=(
                 LoopStage(name="intent", status=LoopStageStatus.SUCCEEDED),
-                LoopStage(name="generator", status=LoopStageStatus.PENDING),
+                LoopStage(name="compiler", status=LoopStageStatus.PENDING),
             ),
         ),
         lambda: _feature_manifest(),

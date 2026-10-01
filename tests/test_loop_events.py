@@ -206,13 +206,13 @@ def test_stage_timeline_keeps_the_latest_state_of_each_stage():
                 kind="stage_finished",
                 status=LoopStageStatus.SUCCEEDED,
             ),
-            event(sequence=2, stage="generator"),
+            event(sequence=2, stage="compiler"),
         ]
     )
 
-    assert set(timeline) == {"intent", "generator"}
+    assert set(timeline) == {"intent", "compiler"}
     assert timeline["intent"].kind == "stage_finished"
-    assert timeline["generator"].kind == "stage_started"
+    assert timeline["compiler"].kind == "stage_started"
 
 
 def test_stage_timeline_ignores_the_run_level_events():

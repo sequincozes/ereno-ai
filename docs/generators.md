@@ -2,9 +2,9 @@
 
 O pipeline treina um IDS sobre um trace. Até aqui, "qual gerador produziu esse
 trace" não era uma pergunta que o sistema soubesse responder a partir dos
-artefatos: o ERENO era a única fonte possível, o estágio se chama `ereno` no
-vocabulário do `LoopRecord`, e o modo cacheado — que devolve sempre o mesmo
-arquivo — se parecia com uma execução normal. O registro de geradores
+artefatos: o ERENO era a única fonte possível, o estágio que gerava o trace se
+chamava `ereno` no vocabulário do `LoopRecord`, e o modo cacheado — que devolve
+sempre o mesmo arquivo — se parecia com uma execução normal. O registro de geradores
 (`core/generators.py`) faz o mesmo movimento que o épico E8 fez com o detector,
 só que a montante.
 
@@ -96,8 +96,14 @@ qualquer campanha começar.
 que o registro abre vale para o **terceiro** backend, que se implementa sozinho.
 Mesma ressalva que o `DetectorLike` do E8 faz sobre si mesmo.
 
-**O estágio ainda se chama `ereno`.** `LoopStageName` é um `Literal` do domínio,
-gravado nos `LoopRecord` que já existem em disco, lido pelo dashboard e fixado
-em vários testes; renomeá-lo é mudança de schema, não de nome de variável.
-Enquanto não for feita, quem diz o simulador de verdade é o manifest, não o nome
-do estágio.
+**O vocabulário de estágios foi corrigido junto (`schema_version` 2).** Até a v1
+o `LoopStageName` chamava de `generator` a etapa que **compila** a intenção num
+`AttackCandidate`, e de `ereno` a que de fato gera o trace — o dashboard já
+compensava rotulando o primeiro como "Compilação". Numa arquitetura de backends
+plugáveis, nomear um estágio com o nome de um backend é o tipo de coisa que um
+revisor nota. Na v2 são `compiler` e `generator`, cada um com o nome do que faz.
+
+Ledgers da v1 são recusados por `load_loop_records` com a razão e o caminho do
+arquivo, não com um erro de enum do Pydantic. Eles vivem em `outputs/`, que é
+descartável (`scripts/init_state.py`), então não há migração a escrever — só um
+arquivo a apagar.

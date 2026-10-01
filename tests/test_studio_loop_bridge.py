@@ -36,7 +36,7 @@ def _record(run_dir=None, *, run_id: str = "run-1", failed: bool = False) -> Loo
     if failed:
         stages.append(
             LoopStage(
-                name="ereno",
+                name="generator",
                 status=LoopStageStatus.FAILED,
                 duration_seconds=0.1,
                 error="jar ausente",
@@ -204,7 +204,7 @@ def test_progress_counts_finished_stages_not_substrings_of_a_log():
 
     def fake_runner(**kwargs):
         sink = kwargs["event_sink"]
-        for index, stage in enumerate(("intent", "generator", "ereno")):
+        for index, stage in enumerate(("intent", "compiler", "generator")):
             sink(
                 LoopEvent(
                     run_id="r",
@@ -235,10 +235,10 @@ def test_current_stage_is_the_one_started_and_not_yet_finished():
                 status=LoopStageStatus.SUCCEEDED,
             )
         )
-        sink(LoopEvent(run_id="r", sequence=2, kind="stage_started", stage="ereno"))
+        sink(LoopEvent(run_id="r", sequence=2, kind="stage_started", stage="generator"))
         return (_record(),)
 
-    assert _finished_job(fake_runner).current_stage() == "ereno"
+    assert _finished_job(fake_runner).current_stage() == "generator"
 
 
 def test_failed_stage_carries_the_cause_to_the_screen():
@@ -250,7 +250,7 @@ def test_failed_stage_carries_the_cause_to_the_screen():
                 run_id="r",
                 sequence=0,
                 kind="stage_finished",
-                stage="ereno",
+                stage="generator",
                 status=LoopStageStatus.FAILED,
                 duration_seconds=0.2,
                 message="jar ausente",
@@ -261,7 +261,7 @@ def test_failed_stage_carries_the_cause_to_the_screen():
     failed = _finished_job(fake_runner).failed_stage()
 
     assert failed is not None
-    assert failed.stage == "ereno"
+    assert failed.stage == "generator"
     assert failed.message == "jar ausente"
 
 

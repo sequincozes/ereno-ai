@@ -43,8 +43,8 @@ _POLL_SECONDS = 0.6
 # os quatro que não rodaram como pendentes, e não simplesmente omiti-los.
 _STAGES: tuple[tuple[str, str], ...] = (
     ("intent", "Intenção"),
-    ("generator", "Compilação"),
-    ("ereno", "Geração ERENO"),
+    ("compiler", "Compilação"),
+    ("generator", "Geração do trace"),
     ("preprocess", "Dataset"),
     ("detector", "Detecção"),
     ("defender", "Defesa"),

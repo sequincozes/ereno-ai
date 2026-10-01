@@ -563,6 +563,6 @@ def test_a_contradictory_dictated_value_fails_the_generator_stage(tmp_path):
     )
     record = _orchestrator(tmp_path, _StubIntentAgent(intent)).run(PROMPT)
 
-    assert [stage.name for stage in record.stages] == ["intent", "generator"]
+    assert [stage.name for stage in record.stages] == ["intent", "compiler"]
     assert record.stages[-1].status is LoopStageStatus.FAILED
     assert "não forma um intervalo" in record.stages[-1].error

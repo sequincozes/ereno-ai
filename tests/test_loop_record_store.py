@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 
+import pytest
+
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
+from adversarial_ids.shared.json_io import save_json
 from adversarial_ids.shared.loop_record_store import (
     append_loop_record,
     load_loop_records,
@@ -69,3 +72,35 @@ def test_records_persisted_before_the_e10_lineage_fields_still_load(tmp_path):
     assert len(records) == 1
     assert records[0].round == 1
     assert records[0].parent_run_id is None
+
+
+# --------------------------------------------------------------------------- #
+# Versão do contrato (v2 renomeou dois estágios)                              #
+# --------------------------------------------------------------------------- #
+def test_a_v1_ledger_is_refused_with_the_reason(tmp_path):
+    """Sem isto o erro seria "'ereno' não é um LoopStageName" — verdade que não
+    ajuda ninguém a perceber que o arquivo é de outra versão do contrato."""
+
+    path = tmp_path / "loop_records.json"
+    save_json(
+        path,
+        {"loop_records": [{"schema_version": 1, "run_id": "antigo", "stages": []}]},
+    )
+
+    with pytest.raises(ValueError, match="schema_version"):
+        load_loop_records(path)
+
+
+def test_the_refusal_says_where_the_file_is_and_what_changed(tmp_path):
+    path = tmp_path / "loop_records.json"
+    save_json(path, {"loop_records": [{"schema_version": 1, "run_id": "antigo"}]})
+
+    with pytest.raises(ValueError) as excinfo:
+        load_loop_records(path)
+
+    message = str(excinfo.value)
+    assert "loop_records.json" in message
+    assert "compiler" in message and "generator" in message
+    # Ledgers são artefatos descartáveis: a mensagem precisa dizer isso, ou
+    # alguém vai procurar uma migração que não existe.
+    assert "init_state" in message

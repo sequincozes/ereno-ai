@@ -37,8 +37,8 @@ class LoopStageStatus(str, Enum):
 # envelheceria em silêncio no dia em que o pipeline ganhasse uma etapa.
 LoopStageName = Literal[
     "intent",
+    "compiler",
     "generator",
-    "ereno",
     "preprocess",
     "detector",
     "defender",
@@ -62,7 +62,7 @@ class LoopRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     run_id: str = Field(min_length=1)
     source_prompt: str = Field(min_length=1, max_length=4000)
     seed: int = Field(ge=0, le=4_294_967_295)

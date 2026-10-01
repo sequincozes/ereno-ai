@@ -7,9 +7,10 @@ como um ``LoopStage`` do ``LoopRecord`` (contrato congelado, ação 72h #2):
 
 - INTENT      — ``IntentLike.interpret(prompt)`` (o ``IntentAgent`` real ou
   um stub de teste), já validado pelos dois portões de ``compile_intent``.
-- GENERATOR   — ``core.intent_compiler.compile_attack_candidate`` (E2).
-- ERENO       — ``GeneratorRunner.generate_dataset`` sobre o
-  ``AttackCandidate.config`` compilado.
+- COMPILER    — ``core.intent_compiler.compile_attack_candidate`` (E2).
+- GENERATOR   — ``GeneratorLike.generate_dataset`` sobre o
+  ``AttackCandidate.config`` compilado, no backend resolvido por
+  ``core.generators`` (ver ``docs/generators.md``).
 - PREPROCESS  — ``core.dataset_bundle_builder.build_dataset_bundle`` (E4):
   hash, classes e volume do trace validados antes do detector rodar — volume
   tanto absoluto quanto em prevalência da classe de ataque, porque um trace
@@ -639,7 +640,7 @@ class IntentLoopOrchestrator:
                 return compile_attack_candidate(intent)
 
             candidate = self._stage(
-                ctx, "generator",
+                ctx, "compiler",
                 _compile_candidate,
                 persist_as="attack_candidate.json",
             )
@@ -650,15 +651,13 @@ class IntentLoopOrchestrator:
             generator = self._build_generator(run_dir, spec, random_seed=effective_seed)
 
             trace_path = self._stage(
-                ctx, "ereno",
+                ctx, "generator",
                 lambda: generator.generate_dataset(candidate.config, iteration=1),
             )
             # Quarto manifest da rodada, ao lado de feature/selection/detector —
             # e o único a montante do detector: de onde este trace veio. Sem
             # ele, "qual gerador produziu estes números" só existe na linha de
-            # comando que alguém digitou, e some junto com o terminal. O nome do
-            # estágio continua "ereno" por compatibilidade com os LoopRecords já
-            # gravados; quem diz o simulador de verdade é o manifest.
+            # comando que alguém digitou, e some junto com o terminal.
             save_json(
                 run_dir / "generator_manifest.json",
                 manifest_for(
