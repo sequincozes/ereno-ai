@@ -68,9 +68,12 @@ def submit_intent_spec(
             e 80 ms" -> {"fault.durationMs.min": 50, "fault.durationMs.max":
             80}). Um intervalo são dois caminhos, um por limite. O valor
             precisa respeitar o tipo e os limites do campo listados no
-            catálogo; cada campo fixado conta em max_fields_changed. Deixe
-            vazio/None quando o prompt não disser valores — aí a intensidade
-            decide, que é o caso comum.
+            catálogo; cada campo fixado conta em max_fields_changed. Os
+            caminhos vão DENTRO deste objeto; passá-los como argumentos
+            soltos da ferramenta (ex.: "rules.r0.op": "add" no topo) faz a
+            chamada inteira ser recusada pelo provedor. Deixe vazio/None
+            quando o prompt não disser valores — aí a intensidade decide, que
+            é o caso comum.
         max_fields_changed: Máximo de campos que o compilador pode alterar
             (1 a 16; o teto efetivo é o número de campos do ataque escolhido
             capazes do efeito pedido, que pode ser bem menor). Campos em
