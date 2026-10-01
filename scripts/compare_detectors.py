@@ -31,12 +31,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from adversarial_ids.config.settings import BASELINE_DATASET_PATH, OUTPUTS_DIR  # noqa: E402
+from adversarial_ids.config.settings import (  # noqa: E402
+    BASELINE_DATASET_PATH,
+    OUTPUTS_DIR,
+    UNDERSAMPLING_MAX_IMBALANCE,
+    UNDERSAMPLING_TARGET_RATIO,
+)
 from adversarial_ids.core.detector_comparison import (  # noqa: E402
     compare_detectors,
     format_comparison_table,
 )
+from adversarial_ids.core.undersampling_policy import UNDERSAMPLING_MODES  # noqa: E402
 from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS  # noqa: E402
+from adversarial_ids.domain.selection_manifest import (  # noqa: E402
+    FEATURE_SELECTION_STRATEGIES,
+)
 from adversarial_ids.shared.json_io import save_json  # noqa: E402
 
 DEFAULT_OUTPUT_PATH = OUTPUTS_DIR / "detector_comparison.json"
@@ -87,9 +96,34 @@ def create_parser() -> argparse.ArgumentParser:
             "controlada com --feature-selection ligado."
         ),
     )
-    parser.add_argument("--feature-selection", choices=("none", "mutual_info"), default="none")
+    # As opções vêm dos contratos, não de listas digitadas aqui: foi uma
+    # lista digitada duas vezes que deixou "rfe" inalcançável por este
+    # script no dia em que ele foi registrado.
+    parser.add_argument(
+        "--feature-selection", choices=FEATURE_SELECTION_STRATEGIES, default="none"
+    )
     parser.add_argument("--feature-selection-top-k", type=int, default=None)
-    parser.add_argument("--undersampling", choices=("none", "random"), default="none")
+    parser.add_argument(
+        "--undersampling",
+        choices=UNDERSAMPLING_MODES,
+        default="none",
+        help=(
+            "Estratégia fixa, ou 'policy' para deixar a regra declarada "
+            "decidir a partir do desequilíbrio do treino."
+        ),
+    )
+    parser.add_argument(
+        "--undersampling-target-ratio",
+        type=float,
+        default=UNDERSAMPLING_TARGET_RATIO,
+        help="Teto de desequilíbrio alvo para 'ratio'/'policy' (1.0 = equilíbrio).",
+    )
+    parser.add_argument(
+        "--undersampling-max-imbalance",
+        type=float,
+        default=UNDERSAMPLING_MAX_IMBALANCE,
+        help="Desequilíbrio tolerado sem reamostrar, só para 'policy'.",
+    )
     parser.add_argument("--test-size", type=float, default=0.3)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument(
@@ -114,6 +148,8 @@ def main(argv: list[str] | None = None) -> int:
             "feature_selection": args.feature_selection,
             "feature_selection_top_k": args.feature_selection_top_k,
             "undersampling": args.undersampling,
+            "undersampling_target_ratio": args.undersampling_target_ratio,
+            "undersampling_max_imbalance": args.undersampling_max_imbalance,
             "test_size": args.test_size,
             "random_state": args.seed,
         },
