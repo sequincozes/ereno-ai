@@ -287,8 +287,8 @@ def test_run_completes_all_seven_stages_including_feedback(tmp_path):
     names = [stage.name for stage in record.stages]
     assert names == [
         "intent",
+        "compiler",
         "generator",
-        "ereno",
         "preprocess",
         "detector",
         "defender",
@@ -297,7 +297,7 @@ def test_run_completes_all_seven_stages_including_feedback(tmp_path):
 
     statuses = {stage.name: stage.status for stage in record.stages}
     for implemented in (
-        "intent", "generator", "ereno", "preprocess", "detector", "defender",
+        "intent", "compiler", "generator", "preprocess", "detector", "defender",
         "feedback",
     ):
         assert statuses[implemented] == LoopStageStatus.SUCCEEDED
@@ -347,7 +347,7 @@ def test_every_catalogued_attack_runs_the_seven_stages_in_cached_mode(tmp_path, 
     assert statuses == {
         name: LoopStageStatus.SUCCEEDED
         for name in (
-            "intent", "generator", "ereno", "preprocess", "detector", "defender",
+            "intent", "compiler", "generator", "preprocess", "detector", "defender",
             "feedback",
         )
     }
@@ -401,7 +401,7 @@ def test_run_persists_a_json_artifact_per_typed_stage(tmp_path):
     assert stage_by_name["defender"].artifact_ref == str(run_dir / "defense_plan.json")
     assert stage_by_name["feedback"].artifact_ref == str(run_dir / "feedback.json")
     # O estágio ERENO referencia o trace CSV gerado, não um JSON.
-    assert stage_by_name["ereno"].artifact_ref.endswith(".csv")
+    assert stage_by_name["generator"].artifact_ref.endswith(".csv")
 
     # O plano persistido é um DefensePlan válido e fundamentado no relatório.
     DefensePlan.model_validate(load_json(run_dir / "defense_plan.json"))
@@ -623,7 +623,7 @@ def test_run_marks_preprocess_failed_when_the_trace_fails_the_gate(tmp_path):
     record = orchestrator.run("Reduza o recall.")
 
     names = [s.name for s in record.stages]
-    assert names == ["intent", "generator", "ereno", "preprocess"]
+    assert names == ["intent", "compiler", "generator", "preprocess"]
     assert record.stages[-1].status == LoopStageStatus.FAILED
     assert "abaixo do piso" in record.stages[-1].error
 
@@ -643,7 +643,7 @@ def test_run_marks_defender_failed_when_the_llm_call_raises(tmp_path):
     record = orchestrator.run("Reduza o recall.")
 
     names = [s.name for s in record.stages]
-    assert names == ["intent", "generator", "ereno", "preprocess", "detector", "defender"]
+    assert names == ["intent", "compiler", "generator", "preprocess", "detector", "defender"]
     assert record.stages[-1].status == LoopStageStatus.FAILED
     assert "DefensePlan" in record.stages[-1].error
 
@@ -664,7 +664,7 @@ def test_run_marks_defender_failed_when_the_plan_is_ungrounded(tmp_path):
     record = orchestrator.run("Reduza o recall.")
 
     names = [s.name for s in record.stages]
-    assert names == ["intent", "generator", "ereno", "preprocess", "detector", "defender"]
+    assert names == ["intent", "compiler", "generator", "preprocess", "detector", "defender"]
     assert record.stages[-1].status == LoopStageStatus.FAILED
     assert "Evidência inventada" in record.stages[-1].error
     assert "feedback" not in names
@@ -687,7 +687,7 @@ def test_run_marks_feedback_failed_when_the_policy_raises(tmp_path, monkeypatch)
 
     names = [s.name for s in record.stages]
     assert names == [
-        "intent", "generator", "ereno", "preprocess", "detector", "defender", "feedback",
+        "intent", "compiler", "generator", "preprocess", "detector", "defender", "feedback",
     ]
     assert record.stages[-1].status == LoopStageStatus.FAILED
     assert "política quebrada" in record.stages[-1].error
@@ -769,7 +769,7 @@ def test_run_emits_a_typed_timeline_from_the_first_stage_to_the_last(tmp_path):
     assert all(e.run_id == record.run_id for e in events)
 
     # Cada estágio se anuncia ao começar e ao terminar, nessa ordem.
-    for stage in ("intent", "generator", "ereno", "preprocess", "detector",
+    for stage in ("intent", "compiler", "generator", "preprocess", "detector",
                   "defender", "feedback"):
         kinds = [e.kind for e in events if e.stage == stage]
         assert kinds == ["stage_started", "stage_finished"], stage

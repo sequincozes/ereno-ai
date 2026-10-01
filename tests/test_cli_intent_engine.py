@@ -25,7 +25,7 @@ def _record(
             artifact_ref="outputs/intent_loop/run-1/intent.json",
         ),
         LoopStage(
-            name="generator",
+            name="compiler",
             status=LoopStageStatus.FAILED if failed else LoopStageStatus.SUCCEEDED,
             duration_seconds=1.5,
             error="falha controlada" if failed else None,
@@ -183,7 +183,7 @@ def test_intent_engine_reports_nonzero_exit_when_a_stage_failed():
     assert exit_code == 1
     output = stdout.getvalue()
     assert "[FALHOU]" in output
-    assert "generator" in output
+    assert "compiler" in output
     assert "falha controlada" in output
     assert "falha controlada" in stdout.getvalue()
 
