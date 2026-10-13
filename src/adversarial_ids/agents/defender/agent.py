@@ -153,7 +153,7 @@ class DefenderAgent:
             raise RuntimeError("O agente Defensor não retornou uma resposta.")
 
         content = getattr(response, "content", None)
-        plan = parse_defense_plan(content)
+        plan = parse_defense_plan(content, expected_report_ref=report_ref)
 
         return validate_plan_against_report(
             plan,
