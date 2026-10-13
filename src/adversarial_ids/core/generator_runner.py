@@ -57,6 +57,7 @@ class GeneratorRunner:
         max_retries: int = 0,
         retry_backoff_seconds: float = 2.0,
         random_seed: int | None = None,
+        benign_data_path: Path | str | None = None,
     ) -> None:
         self.runtime_dir = Path(runtime_dir)
         self.output_dataset_path = Path(output_dataset_path)
@@ -84,6 +85,15 @@ class GeneratorRunner:
         # não determinística — o que o piloto E0 mediu). Só o modo ``jar`` a usa;
         # o modo cacheado serve o mesmo arquivo de qualquer forma.
         self.random_seed = random_seed
+        # Tráfego benigno desta geração (absoluto, ou relativo a runtime_dir).
+        # ``None`` mantém o comportamento anterior: o ``benignDataPath`` que o
+        # action config já aponta, preparado por ``_ensure_benign_dataset``.
+        # Informado, ele é gravado no action config antes do run — é o que deixa
+        # cada seed de um experimento ter o próprio tráfego normal, em vez de
+        # todo trace repetir o mesmo arquivo benigno (ver docs/experiments.md).
+        self.benign_data_path = (
+            Path(benign_data_path) if benign_data_path is not None else None
+        )
 
     @property
     def is_cached(self) -> bool:
@@ -197,7 +207,10 @@ class GeneratorRunner:
 
         save_json(str(attack_config_path), attack_config)
 
-        self._ensure_benign_dataset()
+        if self.benign_data_path is not None:
+            self._point_at_benign(self.benign_data_path)
+        else:
+            self._ensure_benign_dataset()
 
         self._run_generator_command(
             self.run_command, label="Geração do dataset sintético"
@@ -277,6 +290,17 @@ class GeneratorRunner:
             f"STDOUT:\n{last_result.stdout}\n"
             f"STDERR:\n{last_result.stderr}"
         )
+
+    def _point_at_benign(self, benign_path: Path) -> None:
+        """Faz o action config usar ``benign_path`` como tráfego normal."""
+
+        resolved = benign_path if benign_path.is_absolute() else self.runtime_dir / benign_path
+        if not resolved.exists():
+            raise FileNotFoundError(f"Dataset benigno informado não existe: {resolved}")
+        action_path = self._action_config_path()
+        action = load_json(action_path)
+        action.setdefault("input", {})["benignDataPath"] = resolved.as_posix()
+        save_json(str(action_path), action)
 
     def _ensure_benign_dataset(self) -> None:
         """Gera e conecta o dataset benigno quando o action config aponta
