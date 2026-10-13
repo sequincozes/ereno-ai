@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Any, Mapping
 
 import pandas as pd
@@ -362,6 +364,34 @@ class IdsEvaluator:
             X_train = self.preprocessor.fit_transform(X_train_raw, label_column=self.label_column)
             X_test = self.preprocessor.transform(X_test_raw)
 
+        X_train = self._fit_downstream(X_train, y_train)
+        X_test = self.feature_selector.transform(X_test)
+
+        y_pred = self.detector.predict(X_test)
+
+        metrics = self._compute_metrics(
+            y_true=y_test,
+            y_pred=y_pred,
+            dataset_path=dataset_path,
+            dataset_rows=len(df),
+            dataset_columns=len(df.columns),
+            evaluation_type="baseline_internal_test",
+        )
+
+        print("[IDS] Métricas do baseline:")
+        print(metrics)
+
+        return metrics
+
+    def _fit_downstream(self, X_train: pd.DataFrame, y_train: pd.Series) -> pd.DataFrame:
+        """Seleção (E7) → undersampling (E7) → detector (E8), só no treino.
+
+        Compartilhado por ``train_baseline`` (o loop) e ``fit_traces`` (o
+        protocolo agrupado dos experimentos): os dois treinam exatamente o mesmo
+        pipeline, que é o que torna comparáveis os números de um e de outro.
+        Devolve o ``X_train`` no espaço selecionado, antes do undersampling.
+        """
+
         # Épico E7 — seleção de features primeiro (ajustada sobre TODO o
         # treino, antes de qualquer undersampling), undersampling depois, só
         # no espaço já reduzido. Nunca sobre X_test/y_test: ver docstring da
@@ -373,7 +403,6 @@ class IdsEvaluator:
             random_state=self.random_state,
         )
         X_train = self.feature_selector.fit_transform(X_train, y_train)
-        X_test = self.feature_selector.transform(X_test)
 
         self._fitted_rows_before_undersampling = len(X_train)
         self._class_counts_before_undersampling = {
@@ -394,6 +423,7 @@ class IdsEvaluator:
             random_state=self.random_state,
             target_ratio=self._undersampling_decision.target_ratio,
         )
+        X_selected = X_train
         X_train, y_train = self.undersampler.fit_resample(X_train, y_train)
         self._fitted_rows_after_undersampling = len(X_train)
         self._class_counts_after_undersampling = {
@@ -423,21 +453,73 @@ class IdsEvaluator:
         # isso; se algum passar a fazer, o caminho é reconstruir o Detector.
         self.detector.fit(X_train, y_train)
         self.model = self.detector.estimator
-        y_pred = self.detector.predict(X_test)
+        return X_selected
 
-        metrics = self._compute_metrics(
-            y_true=y_test,
-            y_pred=y_pred,
-            dataset_path=dataset_path,
-            dataset_rows=len(df),
-            dataset_columns=len(df.columns),
-            evaluation_type="baseline_internal_test",
+    def fit_traces(self, dataset_paths: Sequence[str | Path]) -> dict[str, Any]:
+        """Treina sobre **todos** os traces dados, sem split interno.
+
+        É o regime de IDS congelado dos experimentos: o treino é um conjunto de
+        traces de seeds separadas (o split é por seed, feito pelo chamador), e o
+        detector resultante pontua outros traces sem nunca ser reajustado. Mesmo
+        pipeline de ``train_baseline`` (preprocessador ajustado só aqui, depois
+        ``_fit_downstream``); só não há partição de teste dentro dele.
+        """
+
+        if not dataset_paths:
+            raise ValueError("fit_traces precisa de ao menos um trace.")
+        frames = [pd.read_csv(path) for path in dataset_paths]
+        df = pd.concat(frames, ignore_index=True)
+        if df.empty:
+            raise ValueError("Traces de treino vazios.")
+
+        self.label_column = self._find_label_column(df)
+        X = df.drop(columns=[self.label_column])
+        y_encoded = self._fit_transform_labels(df[self.label_column])
+
+        self.preprocessor = FeaturePreprocessor(
+            protocol_features=self.protocol_features,
+            drop_cb_status=self.drop_cb_status,
+            scaler=self.scaler,  # type: ignore[arg-type]  # validado no __init__
         )
+        X_train = self.preprocessor.fit_transform(X, label_column=self.label_column)
+        self._fit_downstream(X_train, y_encoded)
 
-        print("[IDS] Métricas do baseline:")
-        print(metrics)
+        return {
+            "traces": [str(path) for path in dataset_paths],
+            "rows": len(df),
+            "class_counts": {str(k): int(v) for k, v in df[self.label_column].astype(str).value_counts().items()},
+            "features": list(self.feature_columns or []),
+        }
 
-        return metrics
+    def score_trace(self, dataset_path: str | Path) -> dict[str, Any]:
+        """Pontua um trace com o detector congelado, sem reajustar nada.
+
+        Devolve, por mensagem, se ela é ataque (qualquer rótulo diferente de
+        ``normal``), o score contínuo da classe de ataque e a predição do
+        arg-max. Métricas sem limiar (AP) e com limiar fixado por orçamento de
+        alarmes são calculadas por quem chama (``experiments/metrics.py``).
+        """
+
+        if self.preprocessor is None or self.label_column is None or self.attack_label is None:
+            raise RuntimeError("Detector não treinado: chame fit_traces() antes.")
+        import numpy as np
+
+        df = pd.read_csv(dataset_path)
+        if self.label_column not in df.columns:
+            raise ValueError(f"Coluna de classe '{self.label_column}' ausente em {dataset_path}.")
+        labels = df[self.label_column].astype(str)
+        X = self.preprocessor.transform(df.drop(columns=[self.label_column]))
+        if self.feature_selector is not None:
+            X = self.feature_selector.transform(X)
+
+        scores = self.detector.score(X, self.attack_label)
+        predicted = np.asarray(self.detector.predict(X)) == self.attack_label
+        return {
+            "is_attack": (labels.str.lower() != "normal").to_numpy(),
+            "scores": np.asarray(scores, dtype=float),
+            "predicted_attack": predicted,
+            "labels": labels.to_numpy(),
+        }
 
     def evaluate_variant(self, dataset_path: str) -> dict[str, Any]:
         if self.model is None:
