@@ -216,11 +216,59 @@ existia e o default entrava calado:
 | `grayhole` (uc08) | `burstDropLen.{min,max}` | sempre 3..7, qualquer que fosse o config (o baseline coincide com o default) |
 
 Ou seja: no `random_replay` todo o bloco `burst.*` era inerte, e no `grayhole`
-`burstDropLen` também. A leitura de que o grayhole está "espremido" e de que no
-`random_replay` só `high` alcança a temporização foi feita com essas alavancas
-desligadas, e **precisa ser refeita** antes de ser citada. Sem burst
-configurado (`burst.prob=0`), o JAR corrigido gera os mesmos bytes que o
-antigo.
+`burstDropLen` também. Sem burst configurado (`burst.prob=0`), o JAR corrigido
+gera os mesmos bytes que o antigo.
+
+A reexecução com 11 campos expôs mais dois bugs, que também derrubavam a
+geração (commit `46b0039` no ERENO):
+
+- `delayMs` abaixo de 10 era convertido de segundos **limite a limite**:
+  `{min: 8, max: 80}` virava 8000..80 ms. A unidade agora é decidida uma vez
+  para o par, pelo `max`.
+- `randomBetween(int, int)` é inclusivo nas duas pontas, mas recusava
+  `lower == upper`. Uma janela de replay menor que um intervalo GOOSE (o
+  `windowS.min = 0,385` da intensidade `high`) ou um `ttlOverride.valuesMs` de
+  um elemento abortavam o run.
+
+Com seed fixa, o baseline dos 12 ataques registrados é idêntico byte a byte
+antes e depois das duas correções.
+
+## Reexecução de 13/10/2026, com o JAR corrigido
+
+Mesmos recortes de 18/09 (rótulos `posfix*`; os relatórios antigos continuam em
+`outputs/pilot/`), mais o `inverse_replay`, que nunca tinha gerado, e um recorte
+de replay com 11 campos, o único em que o compilador escolhe os campos de
+`burst`.
+
+| recorte | família | 18/09 | 13/10 | o que mudou |
+|---|---|---|---|---|
+| default (3 campos) | `masquerade_fault` | passou, 3/3 | passou, 3/3 | nada — controle: o creator não foi tocado |
+| default (3 campos) | `random_replay` | passou, 3/3 | passou, 3/3 | nada: com 3 campos o compilador escolhe `delayMs`/`ethSpoof`/`windowS`, nunca `burst` |
+| default (3 campos) | `grayhole` | reprovou, 2/3 | reprovou, 2/3 | nada: `burstDropLen` não está entre os 3 campos |
+| default (3 campos) | `inverse_replay` | não gerava | passou, 3/3 | só `timestampDiff` se move |
+| 11 campos | `grayhole` | reprovou, 2/3 | reprovou, 2/3 | a variante reprovada trocou de `low` para `medium`; a deriva segue só em `timestampDiff` |
+| atividade (6 campos) | `grayhole` | reprovou, 2/3 | reprovou, 1/3 | **pior**: com `burstDropLen` ativo a classe some mais cedo (`medium` já fica com 0,47% de prevalência) |
+| 11 campos | `random_replay` | — | passou, 3/3 | **15 features em todas as intensidades**, inclusive `timestampDiff`, `timeFromLastChange`, `SqNum`, `sqDiff` |
+| 11 campos | `inverse_replay` | — | passou, 3/3 | `low` move 1 feature; `medium`/`high` movem 4 (`timestampDiff`, `tDiff`, `stDiff`) |
+
+O que isso faz com as leituras anteriores:
+
+- **"Em `random_replay`, só a intensidade alta mexe na temporização"** era
+  verdade sobre o recorte de 3 campos, não sobre a família. Com o `burst` ativo,
+  a temporização e a sequência se movem já em `low`. A frase só pode ser citada
+  com o recorte junto.
+- **"O grayhole está espremido pelos dois lados"** se mantém, e a parede do lado
+  da atividade ficou mais perto: `burstDropLen`, agora efetivo, descarta mais, e
+  a classe de ataque cai abaixo do piso de prevalência já em `medium`. A deriva
+  continua numa feature só, `timestampDiff`, em todos os recortes.
+- **`inverse_replay` é usável**, com a mesma forma estreita do grayhole no
+  recorte de 3 campos (uma feature só) e mais larga com 11.
+
+Uma ressalva de medida: o piloto roda **sem seed**, como em 18/09, para medir o
+ruído do gerador. Uma variante perto do limiar pode trocar de veredito entre
+execuções (foi o que aconteceu com `low`/`medium` do grayhole com 11 campos).
+O veredito por família se repetiu; o de uma variante isolada não deve ser
+citado sozinho.
 
 ## Orçamento medido
 
