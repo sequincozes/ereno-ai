@@ -23,6 +23,7 @@ from adversarial_ids.agents.intent.catalog_context import build_intent_instructi
 from adversarial_ids.agents.usage import usage_from_response
 from adversarial_ids.agents.intent.tools import submit_intent_spec
 from adversarial_ids.config.attack_capabilities import validate_intent_capability
+from adversarial_ids.domain.injector_manifest import InjectorManifest
 from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.run_usage import AgentUsage
 
@@ -67,12 +68,23 @@ class IntentAgent:
         # Consumo da última chamada (E11); None enquanto nenhuma aconteceu,
         # que é diferente de zero token.
         self.last_usage: AgentUsage | None = None
+        self.instructions = build_intent_instructions()
         self.agent = Agent(
             model=Groq(id=model_id, temperature=temperature),
             tools=[submit_intent_spec],
-            instructions=build_intent_instructions(),
+            instructions=self.instructions,
             markdown=False,
         )
+
+    def injector_artifacts(self) -> dict[str, Any]:
+        """O manifest do Injector: este é o intent-driven (ver agents/injector)."""
+
+        manifest = InjectorManifest(
+            injector="intent",
+            context_kind="catalog",
+            context_chars=len(self.instructions),
+        )
+        return {"injector_manifest.json": manifest.model_dump(mode="json")}
 
     def interpret(self, prompt: str) -> IntentSpec:
         """Interpreta ``prompt`` e devolve uma ``IntentSpec`` já autorizada.

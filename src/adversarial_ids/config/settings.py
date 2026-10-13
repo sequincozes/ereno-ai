@@ -134,6 +134,17 @@ def _default_generator_mode() -> str:
 GENERATOR_MODE = os.getenv("GENERATOR_MODE", _default_generator_mode()).strip().lower()
 
 # ------------------------------------------------------------
+# Código-fonte do ERENO, lido pelo injetor model-driven (o LLM lê o creator
+# Java de um ataque para propor um ataque novo na DSL do programmable). Só o
+# `--injector model` precisa dele; o JAR não carrega fonte. Default: o repo
+# irmão ../ERENO-2.0. Sobrescreva com a env var ERENO_SOURCE_DIR.
+# ------------------------------------------------------------
+
+ERENO_SOURCE_DIR = Path(
+    os.getenv("ERENO_SOURCE_DIR", str(BASE_DIR.parent / "ERENO-2.0"))
+)
+
+# ------------------------------------------------------------
 # Robustez do subprocesso do JAR (janela D15-24 do roadmap: "loop
 # confiável e multi-ataque" — quality gates já cobertos por E4, isto cobre
 # retries/timeout). Só se aplica ao modo "jar"; o modo "cached" nunca chama
