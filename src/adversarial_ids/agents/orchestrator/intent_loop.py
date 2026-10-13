@@ -127,6 +127,7 @@ from adversarial_ids.domain.intent_spec import IntentSpec
 from adversarial_ids.domain.loop_event import LoopEvent
 from adversarial_ids.domain.run_usage import AgentUsage
 from adversarial_ids.domain.generator_manifest import GENERATOR_KEYS
+from adversarial_ids.domain.injector_manifest import InjectorManifest
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStage, LoopStageStatus
 from adversarial_ids.shared.json_io import load_json, save_json
 from adversarial_ids.shared.loop_event_store import (
@@ -293,6 +294,13 @@ class IntentLoopOrchestrator:
         detector_spec(detector)
         self.detector = detector
         self.intent_agent = intent_agent
+        # Qual estratégia de injeção é o ``intent_agent`` (intent/model/data,
+        # ver agents/injector). ``None`` quando o agente não se declara — é o
+        # caso dos stubs de teste —, e aí nenhum injector_manifest é gravado:
+        # o orquestrador não afirma sobre um agente o que ele não disse.
+        self._injector_artifacts = self._artifacts_of(intent_agent)
+        manifest = self._injector_artifacts.get("injector_manifest.json")
+        self.injector: str | None = manifest["injector"] if manifest else None
         self.defender_agent = defender_agent
         self.generator_mode = generator_mode
         self.output_dir = Path(output_dir)
@@ -474,6 +482,24 @@ class IntentLoopOrchestrator:
         point = plan_resume(load_loop_records(self.save_path), run_id, rounds=rounds)
         if point.action == "done":
             return ()
+        # O injetor só importa se a retomada vai chamar o LLM — refazer uma
+        # rodada cuja intenção nunca chegou a existir. Nos outros casos a
+        # intenção vem do ledger e o injetor nem roda. A estratégia original é
+        # lida do diretório da rodada refeita: o estágio de intenção falhou, então
+        # o ``LoopRecord`` não tem artefato que aponte para lá, mas o manifest foi
+        # gravado antes da chamada justamente para este caso.
+        if point.action == "retry" and point.intent is None:
+            previous = self._recorded_injector(point.tip.run_id)
+            if (
+                previous is not None
+                and self.injector is not None
+                and previous != self.injector
+            ):
+                raise CampaignResumeError(
+                    f"A campanha de {run_id!r} foi proposta pelo injetor "
+                    f"{previous!r}; retomar com {self.injector!r} misturaria "
+                    "duas estratégias de injeção no mesmo ledger."
+                )
         if point.detector is not None and point.detector != self.detector:
             raise CampaignResumeError(
                 f"A campanha de {run_id!r} treinou {point.detector!r}; retomar com "
@@ -611,6 +637,11 @@ class IntentLoopOrchestrator:
 
         try:
             if intent_override is None:
+                # O contexto do injetor é gravado antes da chamada: ele é o que
+                # o LLM vai ler, e precisa estar no disco mesmo se a chamada
+                # falhar — é o primeiro lugar onde se olha nesse caso.
+                for name, payload in self._injector_artifacts.items():
+                    save_json(run_dir / name, payload)
                 intent = self._stage(
                     ctx, "intent",
                     lambda: self.intent_agent.interpret(prompt),
@@ -882,6 +913,19 @@ class IntentLoopOrchestrator:
         spent = sum(record.total_tokens or 0 for record in records)
 
         return spent >= self.token_budget
+
+    def _recorded_injector(self, run_id: str) -> str | None:
+        path = self.output_dir / run_id / "injector_manifest.json"
+        if not path.exists():
+            return None
+        return InjectorManifest.model_validate(load_json(path)).injector
+
+    @staticmethod
+    def _artifacts_of(agent: Any) -> dict[str, Any]:
+        """Os artefatos que o injetor declara (manifest e, no data, o perfil)."""
+
+        declare = getattr(agent, "injector_artifacts", None)
+        return dict(declare()) if callable(declare) else {}
 
     @staticmethod
     def _usage_of(agent: Any) -> AgentUsage | None:

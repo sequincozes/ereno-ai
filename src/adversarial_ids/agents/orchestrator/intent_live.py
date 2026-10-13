@@ -18,9 +18,11 @@ mantém ``agents/orchestrator/live.py`` separado de ``workflow.py``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
+from typing import Any
+
 from adversarial_ids.agents.defender.agent import DefenderAgent
-from adversarial_ids.agents.intent.agent import IntentAgent
-from collections.abc import Sequence
+from adversarial_ids.agents.injector import build_injector, prepare_injector
 
 from adversarial_ids.agents.orchestrator.intent_loop import (
     IntentLoopOrchestrator,
@@ -41,11 +43,21 @@ def build_intent_loop(
     generator_mode: str = "cached",
     detector: str = DETECTOR_MODE,
     event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
 ) -> IntentLoopOrchestrator:
-    """Monta o orquestrador v2 com o ``IntentAgent`` e o ``DefenderAgent`` reais."""
+    """Monta o orquestrador v2 com o injetor e o ``DefenderAgent`` reais.
 
+    ``injector`` escolhe a estratégia que propõe o ataque (``intent``, o
+    default e o comportamento de antes; ``model``; ``data`` — ver
+    ``agents/injector``). ``injector_options`` leva o insumo dela
+    (``source_attack`` ou ``dataset_path``/``attack_label``). O contexto é lido
+    aqui, antes de qualquer chamada paga: um creator ou trace inválido falha já.
+    """
+
+    prepared = prepare_injector(injector, **dict(injector_options or {}))
     return IntentLoopOrchestrator(
-        intent_agent=IntentAgent(model_id=model_id),
+        intent_agent=build_injector(prepared, model_id=model_id),
         defender_agent=DefenderAgent(model_id=model_id),
         generator_mode=generator_mode,
         detector=detector,
@@ -61,6 +73,8 @@ def run_intent_loop(
     rounds: int = INTENT_LOOP_DEFAULT_ROUNDS,
     detector: str = DETECTOR_MODE,
     event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
 ) -> tuple[LoopRecord, ...]:
     """Roda a campanha intent-driven ponta a ponta e devolve um ``LoopRecord``
     por rodada.
@@ -84,6 +98,8 @@ def run_intent_loop(
         generator_mode=generator_mode,
         detector=detector,
         event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
     )
     return orchestrator.run_campaign(prompt, rounds=rounds)
 
@@ -96,6 +112,8 @@ def resume_intent_loop(
     rounds: int | None = None,
     detector: str = DETECTOR_MODE,
     event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
 ) -> tuple[LoopRecord, ...]:
     """Retoma a campanha de ``run_id`` e devolve só as rodadas novas.
 
@@ -109,6 +127,8 @@ def resume_intent_loop(
         generator_mode=generator_mode,
         detector=detector,
         event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
     )
     return orchestrator.resume_campaign(run_id, rounds=rounds)
 
@@ -121,6 +141,8 @@ def run_intent_replicates(
     generator_mode: str = "cached",
     detector: str = DETECTOR_MODE,
     event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
 ) -> ReplicateResult:
     """Roda a mesma intenção sob várias seeds e devolve o resumo do lote (2.R).
 
@@ -134,5 +156,7 @@ def run_intent_replicates(
         generator_mode=generator_mode,
         detector=detector,
         event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
     )
     return orchestrator.run_replicates(prompt, seeds=seeds)

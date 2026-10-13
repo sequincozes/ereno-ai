@@ -8,7 +8,7 @@ import subprocess
 import sys
 from collections.abc import Callable, Sequence
 from pathlib import Path
-from typing import TextIO
+from typing import Any, TextIO
 
 from adversarial_ids.config.attacks_registry import (
     DEFAULT_ATTACK_KEY,
@@ -27,6 +27,8 @@ from adversarial_ids.agents.orchestrator.campaign_resume import (
     CampaignResumeError,
     plan_resume,
 )
+from adversarial_ids.agents.injector import DEFAULT_INJECTOR_KEY, list_injector_keys
+from adversarial_ids.agents.injector.java_sources import list_source_attacks
 from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS
 from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
 from adversarial_ids.shared.loop_record_store import load_loop_records
@@ -216,6 +218,48 @@ def create_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "--injector",
+        choices=list_injector_keys(),
+        # default=None pelo mesmo motivo de --detector: distinguir "passou a
+        # flag" de "herdou o default" para recusá-la fora do --engine intent.
+        default=None,
+        help=(
+            "Apenas com --engine intent: estratégia que propõe o ataque. "
+            "'intent' (default): o LLM traduz o pedido sobre o catálogo. "
+            "'model': o LLM lê o creator Java de --injector-source e propõe um "
+            "ataque novo na DSL do programmable. 'data': o LLM lê o perfil do "
+            "trace em --injector-dataset e propõe um ataque novo na mesma DSL. "
+            "Ver docs/injectors.md."
+        ),
+    )
+    parser.add_argument(
+        "--injector-source",
+        choices=list_source_attacks(),
+        default=None,
+        metavar="ATAQUE",
+        help=(
+            "Apenas com --injector model: ataque cujo creator Java o LLM lê "
+            "(lido de ERENO_SOURCE_DIR). Opções: "
+            + ", ".join(list_source_attacks())
+            + "."
+        ),
+    )
+    parser.add_argument(
+        "--injector-dataset",
+        default=None,
+        metavar="CSV",
+        help="Apenas com --injector data: trace do ERENO cujo perfil o LLM lê.",
+    )
+    parser.add_argument(
+        "--injector-label",
+        default=None,
+        metavar="CLASSE",
+        help=(
+            "Apenas com --injector data: classe de ataque a perfilar, quando o "
+            "trace tem mais de uma além de 'normal'."
+        ),
+    )
+    parser.add_argument(
         "--open-dashboard",
         action="store_true",
         help="Ao terminar, abre o dashboard Streamlit com o panorama dos resultados.",
@@ -350,6 +394,8 @@ def _run_intent_engine(
             generator_mode=args.generator_mode,
             rounds=args.rounds if args.rounds is not None else INTENT_LOOP_DEFAULT_ROUNDS,
             detector=detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
         )
     except KeyboardInterrupt:
         print("Execução interrompida pelo usuário.", file=stderr)
@@ -430,6 +476,8 @@ def _run_replicate_engine(
             model_id=args.model_id,
             generator_mode=args.generator_mode,
             detector=detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
         )
     except KeyboardInterrupt:
         print("Execução interrompida pelo usuário.", file=stderr)
@@ -523,6 +571,8 @@ def _resume_intent_engine(
             generator_mode=args.generator_mode,
             rounds=args.rounds,
             detector=resolved_detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
         )
     except KeyboardInterrupt:
         print("Execução interrompida pelo usuário.", file=stderr)
@@ -532,6 +582,62 @@ def _resume_intent_engine(
         return 1
 
     return _report_campaign(records, stdout=stdout)
+
+
+_INJECTOR_FLAGS = {
+    "injector_source": ("--injector-source", "model"),
+    "injector_dataset": ("--injector-dataset", "data"),
+    "injector_label": ("--injector-label", "data"),
+}
+
+
+def _resolve_injector(
+    args: argparse.Namespace, *, stderr: TextIO
+) -> tuple[str, dict[str, Any]] | None:
+    """Resolve ``--injector`` e o insumo dele; ``None`` (e a causa) se inválido.
+
+    Só checa combinação de flags — barato e sem I/O. Ler o creator ou perfilar o
+    trace fica com ``prepare_injector``, uma vez, na montagem do orquestrador.
+    """
+
+    given = [name for name in ("injector", *_INJECTOR_FLAGS) if getattr(args, name)]
+    if args.engine != "intent":
+        if given:
+            flag = "--" + given[0].replace("_", "-")
+            print(f"Erro: {flag} só se aplica a --engine intent.", file=stderr)
+            return None
+        return DEFAULT_INJECTOR_KEY, {}
+
+    injector = args.injector or DEFAULT_INJECTOR_KEY
+    for name, (flag, owner) in _INJECTOR_FLAGS.items():
+        if getattr(args, name) is not None and injector != owner:
+            print(f"Erro: {flag} só se aplica a --injector {owner}.", file=stderr)
+            return None
+
+    if injector == "model":
+        if args.injector_source is None:
+            print(
+                "Erro: --injector model exige --injector-source (o ataque cujo "
+                "creator Java o LLM vai ler).",
+                file=stderr,
+            )
+            return None
+        return injector, {"source_attack": args.injector_source}
+
+    if injector == "data":
+        if args.injector_dataset is None:
+            print(
+                "Erro: --injector data exige --injector-dataset (o trace cujo "
+                "perfil o LLM vai ler).",
+                file=stderr,
+            )
+            return None
+        options: dict[str, Any] = {"dataset_path": args.injector_dataset}
+        if args.injector_label is not None:
+            options["attack_label"] = args.injector_label
+        return injector, options
+
+    return injector, {}
 
 
 def _resolve_detector(detector: str | None, *, stderr: TextIO) -> str | None:
@@ -585,6 +691,11 @@ def run_cli(
     detector = _resolve_detector(args.detector, stderr=stderr)
     if detector is None:
         return 2
+
+    resolved_injector = _resolve_injector(args, stderr=stderr)
+    if resolved_injector is None:
+        return 2
+    args.injector, args.injector_options = resolved_injector
 
     if args.engine == "intent":
         return _run_intent_engine(
