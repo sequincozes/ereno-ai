@@ -346,6 +346,37 @@ class Detector:
             raise DetectorError("predict() chamado antes de fit(): nenhum modelo treinado.")
         return self._estimator.predict(X)
 
+    def score(self, X: pd.DataFrame, positive_label: Any) -> Any:
+        """Score contínuo de ``positive_label`` (maior = mais suspeito).
+
+        É o que permite medir a detecção sem um limiar fixo (AP) e escolher o
+        limiar por um orçamento de alarmes, em vez do arg-max do ``predict``.
+        Probabilidade da classe nos modelos que a têm; nos SVMs, a função de
+        decisão orientada para a classe positiva — não é probabilidade, mas a
+        ordem é o que AP e orçamento usam.
+        """
+
+        if not self._fitted:
+            raise DetectorError("score() chamado antes de fit(): nenhum modelo treinado.")
+        import numpy as np
+
+        classes = list(self._estimator.classes_)
+        if positive_label not in classes:
+            raise DetectorError(
+                f"Classe {positive_label!r} não foi vista no treino: {classes!r}."
+            )
+        if hasattr(self._estimator, "predict_proba"):
+            proba = self._estimator.predict_proba(X)
+            return np.asarray(proba[:, classes.index(positive_label)], dtype=float)
+        if len(classes) != 2:
+            raise DetectorError(
+                f"{self.key!r} sem predict_proba só pontua problemas binários; "
+                f"o treino teve {len(classes)} classes."
+            )
+        decision = np.asarray(self._estimator.decision_function(X), dtype=float)
+        # A função de decisão binária do sklearn é positiva para classes_[1].
+        return decision if classes.index(positive_label) == 1 else -decision
+
     # ------------------------------------------------------------------ #
     # Importâncias — significado varia por detector                       #
     # ------------------------------------------------------------------ #
