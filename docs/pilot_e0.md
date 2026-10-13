@@ -200,6 +200,28 @@ usável, mas numa faixa estreita e num eixo só: com 11 campos, `medium` e `high
 são distintas da baseline e monotônicas. O E1 pode usá-la desde que não conte
 com a intensidade `low` nem com a direção de atividade.
 
+### Ressalva: três creators liam campos do lugar errado (corrigido em 13/10)
+
+Os números acima foram medidos com um JAR em que três creators configuráveis
+chamavam `getNestedRangeMinInt(parent, child)` — que lê `parent.child.min` —
+para campos que são um intervalo **de topo** (`blockLen`, `burstDropLen`) ou
+um inteiro **dentro** de um objeto (`burst.min`/`burst.max`). O caminho nunca
+existia e o default entrava calado:
+
+| ataque | campo | efeito no JAR antigo |
+|---|---|---|
+| `inverse_replay` (uc02) | `blockLen` | default 1..1 → `randomBetween(1,1)` → geração abortava sempre (o "returncode=3") |
+| `inverse_replay` (uc02) | `burst.{min,max}` | default 0 → o burst nunca disparava |
+| `random_replay` (uc01) | `burst.{min,max}` | idem: com `burst.prob=1.0`, `bursts=0` no log do creator (o JAR corrigido, mesma seed: `bursts=1926`) |
+| `grayhole` (uc08) | `burstDropLen.{min,max}` | sempre 3..7, qualquer que fosse o config (o baseline coincide com o default) |
+
+Ou seja: no `random_replay` todo o bloco `burst.*` era inerte, e no `grayhole`
+`burstDropLen` também. A leitura de que o grayhole está "espremido" e de que no
+`random_replay` só `high` alcança a temporização foi feita com essas alavancas
+desligadas, e **precisa ser refeita** antes de ser citada. Sem burst
+configurado (`burst.prob=0`), o JAR corrigido gera os mesmos bytes que o
+antigo.
+
 ## Orçamento medido
 
 **Geração:** ~4,9s por trace e ~45 MB por trace no JAR (18 gerações = 88s e
