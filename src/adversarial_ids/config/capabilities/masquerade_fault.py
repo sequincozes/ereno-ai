@@ -3,6 +3,13 @@
 Movido de ``config/attack_capabilities.py`` — conteúdo inalterado, exceto o
 ``polarity`` implícito (todos os campos são "direct", já era o comportamento
 default do compilador antes deste campo existir).
+
+Exclui ``ttlMsValues``, pela auditoria campo a campo do E0 (13/10/2026,
+``scripts/run_e0_sensitivity.py``): o TTL é aplicado na mensagem, mas
+``Goose.copy()`` não o carrega e o creator emite a cópia, então o CSV sai
+sempre com o default. Consertar no gerador criaria um artefato (o benigno tem
+TTL constante, e ``frameLen`` soma o TTL como texto), então o campo sai do
+catálogo em vez de o gerador mudar.
 """
 
 from __future__ import annotations
@@ -15,7 +22,7 @@ from adversarial_ids.config.capabilities._effects import (
 from adversarial_ids.domain.intent_spec import IntentObjective
 
 MASQUERADE_FAULT_CAPABILITY = AttackCapability(
-    capability_id="masquerade_fault.v1",
+    capability_id="masquerade_fault.v2",
     attack_key="masquerade_fault",
     supported_objectives=frozenset(
         {IntentObjective.ASSESS_IDS_ROBUSTNESS, IntentObjective.EVADE_DETECTION}
@@ -67,12 +74,6 @@ MASQUERADE_FAULT_CAPABILITY = AttackCapability(
             # qualquer outro valor — confirmado no bytecode do JAR
             # (MasqueradeFakeFaultCreatorC). "normal" é o alternante estável.
             choices=("fast", "normal"),
-        ),
-        FieldCapability(
-            path="ttlMsValues",
-            value_type="integer_list",
-            description="Valores de TTL usados nas mensagens GOOSE forjadas.",
-            effects=DETECTION_EFFECTS,
         ),
         FieldCapability(
             path="analog.deltaAbs.min",

@@ -14,8 +14,9 @@ Três camadas, nesta ordem:
 - compilador (``core/intent_compiler.py``): o que só a baseline decide.
 
 Baseline de ``masquerade_fault`` (``inputs/attacks/uc03_masquerade_fault.json``):
-``fault.prob=0.6``, ``fault.durationMs={50, 800}``, ``cbStatus=1``,
-``ttlMsValues=[20, 40, 80]``.
+``fault.prob=0.6``, ``fault.durationMs={50, 800}``, ``cbStatus=1``. O único
+campo ``integer_list`` que restou no catálogo é o ``sqnumStrideValues`` do
+``flooding`` (baseline ``[1, 2, 4]``).
 """
 
 from __future__ import annotations
@@ -138,7 +139,7 @@ def test_a_pinned_field_must_be_inside_allowed_fields_when_it_is_set():
 
 def test_a_quoted_number_inside_a_list_is_refused_instead_of_converted():
     with pytest.raises(ValueError, match="sem aspas"):
-        TargetValue(path="ttlMsValues", value=(20, "40"))
+        TargetValue(path="sqnumStrideValues", value=(1, "2"))
 
 
 def test_target_value_rejects_an_unknown_key():
@@ -164,7 +165,6 @@ def test_a_pinned_path_outside_the_catalog_is_refused():
         ("fault.prob", "alta", "esperava número"),
         ("incrementStNumOnFault", 1, "esperava booleano"),
         ("sqnumMode", 1, "esperava texto"),
-        ("ttlMsValues", 20, "esperava lista"),
     ],
 )
 def test_a_pinned_value_of_the_wrong_type_is_refused(path, value, message):
@@ -360,17 +360,31 @@ def test_a_request_that_only_pins_the_baseline_fails_saying_so():
         compile_attack_candidate(intent)
 
 
+def test_a_scalar_pinned_on_a_list_field_is_refused():
+    capability = get_attack_capability("flooding")
+    intent = _intent(
+        pins={"sqnumStrideValues": 2},
+        attack="flooding",
+        effect=DesiredEffect.INCREASE_ATTACK_ACTIVITY,
+    )
+
+    with pytest.raises(ValueError, match="esperava lista"):
+        validate_target_values(capability, intent)
+
+
 def test_an_integer_list_pin_reaches_the_config_as_a_json_list():
     config = _config_of(
         _intent(
-            pins={"ttlMsValues": (10, 15)},
-            allowed=("ttlMsValues",),
+            pins={"sqnumStrideValues": (1, 3)},
+            allowed=("sqnumStrideValues",),
+            attack="flooding",
+            effect=DesiredEffect.INCREASE_ATTACK_ACTIVITY,
             max_fields_changed=1,
         )
     )
 
-    assert config["ttlMsValues"] == [10, 15]
-    assert isinstance(config["ttlMsValues"], list)
+    assert config["sqnumStrideValues"] == [1, 3]
+    assert isinstance(config["sqnumStrideValues"], list)
 
 
 def test_a_pin_against_a_baseline_sibling_that_inverts_the_range_fails():

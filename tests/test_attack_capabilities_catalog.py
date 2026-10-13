@@ -33,9 +33,20 @@ from adversarial_ids.shared.json_io import load_json
 # quê (ver docstrings de config/capabilities/*.py). Uma omissão não listada
 # aqui falha o teste — toda exclusão é deliberada.
 _DOCUMENTED_EXCLUSIONS: dict[str, frozenset[str]] = {
-    "masquerade_fault": frozenset(),
-    "random_replay": frozenset(),
-    "inverse_replay": frozenset(),
+    # E0 (13/10/2026): campos que geravam trace idêntico byte a byte.
+    "masquerade_fault": frozenset({"ttlMsValues"}),
+    "random_replay": frozenset(
+        {
+            "count.lambda",
+            "ttlOverride.valuesMs",
+            "ttlOverride.prob",
+            "ethSpoof.srcProb",
+            "ethSpoof.dstProb",
+        }
+    ),
+    "inverse_replay": frozenset(
+        {"count.lambda", "ttlOverride.valuesMs", "ttlOverride.prob"}
+    ),
     "injection": frozenset(
         {
             "randomSeed",
@@ -50,9 +61,28 @@ _DOCUMENTED_EXCLUSIONS: dict[str, frozenset[str]] = {
             "confRev.max",
         }
     ),
-    "high_stnum": frozenset({"sqNumDelta.min", "padBytes.min"}),
+    "high_stnum": frozenset(
+        {
+            "sqNumDelta.min",
+            "padBytes.min",
+            "padBytes.max",
+            "count.lambda",
+            "ttlOverride.valuesMs",
+            "ttlOverride.prob",
+        }
+    ),
     "flooding": frozenset(),
-    "grayhole": frozenset({"protectStatusChanges"}),
+    "grayhole": frozenset(
+        {
+            "protectStatusChanges",
+            "statusChangeDropProb",
+            "extraDelayMs.min",
+            "extraDelayMs.max",
+            "delayBurstProb",
+            "delayBurstLen.min",
+            "delayBurstLen.max",
+        }
+    ),
     "delayed_replay": frozenset({"orderBy"}),
     "delayed_replay_backoff": frozenset({"orderBy"}),
     "delayed_replay_batch_dump": frozenset({"orderBy"}),
@@ -105,6 +135,18 @@ def _every_field_and_effect():
 # --------------------------------------------------------------------------- #
 # Registry <-> catálogo                                                       #
 # --------------------------------------------------------------------------- #
+# v2: catálogos podados pela auditoria do E0 (13/10/2026). O id vai para o
+# ``AttackCandidate``, então um candidato compilado contra o catálogo antigo
+# continua distinguível.
+_CATALOG_VERSION: dict[str, int] = {
+    "masquerade_fault": 2,
+    "random_replay": 2,
+    "inverse_replay": 2,
+    "high_stnum": 2,
+    "grayhole": 2,
+}
+
+
 @pytest.mark.parametrize("attack_key", list_attack_keys())
 def test_every_registered_attack_resolves_a_capability(attack_key):
     capability = get_attack_capability(attack_key)
@@ -112,7 +154,7 @@ def test_every_registered_attack_resolves_a_capability(attack_key):
 
     assert capability.attack_key == attack_key
     assert capability.capability_id == spec.intent_capability_id
-    assert capability.capability_id == f"{attack_key}.v1"
+    assert capability.capability_id == f"{attack_key}.v{_CATALOG_VERSION.get(attack_key, 1)}"
 
 
 def test_capability_ids_are_unique():

@@ -1,12 +1,16 @@
 """Capacidade intent-driven de ``grayhole`` (uc08).
 
-Exclui ``protectStatusChanges`` — um gate booleano de ``statusChangeDropProb``
-(com o gate ``true``, mensagens de mudança de estado nunca são descartadas, e
-a probabilidade fica inerte). Catalogar os dois permitiria ao compilador
-selecionar ambos no mesmo round e ligar o gate justo quando muda a
-probabilidade que ele desativa. Mantém-se só ``statusChangeDropProb`` — a
-alavanca fisicamente mais forte, já que mensagens de mudança de estado são as
-de maior valor para o IDS.
+Exclui, pela auditoria campo a campo do E0 (13/10/2026,
+``scripts/run_e0_sensitivity.py``), tudo que gerava trace idêntico byte a byte:
+
+- ``extraDelayMs.{min,max}``, ``delayBurstProb``, ``delayBurstLen.{min,max}`` —
+  o ``GrayHoleVictimCreatorC`` nunca lê esses campos (as mensagens que
+  sobrevivem saem sem atraso). Atraso no caminho é plausível, mas modelá-lo é
+  decisão do estudo do próprio grayhole, não do catálogo.
+- ``protectStatusChanges`` e ``statusChangeDropProb`` — a probabilidade só é
+  consultada com o gate ligado (aí as mensagens de mudança de estado caem com
+  ``statusChangeDropProb`` em vez de ``dropRate``). O gate fica ``false`` na
+  baseline e nunca esteve no catálogo, então a probabilidade era inalcançável.
 
 ``dropRate.{min,max}`` é semanticamente uma probabilidade em ``[0, 1]`` cujas
 folhas se chamam ``min``/``max`` — o clamp genérico legado (que casa por
@@ -26,7 +30,7 @@ from adversarial_ids.config.capabilities._effects import (
 from adversarial_ids.domain.intent_spec import IntentObjective
 
 GRAYHOLE_CAPABILITY = AttackCapability(
-    capability_id="grayhole.v1",
+    capability_id="grayhole.v2",
     attack_key="grayhole",
     supported_objectives=frozenset(
         {IntentObjective.ASSESS_IDS_ROBUSTNESS, IntentObjective.EVADE_DETECTION}
@@ -72,54 +76,6 @@ GRAYHOLE_CAPABILITY = AttackCapability(
             effects=DETECTION_AND_ACTIVITY_EFFECTS,
             minimum=1,
             maximum=100,
-        ),
-        FieldCapability(
-            path="extraDelayMs.min",
-            value_type="number",
-            description="Atraso extra mínimo aplicado às mensagens, em milissegundos.",
-            effects=DETECTION_EFFECTS,
-            minimum=1.0,
-            maximum=2000.0,
-        ),
-        FieldCapability(
-            path="extraDelayMs.max",
-            value_type="number",
-            description="Atraso extra máximo aplicado às mensagens, em milissegundos.",
-            effects=DETECTION_EFFECTS,
-            minimum=1.0,
-            maximum=2000.0,
-        ),
-        FieldCapability(
-            path="delayBurstProb",
-            value_type="number",
-            description="Probabilidade de atrasar em rajada.",
-            effects=DETECTION_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
-        ),
-        FieldCapability(
-            path="delayBurstLen.min",
-            value_type="integer",
-            description="Tamanho mínimo da rajada de atraso.",
-            effects=DETECTION_EFFECTS,
-            minimum=1,
-            maximum=100,
-        ),
-        FieldCapability(
-            path="delayBurstLen.max",
-            value_type="integer",
-            description="Tamanho máximo da rajada de atraso.",
-            effects=DETECTION_EFFECTS,
-            minimum=1,
-            maximum=100,
-        ),
-        FieldCapability(
-            path="statusChangeDropProb",
-            value_type="number",
-            description="Probabilidade de descartar mensagens de mudança de estado.",
-            effects=DETECTION_AND_ACTIVITY_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
         ),
     ),
 )

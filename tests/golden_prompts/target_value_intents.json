@@ -50,13 +50,13 @@
   {
     "id": "pinned-04",
     "category": "valid",
-    "prompt": "Reduza o F1 usando TTL de 10 e 15 ms nas mensagens forjadas.",
+    "prompt": "Aumente a atividade do flooding usando strides de sqNum de 1 e 3.",
     "payload": {
-      "objective": "evade_detection",
-      "base_attack": "masquerade_fault",
-      "desired_effect": "lower_f1",
+      "objective": "assess_ids_robustness",
+      "base_attack": "flooding",
+      "desired_effect": "increase_attack_activity",
       "intensity": "medium",
-      "target_values": { "ttlMsValues": [10, 15] },
+      "target_values": { "sqnumStrideValues": [1, 3] },
       "max_fields_changed": 1,
       "seed": 42
     },

@@ -1,6 +1,17 @@
 """Capacidade intent-driven de ``random_replay`` (uc01).
 
-Cobertura total dos 15 campos editáveis do baseline — nenhuma exclusão.
+Exclui, pela auditoria campo a campo do E0 (13/10/2026,
+``scripts/run_e0_sensitivity.py``), os campos que não mudam o trace gerado:
+
+- ``count.lambda`` — o creator nunca lê; a quantidade de mensagens de ataque
+  vem do orçamento por segmento da ação de dataset.
+- ``ttlOverride.{valuesMs,prob}`` — o TTL é aplicado na mensagem, mas
+  ``Goose.copy()`` não o carrega e o creator emite a cópia: o CSV sai sempre
+  com o default. Consertar no gerador criaria um artefato (o benigno tem TTL
+  constante, e ``frameLen`` soma o TTL como texto).
+- ``ethSpoof.{srcProb,dstProb}`` — o creator nunca lê; e trocar o MAC de origem
+  de um replay o deixaria menos parecido com o publisher, não mais.
+
 ``burst.gapMs.{min,max}`` tem ``polarity="inverse"``: um gap **menor** entre
 mensagens da rajada é o que torna o replay mais agressivo/detectável, não o
 oposto.
@@ -22,21 +33,13 @@ from adversarial_ids.config.capabilities._effects import (
 from adversarial_ids.domain.intent_spec import IntentObjective
 
 RANDOM_REPLAY_CAPABILITY = AttackCapability(
-    capability_id="random_replay.v1",
+    capability_id="random_replay.v2",
     attack_key="random_replay",
     supported_objectives=frozenset(
         {IntentObjective.ASSESS_IDS_ROBUSTNESS, IntentObjective.EVADE_DETECTION}
     ),
     supported_effects=DETECTION_AND_ACTIVITY_EFFECTS,
     fields=(
-        FieldCapability(
-            path="count.lambda",
-            value_type="integer",
-            description="Taxa média (Poisson) de mensagens reenviadas.",
-            effects=DETECTION_AND_ACTIVITY_EFFECTS,
-            minimum=50,
-            maximum=5000,
-        ),
         FieldCapability(
             path="windowS.min",
             value_type="number",
@@ -115,36 +118,6 @@ RANDOM_REPLAY_CAPABILITY = AttackCapability(
             path="reorderProb",
             value_type="number",
             description="Probabilidade de reordenar mensagens reenviadas.",
-            effects=DETECTION_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
-        ),
-        FieldCapability(
-            path="ttlOverride.valuesMs",
-            value_type="integer_list",
-            description="Valores de TTL sobrescritos nas mensagens reenviadas.",
-            effects=DETECTION_EFFECTS,
-        ),
-        FieldCapability(
-            path="ttlOverride.prob",
-            value_type="number",
-            description="Probabilidade de sobrescrever o TTL da mensagem reenviada.",
-            effects=DETECTION_AND_ACTIVITY_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
-        ),
-        FieldCapability(
-            path="ethSpoof.srcProb",
-            value_type="number",
-            description="Probabilidade de forjar o endereço MAC de origem.",
-            effects=DETECTION_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
-        ),
-        FieldCapability(
-            path="ethSpoof.dstProb",
-            value_type="number",
-            description="Probabilidade de forjar o endereço MAC de destino.",
             effects=DETECTION_EFFECTS,
             minimum=0.0,
             maximum=1.0,

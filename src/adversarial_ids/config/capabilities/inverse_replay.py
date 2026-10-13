@@ -1,6 +1,16 @@
 """Capacidade intent-driven de ``inverse_replay`` (uc02).
 
-Cobertura total dos 12 campos editáveis do baseline — nenhuma exclusão.
+Exclui, pela auditoria campo a campo do E0 (13/10/2026,
+``scripts/run_e0_sensitivity.py``), os campos que não mudam o trace gerado:
+
+- ``count.lambda`` — o creator nunca lê; a quantidade de mensagens de ataque
+  vem do orçamento por segmento da ação de dataset.
+- ``ttlOverride.{valuesMs,prob}`` — o TTL é aplicado na mensagem, mas
+  ``Goose.copy()`` não o carrega e o creator emite a cópia: o CSV sai sempre
+  com o default. Consertar no gerador criaria um artefato (o benigno tem TTL
+  constante, e ``frameLen`` soma o TTL como texto), então o campo sai do
+  catálogo em vez de o gerador mudar.
+
 Mesma família estrutural do ``random_replay``: ``burst.gapMs.{min,max}`` é
 ``inverse`` pelo mesmo motivo (gap menor = rajada mais apertada e detectável).
 """
@@ -15,21 +25,13 @@ from adversarial_ids.config.capabilities._effects import (
 from adversarial_ids.domain.intent_spec import IntentObjective
 
 INVERSE_REPLAY_CAPABILITY = AttackCapability(
-    capability_id="inverse_replay.v1",
+    capability_id="inverse_replay.v2",
     attack_key="inverse_replay",
     supported_objectives=frozenset(
         {IntentObjective.ASSESS_IDS_ROBUSTNESS, IntentObjective.EVADE_DETECTION}
     ),
     supported_effects=DETECTION_AND_ACTIVITY_EFFECTS,
     fields=(
-        FieldCapability(
-            path="count.lambda",
-            value_type="integer",
-            description="Taxa média (Poisson) de mensagens reenviadas em ordem invertida.",
-            effects=DETECTION_AND_ACTIVITY_EFFECTS,
-            minimum=50,
-            maximum=5000,
-        ),
         FieldCapability(
             path="blockLen.min",
             value_type="integer",
@@ -103,20 +105,6 @@ INVERSE_REPLAY_CAPABILITY = AttackCapability(
             polarity="inverse",
             minimum=0.05,
             maximum=1000.0,
-        ),
-        FieldCapability(
-            path="ttlOverride.valuesMs",
-            value_type="integer_list",
-            description="Valores de TTL sobrescritos nas mensagens reenviadas.",
-            effects=DETECTION_EFFECTS,
-        ),
-        FieldCapability(
-            path="ttlOverride.prob",
-            value_type="number",
-            description="Probabilidade de sobrescrever o TTL da mensagem reenviada.",
-            effects=DETECTION_AND_ACTIVITY_EFFECTS,
-            minimum=0.0,
-            maximum=1.0,
         ),
     ),
 )
