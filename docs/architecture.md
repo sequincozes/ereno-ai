@@ -84,7 +84,7 @@ da v1 são recusados com a razão; eles vivem em `outputs/`, que é descartável
 
 | caixa | estratégias registradas | como se escolhe |
 |---|---|---|
-| Injector | `intent` (e o loop legado Strategist, em pipeline separado) | `--engine` |
+| Injector | `intent`, `model`, `data` | `--injector`, registro em `agents/injector/registry.py` |
 | Generator | `cached`, `jar` | `--generator-mode`, registro em `core/generators.py` |
 | Pre-Processor | seletor `none`/`mutual_info`/`rfe`; undersampler `none`/`random`/`ratio` | env var **ou** política declarada; **desligados** por default |
 | Detector | `random_forest`, `decision_tree`, `svm_linear`, `svm_rbf` | `--detector`, registro em `core/detectors.py` |
@@ -92,10 +92,15 @@ da v1 são recusados com a razão; eles vivem em `outputs/`, que é descartável
 
 Duas observações honestas sobre esta tabela:
 
-**O Injector não é um registro.** `--engine demo|live|intent` troca o pipeline
-inteiro, não uma estratégia de injeção atrás de um contrato comum. Unificar
-intent-driven, model-driven e data-driven sob uma interface só é trabalho de
-desenho, não de refactor.
+**O Injector é um registro dentro do pipeline intent-driven** (desde 13/10).
+As três estratégias produzem a mesma `IntentSpec` e passam pelos mesmos
+portões; o que as separa é o contexto que o LLM lê — o catálogo (`intent`), o
+creator Java de um ataque (`model`) ou o perfil de um trace (`data`). `model` e
+`data` só propõem ataques novos na DSL do `programmable`, nunca código: ver
+`docs/injectors.md`. O `--engine` continua escolhendo o **pipeline** (`demo` é
+replay do golden, `live` é o loop legado Strategist↔Analyst, que segue
+gravando `IterationRecord`); o `--injector` escolhe a estratégia dentro do
+`intent`.
 
 **O Pre-Processor decide metade.** O undersampler tem um decisor de verdade
 desde 01/10: `UNDERSAMPLING_MODE=policy` entrega a escolha a uma regra
