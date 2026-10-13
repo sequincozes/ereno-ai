@@ -66,13 +66,13 @@
   {
     "id": "valid-06",
     "category": "valid",
-    "prompt": "Reduza o recall variando somente os valores de TTL usados nas mensagens GOOSE forjadas.",
+    "prompt": "Reduza o recall variando somente o desvio analógico máximo das medidas forjadas.",
     "payload": {
       "objective": "evade_detection",
       "base_attack": "masquerade_fault",
       "desired_effect": "lower_recall",
       "intensity": "low",
-      "allowed_fields": ["ttlMsValues"],
+      "allowed_fields": ["analog.deltaAbs.max"],
       "seed": 42
     }
   },

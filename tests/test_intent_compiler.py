@@ -120,16 +120,21 @@ def test_sqnum_mode_toggles_to_the_alternate_choice():
     assert candidate.diff[0].new_value == "normal"
 
 
-def test_ttl_ms_values_are_scaled_elementwise_and_stay_positive():
-    intent = _intent(restrictions=IntentRestrictions(allowed_fields=("ttlMsValues",)))
+def test_integer_lists_are_scaled_elementwise_and_stay_positive():
+    intent = _intent(
+        objective=IntentObjective.ASSESS_IDS_ROBUSTNESS,
+        base_attack="flooding",
+        desired_effect=DesiredEffect.INCREASE_ATTACK_ACTIVITY,
+        restrictions=IntentRestrictions(allowed_fields=("sqnumStrideValues",)),
+    )
     candidate = compile_attack_candidate(intent)
 
-    baseline_values = _BASELINE["ttlMsValues"]
+    baseline_values = load_json(get_attack_spec("flooding").baseline_path)["sqnumStrideValues"]
     change = candidate.diff[0]
     assert change.old_value == baseline_values
     assert len(change.new_value) == len(baseline_values)
     assert all(value >= 1 for value in change.new_value)
-    assert all(new <= old for new, old in zip(change.new_value, baseline_values))
+    assert all(new >= old for new, old in zip(change.new_value, baseline_values))
 
 
 def test_a_field_outside_the_effects_capability_is_rejected_before_compiling():

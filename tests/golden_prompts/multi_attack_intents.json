@@ -15,13 +15,13 @@
   {
     "id": "valid-inverse-replay",
     "category": "valid",
-    "prompt": "Avalie a robustez do IDS aumentando a taxa de reenvio invertido.",
+    "prompt": "Avalie a robustez do IDS aumentando a chance de rajadas no reenvio invertido.",
     "payload": {
       "objective": "assess_ids_robustness",
       "base_attack": "inverse_replay",
       "desired_effect": "increase_attack_activity",
       "intensity": "medium",
-      "allowed_fields": ["count.lambda"],
+      "allowed_fields": ["burst.prob"],
       "seed": 42
     }
   },

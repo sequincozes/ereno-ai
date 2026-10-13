@@ -9,11 +9,13 @@ dele.
 
 ## Convenções
 
-- **`capability_id`**: `"<attack_key>.v1"` — uma por ataque registrado em
+- **`capability_id`**: `"<attack_key>.v<N>"` — uma por ataque registrado em
   `config/attacks_registry.py`, inclusive as 4 variantes `delayed_replay*`
   (mesmo `delayed_replay_double_drop` sendo campo-a-campo idêntico ao
   `delayed_replay` base: compartilhar um id faria `AttackCapability.attack_key`
-  mentir para três das quatro specs).
+  mentir para três das quatro specs). O id vai para o `AttackCandidate`;
+  os cinco catálogos podados pelo E0 passaram a `v2`, para que um candidato
+  compilado contra o catálogo antigo continue distinguível.
 - **`polarity`**: `"direct"` (padrão) — valor maior = ataque mais intenso.
   `"inverse"` — valor maior = ataque **menos** intenso (gaps, intervalos entre
   rajadas). O compilador inverte a direção efetiva desses campos, para que
@@ -36,7 +38,7 @@ dele.
 
 ## Ataques e campos
 
-### `masquerade_fault` (`masquerade_fault.v1`) — 12 campos, cobertura total
+### `masquerade_fault` (`masquerade_fault.v2`) — 11 de 12 campos
 
 | campo | tipo | pol. | bounds/choices | efeitos |
 |---|---|---|---|---|
@@ -46,28 +48,22 @@ dele.
 | `cbStatus` | integer | direct | {0, 1} | evasão |
 | `incrementStNumOnFault` | boolean | direct | {False, True} | evasão |
 | `sqnumMode` | string | direct | {fast, normal} | evasão |
-| `ttlMsValues` | integer_list | direct | — | evasão |
 | `analog.deltaAbs.min` | number | direct | ≥0.0 | evasão |
 | `analog.deltaAbs.max` | number | direct | ≥0.0 | evasão |
 | `trapArea.multiplier.min` | number | direct | ≥0.0 | evasão |
 | `trapArea.multiplier.max` | number | direct | ≥0.0 | evasão |
 | `trapArea.spikeProb` | number | direct | [0.0, 1.0] | evasão + atividade |
 
-### `random_replay` (`random_replay.v1`) — 15 campos, cobertura total
+### `random_replay` (`random_replay.v2`) — 10 de 15 campos
 
 | campo | tipo | pol. | bounds | efeitos |
 |---|---|---|---|---|
-| `count.lambda` | integer | direct | [50, 5000] | evasão + atividade |
 | `windowS.{min,max}` | number | direct | [0.1, 30.0] | evasão |
 | `delayMs.{min,max}` | number | direct | [1.0, 2000.0] | evasão |
 | `burst.prob` | number | direct | [0.0, 1.0] | evasão + atividade |
 | `burst.{min,max}` | integer | direct | [1, 50] | evasão + atividade |
 | `burst.gapMs.{min,max}` | number | **inverse** | [0.05, 1000.0] | evasão + atividade |
 | `reorderProb` | number | direct | [0.0, 1.0] | evasão |
-| `ttlOverride.valuesMs` | integer_list | direct | — | evasão |
-| `ttlOverride.prob` | number | direct | [0.0, 1.0] | evasão + atividade |
-| `ethSpoof.srcProb` | number | direct | [0.0, 1.0] | evasão |
-| `ethSpoof.dstProb` | number | direct | [0.0, 1.0] | evasão |
 
 > **Incerteza registrada**: `delayMs.{min,max}` está tagueado `direct` (menos
 > atraso ≈ temporização mais próxima do normal), mas um replay quase sem
@@ -75,7 +71,7 @@ dele.
 > Resolver com um experimento A/B (`--generator-mode jar`, comparar recall)
 > em vez de garantir.
 
-### `inverse_replay` (`inverse_replay.v1`) — 12 campos, cobertura total
+### `inverse_replay` (`inverse_replay.v2`) — 9 de 12 campos
 
 Mesma família estrutural do `random_replay`. `blockLen` substitui `windowS`;
 `delayMs` é **inteiro** aqui (vs. float no uc01); sem `ethSpoof`/`reorderProb`.
@@ -92,18 +88,17 @@ O piso 5 de `numInjectedMessages` existe porque o gate E4
 (`DatasetBundle`) exige `min_attack_rows=5` por padrão — um valor menor
 produziria um candidato que o próprio pipeline rejeitaria no PREPROCESS.
 
-### `high_stnum` (`high_stnum.v1`) — 9 de 11 campos
+### `high_stnum` (`high_stnum.v2`) — 5 de 11 campos, só evasão
 
 | campo | tipo | pol. | bounds/choices | efeitos |
 |---|---|---|---|---|
-| `count.lambda` | integer | direct | [20, 4000] | evasão + atividade |
 | `jump.{min,max}` | integer | direct | [1, 1000] | evasão |
 | `sqnumResetProb` | number | direct | [0.0, 1.0] | evasão |
 | `sqNumDelta.max` | integer | direct | [0, 100] | evasão |
 | `randomizeTimestamp` | boolean | direct | {False, True} | evasão |
-| `ttlOverride.valuesMs` | integer_list | direct | — | evasão |
-| `ttlOverride.prob` | number | direct | [0.0, 1.0] | evasão + atividade |
-| `padBytes.max` | integer | direct | [0, 256] | evasão |
+
+As duas alavancas de atividade (`count.lambda`, `ttlOverride.prob`) saíram
+pelo E0, então o `high_stnum` não anuncia mais `increase_attack_activity`.
 
 ### `flooding` (`flooding.v1`) — 8 campos, cobertura total
 
@@ -122,17 +117,13 @@ que caracteriza flooding, daí `inverse`. `sqnumStrideValues` só carrega
 (evasão) produz um multiset degenerado (`[1,2,4]` × 0.5 → `[1,1,2]`, duplicando
 o stride 1), então a direção de evasão não é segura para esse campo.
 
-### `grayhole` (`grayhole.v1`) — 11 de 12 campos
+### `grayhole` (`grayhole.v2`) — 5 de 12 campos
 
 | campo | tipo | pol. | bounds | efeitos |
 |---|---|---|---|---|
 | `dropRate.{min,max}` | number | direct | [0.05, 1.0] | evasão + atividade |
 | `burstDropProb` | number | direct | [0.0, 1.0] | evasão + atividade |
 | `burstDropLen.{min,max}` | integer | direct | [1, 100] | evasão + atividade |
-| `extraDelayMs.{min,max}` | number | direct | [1.0, 2000.0] | evasão |
-| `delayBurstProb` | number | direct | [0.0, 1.0] | evasão |
-| `delayBurstLen.{min,max}` | integer | direct | [1, 100] | evasão |
-| `statusChangeDropProb` | number | direct | [0.0, 1.0] | evasão + atividade |
 
 `dropRate.{min,max}` é semanticamente uma probabilidade cujas folhas se
 chamam `min`/`max` — o clamp genérico legado (que casa por substring `"prob"`
@@ -170,7 +161,28 @@ clamp genérico legado não a alcança.
 | `randomSeed` | `injection` | controle de reprodutibilidade, não uma alavanca de intensidade. |
 | `stNum`, `sqNum`, `cbStatus.values`, `ttlMs`, `confRev` (9 caminhos) | `injection` | só têm efeito físico quando `injectionPattern == "synthetic"`; o baseline usa `"random"` (clona mensagens legítimas, ignora essas faixas). Compilar uma mudança nelas produziria um diff sem efeito físico — corromperia a política E10, que mediria "sem melhora" e escalaria uma alavanca morta. Habilitá-los exige mudar o baseline (`inputs/attacks/uc05_injection.json`) para `"synthetic"`, o que também mudaria o que `--engine live --attack injection` (loop legado) otimiza — decisão de dados fora do escopo deste catálogo. |
 | `sqNumDelta.min`, `padBytes.min` | `high_stnum` | baseline `0`, morto nas duas direções: `decrease` não desce de um piso `0`, e `increase` sem `maximum` é multiplicativo (`0 × fator = 0`). Só os `.max` de cada par entram. |
-| `protectStatusChanges` | `grayhole` | gate booleano de `statusChangeDropProb` (com o gate `true`, a probabilidade fica inerte). Catalogar os dois permitiria ao compilador ligar o gate e mudar a probabilidade que ele desativa no mesmo round. Mantém-se só `statusChangeDropProb`. |
+| `protectStatusChanges`, `statusChangeDropProb` | `grayhole` | a probabilidade só é consultada com o gate ligado (as mensagens de mudança de estado caem com ela em vez de `dropRate`); o gate fica `false` na baseline e nunca esteve no catálogo, então a probabilidade era inalcançável — o E0 a mediu inerte. |
+
+### Excluídos pela auditoria do E0 (13/10/2026)
+
+O teste de catálogo garante que cada campo muda a **config**; não garante que
+a config mude o **trace**. `scripts/run_e0_sensitivity.py` gera cada campo
+sozinho contra a referência nas mesmas seeds, e os campos abaixo deram trace
+idêntico byte a byte. A escolha foi podar o catálogo, não consertar o
+gerador: consertar mudaria o simulador para o ataque ficar mais fácil de
+detectar, e no caso do TTL criaria um artefato.
+
+| campo | ataque(s) | causa no ERENO-2.0 |
+|---|---|---|
+| `count.lambda` | `random_replay`, `inverse_replay`, `high_stnum` | nenhum creator lê; a quantidade de mensagens de ataque é o orçamento por segmento de `CreateAttackDatasetAction` (prevalência 50% qualquer que seja o valor). |
+| `ttlOverride.{valuesMs,prob}`, `ttlMsValues` | `random_replay`, `inverse_replay`, `high_stnum`, `masquerade_fault` | o TTL é aplicado na mensagem, mas `Goose.copy()` não copia `gooseTimeAllowedtoLive` e o creator emite a cópia: o CSV sai sempre com 11000. Consertar criaria um artefato — o benigno tem TTL constante, e `getFrameLen()` soma o TTL como texto, o que vazaria para `frameLengthDiff`. O `prob` não é inerte (consome sorteios), mas não tem efeito fora da RNG. |
+| `ethSpoof.{srcProb,dstProb}` | `random_replay` | o creator nunca lê (e `Goose.ethSrc` é `static`). Trocar o MAC de um replay o deixaria menos parecido com o publisher. |
+| `padBytes.max` | `high_stnum` | o creator nunca lê; enchimento dentro de uma PDU BER faria um frame malformado. |
+| `extraDelayMs.{min,max}`, `delayBurstProb`, `delayBurstLen.{min,max}` | `grayhole` | `GrayHoleVictimCreatorC` nunca lê; as mensagens que sobrevivem saem sem atraso. Modelar o atraso é decisão do estudo do próprio grayhole. |
+
+**Não auditado ainda:** `flooding.ttlMs` e `flooding.ethSrcSpoofProb` passam
+pelos mesmos dois mecanismos (TTL via `copy()`, `ethSrc` estático) e são
+suspeitos; o E0 não cobriu o `flooding`.
 
 ## `increase_resource_pressure` — por que nenhum catálogo o anuncia
 
@@ -186,7 +198,7 @@ efeito é rejeitada no portão de entrada (`resolve_candidate_paths`) com uma
 mensagem acionável, em vez de morrer tarde na rodada 1 com
 `NO_OBJECTIVE_METRIC`. `increase_attack_activity` cobre a metade fisicamente
 representável do pedido nos mesmos campos (`burst.*`, `gapMs.*`,
-`dropRate.*`, `count.lambda`) — a perda é lexical, não física.
+`dropRate.*`) — a perda é lexical, não física.
 
 ## Limitação de modo cached
 
@@ -216,5 +228,7 @@ for k in list_attack_keys():
 ```
 
 `tests/test_attack_capabilities_catalog.py` mantém este catálogo honesto —
-qualquer alavanca morta, caminho não documentado ou efeito sem campo que o
-produza falha ali antes de chegar aqui.
+qualquer alavanca morta na config, caminho não documentado ou efeito sem campo
+que o produza falha ali antes de chegar aqui. Alavanca morta no **trace** (a
+config muda, o gerador ignora) só aparece rodando o gerador:
+`uv run python scripts/run_e0_sensitivity.py` (precisa do JAR).

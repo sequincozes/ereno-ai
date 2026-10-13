@@ -112,7 +112,7 @@ ATTACK_CAPABILITY_CATALOG: dict[str, AttackCapability] = {
 # Reexportado por conveniência/compat — a maioria do código só precisa de
 # ``get_attack_capability("masquerade_fault")``, mas alguns testes e o
 # golden-prompt fixture antigo referenciam a constante diretamente.
-MASQUERADE_FAULT_CAPABILITY = ATTACK_CAPABILITY_CATALOG["masquerade_fault.v1"]
+MASQUERADE_FAULT_CAPABILITY = ATTACK_CAPABILITY_CATALOG["masquerade_fault.v2"]
 
 
 def get_attack_capability(attack_key: str) -> AttackCapability:

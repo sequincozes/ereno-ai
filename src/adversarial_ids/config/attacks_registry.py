@@ -57,7 +57,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Masquerade de falha falsa (uc03): injeta uma falha forjada em GOOSE "
             "manipulando estado do disjuntor, stNum, valores analógicos e a trap area."
         ),
-        intent_capability_id="masquerade_fault.v1",
+        intent_capability_id="masquerade_fault.v2",
     ),
     AttackSpec(
         key="random_replay",
@@ -69,7 +69,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay aleatório (uc01): recaptura e reenvia mensagens legítimas com "
             "janelas, atrasos e rajadas variáveis."
         ),
-        intent_capability_id="random_replay.v1",
+        intent_capability_id="random_replay.v2",
     ),
     AttackSpec(
         key="inverse_replay",
@@ -81,7 +81,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Replay invertido (uc02): reenvia blocos de mensagens em ordem invertida, "
             "com atrasos e rajadas."
         ),
-        intent_capability_id="inverse_replay.v1",
+        intent_capability_id="inverse_replay.v2",
     ),
     AttackSpec(
         key="injection",
@@ -105,7 +105,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Injeção com stNum elevado (uc06): força saltos anômalos de stNum "
             "simulando transições de estado inexistentes."
         ),
-        intent_capability_id="high_stnum.v1",
+        intent_capability_id="high_stnum.v2",
     ),
     AttackSpec(
         key="flooding",
@@ -129,7 +129,7 @@ _SPECS: tuple[AttackSpec, ...] = (
             "Grayhole (uc08): descarte seletivo de mensagens em rajadas, com atrasos "
             "para mascarar o ataque."
         ),
-        intent_capability_id="grayhole.v1",
+        intent_capability_id="grayhole.v2",
     ),
     AttackSpec(
         key="delayed_replay",

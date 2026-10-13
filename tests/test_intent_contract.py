@@ -83,11 +83,15 @@ def test_restrictions_reject_ambiguous_or_duplicate_paths():
         IntentRestrictions(forbidden_fields=("fault.prob", "fault.prob"))
 
 
-def test_masquerade_catalog_matches_every_editable_baseline_field():
+def test_masquerade_catalog_matches_every_editable_baseline_field_but_the_ttl():
+    """``ttlMsValues`` saiu pelo E0: o gerador não leva o TTL até o trace."""
+
     baseline = json.loads(BASELINE_PATH.read_text(encoding="utf-8"))
 
-    assert MASQUERADE_FAULT_CAPABILITY.editable_paths == editable_field_paths(baseline)
-    assert len(MASQUERADE_FAULT_CAPABILITY.fields) == 12
+    assert MASQUERADE_FAULT_CAPABILITY.editable_paths == (
+        editable_field_paths(baseline) - {"ttlMsValues"}
+    )
+    assert len(MASQUERADE_FAULT_CAPABILITY.fields) == 11
 
 
 def test_valid_intent_passes_deterministic_capability_gate():
@@ -100,7 +104,7 @@ def test_valid_intent_passes_deterministic_capability_gate():
 
     capability = validate_intent_capability(intent)
 
-    assert capability.capability_id == "masquerade_fault.v1"
+    assert capability.capability_id == "masquerade_fault.v2"
 
 
 def test_attack_without_intent_capability_fails_with_actionable_error(monkeypatch):
