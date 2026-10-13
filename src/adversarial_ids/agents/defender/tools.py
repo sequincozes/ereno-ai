@@ -8,7 +8,9 @@ prioridade ou referência ao relatório de origem — mesmo papel que
 
 from __future__ import annotations
 
+import json
 import math
+import re
 from typing import Any
 
 from adversarial_ids.config.defense_techniques import techniques_for_evidence
@@ -147,21 +149,75 @@ def legal_techniques_by_bucket() -> dict[str, tuple[str, ...]]:
     return {bucket: techniques_for_bucket(bucket) for bucket in DEFENSE_BUCKETS}
 
 
-def parse_defense_plan(content: Any) -> DefensePlan:
+def _same_report_path(received: str, expected: str) -> bool:
+    r"""Mesmo arquivo, escrito com outro escape de barra?
+
+    O ``detection_report_ref`` é um caminho absoluto que o LLM precisa ecoar
+    dentro de JSON. No Windows ele às vezes escapa as barras duas vezes
+    (``C:\\Users`` em vez de ``C:\Users``), e o plano inteiro era recusado
+    por uma ref que aponta para o arquivo certo. Colapsar barras repetidas e
+    tratar ``\`` e ``/`` como o mesmo separador cobre exatamente isso — e nada
+    mais: outro diretório, outro run_id ou outra caixa de letra continuam
+    diferentes.
+    """
+
+    def _normalized(path: str) -> str:
+        return re.sub(r"[\\/]+", "/", path.strip())
+
+    return _normalized(received) == _normalized(expected)
+
+
+def _canonical_refs(payload: Any, expected_report_ref: str | None) -> Any:
+    """Troca, no plano bruto, toda ref equivalente à esperada pela esperada.
+
+    Roda **antes** do contrato: o ``DefensePlan`` exige que as refs das
+    evidências batam com a do plano, e duas grafias do mesmo caminho o fariam
+    recusar algo que não é erro. Uma ref para outro arquivo passa intacta e
+    segue sendo recusada pelo portão (``validate_plan_against_report``), que
+    continua comparando estritamente.
+    """
+
+    if expected_report_ref is None:
+        return payload
+    if isinstance(payload, dict):
+        result = {}
+        for key, value in payload.items():
+            if (
+                key == "detection_report_ref"
+                and isinstance(value, str)
+                and _same_report_path(value, expected_report_ref)
+            ):
+                result[key] = expected_report_ref
+            else:
+                result[key] = _canonical_refs(value, expected_report_ref)
+        return result
+    if isinstance(payload, list):
+        return [_canonical_refs(item, expected_report_ref) for item in payload]
+    return payload
+
+
+def parse_defense_plan(
+    content: Any, *, expected_report_ref: str | None = None
+) -> DefensePlan:
     """Converte a resposta Agno (modelo, dict ou string JSON) em ``DefensePlan``.
 
     Mesma tolerância de formato usada por ``AnalystAgent._parse_response_content``:
     o Agno pode devolver diretamente um modelo Pydantic, um dicionário, ou uma
     string JSON (às vezes cercada por ```` ``` ````), dependendo do modelo.
+
+    Com ``expected_report_ref``, as refs que apontam para o mesmo arquivo com
+    outro escape de barra são reescritas para o valor exato (ver
+    ``_canonical_refs``); o plano persistido sai sempre com a grafia canônica.
     """
 
     if content is None:
         raise RuntimeError("A resposta do Defensor não possui conteúdo.")
 
     if isinstance(content, DefensePlan):
-        return content
-
-    if isinstance(content, str):
+        if expected_report_ref is None:
+            return content
+        payload: Any = content.model_dump(mode="json")
+    elif isinstance(content, str):
         cleaned = content.strip()
 
         if cleaned.startswith("```"):
@@ -173,12 +229,14 @@ def parse_defense_plan(content: Any) -> DefensePlan:
             cleaned = "\n".join(lines).strip()
 
         try:
-            return DefensePlan.model_validate_json(cleaned)
+            payload = json.loads(cleaned)
         except Exception as error:
             raise ValueError("O Defensor retornou um JSON inválido.") from error
+    else:
+        payload = content
 
     try:
-        return DefensePlan.model_validate(content)
+        return DefensePlan.model_validate(_canonical_refs(payload, expected_report_ref))
     except Exception as error:
         raise ValueError(
             "Não foi possível converter a resposta em DefensePlan."

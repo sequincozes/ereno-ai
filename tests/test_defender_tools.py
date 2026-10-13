@@ -601,3 +601,68 @@ def test_techniques_by_evidence_honours_the_same_top_n_as_the_evidence():
 
     assert set(offered) <= set(citable)
     assert "cbStatusDiff" not in offered
+
+
+# --------------------------------------------------------------------------- #
+# detection_report_ref com outro escape de barra (caminho Windows)            #
+# --------------------------------------------------------------------------- #
+_WINDOWS_REF = r"C:\Users\r\ereno-ai\outputs\intent_loop\run-1\detection_report.json"
+
+
+def _plan_with_ref(ref: str, *, plan_ref: str | None = None) -> dict:
+    report = build_report()
+    plan = build_plan(priority=priority_from_report(report), detection_report_ref=ref)
+    if plan_ref is not None:
+        plan["detection_report_ref"] = plan_ref
+    return plan
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        _WINDOWS_REF.replace("\\", "\\\\"),  # barras escapadas duas vezes
+        _WINDOWS_REF.replace("\\", "/"),  # separador POSIX
+    ],
+)
+def test_equivalent_ref_is_rewritten_to_the_exact_expected_value(written):
+    import json
+
+    raw = json.dumps(_plan_with_ref(written, plan_ref=written))
+    plan = parse_defense_plan(raw, expected_report_ref=_WINDOWS_REF)
+
+    # O plano persistido sai com a grafia canônica — o formato do artefato não muda.
+    assert plan.detection_report_ref == _WINDOWS_REF
+    assert plan.detection_actions[0].evidence[0].detection_report_ref == _WINDOWS_REF
+    validate_plan_against_report(plan, build_report(), expected_report_ref=_WINDOWS_REF)
+
+
+def test_mixed_spellings_no_longer_break_the_plan_contract():
+    # Evidência com barra dupla e plano com a grafia certa: antes, o próprio
+    # contrato DefensePlan recusava, por "referenciar outra execução".
+    plan = parse_defense_plan(
+        _plan_with_ref(_WINDOWS_REF.replace("\\", "\\\\"), plan_ref=_WINDOWS_REF),
+        expected_report_ref=_WINDOWS_REF,
+    )
+    assert plan.detection_actions[0].evidence[0].detection_report_ref == _WINDOWS_REF
+
+
+@pytest.mark.parametrize(
+    "other",
+    [
+        _WINDOWS_REF.replace("run-1", "run-2"),  # outra execução
+        _WINDOWS_REF.replace("Users", "users"),  # outra caixa: não normalizamos
+        "detection_report.json",  # só o nome do arquivo
+    ],
+)
+def test_a_ref_to_another_file_is_still_refused(other):
+    plan = parse_defense_plan(_plan_with_ref(other), expected_report_ref=_WINDOWS_REF)
+
+    assert plan.detection_actions[0].evidence[0].detection_report_ref == other
+    with pytest.raises(DefensePlanValidationError, match="Referência de DetectionReport"):
+        validate_plan_against_report(plan, build_report(), expected_report_ref=_WINDOWS_REF)
+
+
+def test_without_expected_ref_nothing_is_rewritten():
+    written = _WINDOWS_REF.replace("\\", "\\\\")
+    plan = parse_defense_plan(_plan_with_ref(written))
+    assert plan.detection_actions[0].evidence[0].detection_report_ref == written
