@@ -100,6 +100,9 @@ def test_intent_engine_forwards_arguments_and_reports_success():
         # E8: o detector default vai junto, para que a campanha registre qual
         # modelo rodou sem depender de uma env var lida lá dentro.
         "detector": "random_forest",
+        # Sem --injector, a estratégia é a de sempre: o LLM sobre o catálogo.
+        "injector": "intent",
+        "injector_options": {},
     }
     output = stdout.getvalue()
     assert "run_id=run-1" in output
