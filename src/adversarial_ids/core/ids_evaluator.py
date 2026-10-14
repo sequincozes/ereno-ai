@@ -690,6 +690,32 @@ class IdsEvaluator:
         if self.model is None or self.feature_columns is None or self.preprocessor is None:
             return []
 
+        try:
+            df = pd.read_csv(dataset_path)
+        except Exception as error:  # best-effort: nunca derruba o loop
+            print(f"[IDS] SHAP falhou ({error}) — usando só Gini.")
+            return []
+        if self.label_column and self.label_column in df.columns:
+            df = df.drop(columns=[self.label_column])
+        return self.get_shap_importances_for_frame(df, top_n=top_n, max_samples=max_samples)
+
+    def get_shap_importances_for_frame(
+        self,
+        frame: pd.DataFrame,
+        top_n: int = 15,
+        max_samples: int = 200,
+    ) -> list[dict[str, Any]]:
+        """``get_shap_importances`` sobre linhas já escolhidas pelo chamador.
+
+        Existe para explicar uma **população** de mensagens, não um arquivo
+        inteiro — o E1 pede o SHAP só das mensagens de ataque que o detector
+        deixou passar (ver docs/experiments_e1.md). ``frame`` vem sem a coluna
+        de classe, no formato bruto do trace; o preprocessamento é o do treino.
+        Mesmo contrato best-effort: ``[]`` em qualquer falha.
+        """
+        if self.model is None or self.feature_columns is None or self.preprocessor is None:
+            return []
+
         if not self.detector.supports_shap:
             print(
                 f"[IDS] SHAP indisponível para o detector '{self.detector.key}' "
@@ -704,13 +730,11 @@ class IdsEvaluator:
             print("[IDS] SHAP indisponível (pacote 'shap' não instalado) — usando só Gini.")
             return []
 
+        if frame.empty:
+            return []
+
         try:
-            df = pd.read_csv(dataset_path)
-
-            if self.label_column and self.label_column in df.columns:
-                df = df.drop(columns=[self.label_column])
-
-            X = self.preprocessor.transform(df)
+            X = self.preprocessor.transform(frame)
             if self.feature_selector is not None:
                 X = self.feature_selector.transform(X)
 
