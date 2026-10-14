@@ -35,7 +35,7 @@ from adversarial_ids.experiments.traces import TraceStore
 class SeedPlan:
     train: tuple[int, ...] = (101, 102, 103)
     calibration: tuple[int, ...] = (201, 202)
-    search: tuple[int, ...] = (301, 302)
+    search: tuple[int, ...] = (301, 302, 303)
     test: tuple[int, ...] = (401, 402, 403, 404, 405)
 
     def __post_init__(self) -> None:
