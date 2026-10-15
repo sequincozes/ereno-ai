@@ -251,6 +251,9 @@ treino 101–103, limiares calibrados em 201–202):
 | high_stnum | 0,008 | 0,007 | 1,000 | 1,000 | 0,500 | 1,000 |
 | injection | 0,981 | 0,980 | 0,346 | 0,363 | 0,048 | 0,331 |
 
+- Evasão suave de teste (o objetivo adotado depois do piloto) na referência:
+  masquerade 0,000, random_replay 0,002, inverse_replay 0,001, high_stnum
+  0,007 (injection 0,656).
 - As quatro famílias do E1 partem de detecção perfeita: B0 está no piso, e
   toda evasão que uma estratégia achar é mensurável.
 - `injection` evade 98% **sem busca nenhuma**: nenhuma estratégia pode

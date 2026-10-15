@@ -146,9 +146,9 @@ def cmd_references(args) -> None:
             f"teste={test['evasion'][PRIMARY_BUDGET]:.3f} AP teste={test['ap']:.3f}",
             flush=True,
         )
-    lams = [r["oracle"]["lambda_observed"] for r in rows if r.get("oracle")]
+    lams = [r["oracle"]["lambda_observed"] for r in rows if r.get("oracle") and r["family"] in FAMILIES]
     if lams:
-        print(f"\nPior λ observado nas referências: {min(lams):.3f} — λ fica abaixo disso, com folga.")
+        print(f"\nPior λ observado nas famílias do E1: {min(lams):.3f} (λ fixado: {LAMBDA}).")
 
 
 def build_proposer(args, family: str, frozen: FrozenIds):
