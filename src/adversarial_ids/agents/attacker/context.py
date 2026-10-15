@@ -12,7 +12,7 @@ from adversarial_ids.agents.intent.catalog_context import build_capability_conte
 from adversarial_ids.config.attack_capabilities import get_attack_capability
 from adversarial_ids.config.settings import PROMPTS_DIR
 from adversarial_ids.domain.defense_plan import DefensePlan
-from adversarial_ids.experiments.search import PRIMARY_BUDGET, VALID, ProposalContext
+from adversarial_ids.experiments.search import OBJECTIVE, VALID, ProposalContext
 
 ATTACKER_PROMPT_PATH = PROMPTS_DIR / "attacker.md"
 
@@ -37,7 +37,10 @@ def render_entry(entry: dict[str, Any]) -> str:
     search = entry.get("search")
     if entry["status"] == VALID and search:
         evasion = " / ".join(f"{search['evasion'][b]:.3f}" for b in sorted(search["evasion"], key=float))
-        line += f" | evasão@1/10/100 = {evasion} | AP = {search['ap']:.3f}"
+        line += (
+            f" | evasão suave = {search[OBJECTIVE]:.3f} | evasão@1/10/100 = {evasion}"
+            f" | AP = {search['ap']:.3f}"
+        )
     elif entry.get("reason"):
         line += f" | motivo: {str(entry['reason'])[:240]}"
     return line
@@ -71,8 +74,8 @@ def build_round_message(
     sections = [
         "## Campanha",
         f"Família: `{context.family}` · proposta {context.index + 1} de {context.budget} "
-        f"(restam {remaining}, contando esta). Objetivo: evasão no orçamento {PRIMARY_BUDGET} "
-        "alarmes falsos/10k.",
+        f"(restam {remaining}, contando esta). Objetivo: maior evasão suave "
+        "(1 − score médio do detector nas mensagens de ataque).",
         "",
         f"## Caixa de busca (no máximo {context.box.max_fields} campos por proposta)",
         *(f"- {line}" for line in context.box.describe()),

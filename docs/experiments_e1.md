@@ -113,16 +113,20 @@ mesmo critério; se a referência falhar, a família sai do E1 com o motivo.
 
 ## Medidas
 
-- **Objetivo de busca** (o que B2–B4 veem e o que seleciona): evasão no ponto
-  primário, média das três seeds de busca. Desempate: menor AP médio, depois a
-  proposta mais antiga.
+- **Objetivo de busca** (o que B2–B4 veem e o que seleciona): **evasão
+  suave** = 1 − score médio do detector congelado nas mensagens de ataque,
+  média das três seeds de busca. Desempate: menor AP médio, depois a proposta
+  mais antiga. *Mudado em 15/10, depois do piloto e antes de qualquer execução
+  principal* (ver "Piloto"); até então era a evasão no orçamento de 10.
 - **Seleção e teste:** ao fim da campanha, o melhor candidato válido é
   regenerado nas 5 seeds de teste e medido contra o detector congelado. Campanha
   sem candidato válido registra teste ausente (e entra na taxa de validade).
-- **Por campanha (unidade de análise):** evasão de teste nos três orçamentos
-  (média das 5 seeds), AP, alarmes falsos por 10k, validade (fração das 10
-  propostas), tokens, chamadas de LLM, tempo.
-- **Curva:** melhor evasão de busca até a consulta *k*, por estratégia e família.
+- **Por campanha (unidade de análise):** evasão suave de teste (métrica
+  primária) e evasão de teste nos três orçamentos (média das 5 seeds), AP,
+  alarmes falsos por 10k, validade (fração das propostas feitas — uma escada
+  esgotada não propôs nada inválido), tokens, chamadas de LLM, tempo.
+- **Curva:** melhor evasão suave de busca até a consulta *k*, por estratégia e
+  família.
 - **Comparações pré-definidas** (pareadas por família × repetição, bootstrap
   de 1000 reamostragens de campanhas, IC 95% percentil; "separa" só se o IC
   exclui zero): B3−B1, B3−B2, **B4−B3** (RQ2), B1−B0 e B2−B0 como contexto.
@@ -185,6 +189,33 @@ Decide, nesta ordem, com os tokens medidos por chamada:
    cota diária própria — o atacante continua o mesmo no B3 e no B4, que é o
    que a comparação B4−B3 exige;
 3. se ainda não couber, três famílias, mantendo 5 repetições.
+
+### O que o piloto mostrou (15/10/2026, `masquerade_fault`, rep 1)
+
+| | propostas | válidas | chamadas | tokens | evasão@10 |
+|---|---|---|---|---|---|
+| B1 | 10 | 10 | 0 | 0 | 0,000 |
+| B2 | 6 (escada esgotada) | 6 | 0 | 0 | 0,000 |
+| B3 | 10 | 9 | 10 | 27k | 0,000 |
+| B4 | 10 | 8 | 17 | 65k | 0,000 |
+
+- **Evasão por orçamento presa em zero.** As 34 propostas válidas tiveram
+  evasão 0 nos três orçamentos e oráculo AP 1,0. A causa é o detector, não a
+  busca: o RF dá score exatamente 0 a praticamente todo o tráfego normal, então
+  os limiares de 10 e 100 alarmes calibram em 0,0 (o de 1 alarme, em 0,02) e
+  qualquer voto de árvore em "ataque" dispara. Com esse objetivo, toda
+  comparação B×B daria zero por construção.
+- **O score médio do ataque se move.** Recalculado sobre as mesmas propostas
+  (traces em cache): 1,00 na referência, até 0,44 nas variantes com
+  `incrementStNumOnFault=False` ou `sqnumMode=normal`, ~0,83 numa linha que o
+  B3 achou (desvio analógico mínimo, multiplicador ~1). Daí a troca do
+  objetivo para a evasão suave. A evasão por orçamento continua reportada: é
+  ela que diz se alguma mensagem de fato passa.
+- **Custo medido:** ~35–80 s por proposta (3 gerações + oráculo); B3 ≈ 2,7k
+  tokens por chamada, B4 ≈ 3,8k (17 chamadas: 10 do atacante, 7 do Defensor;
+  o reuso do plano poupou 2). Portões funcionando: o LLM ditou 5 campos uma
+  vez (`no_intent`) e inverteu um par outra (`compile_failed`); Defensor com
+  8/8 planos aceitos.
 
 ## Implementação
 

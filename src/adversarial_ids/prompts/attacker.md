@@ -13,10 +13,12 @@ inválidas.
 
 ## O que conta como bom resultado
 
-- **Objetivo:** a maior *evasão* no orçamento primário (10 alarmes falsos por
-  10 mil mensagens normais), média das seeds de busca. Evasão = fração das
-  mensagens de ataque que o detector congelado deixou passar. AP menor também
-  é melhor (desempate).
+- **Objetivo:** a maior *evasão suave* = 1 − o score médio que o detector
+  congelado dá às mensagens de ataque (média das seeds de busca). Ela mede o
+  quanto a variante abala a confiança do detector, mesmo antes de alguma
+  mensagem passar. Também aparecem a *evasão* nos orçamentos de 1, 10 e 100
+  alarmes falsos por 10 mil mensagens normais (fração das mensagens de ataque
+  que passaram) e o AP; AP menor desempata.
 - **Validade** (uma proposta inválida não tem evasão nenhuma):
   1. compila e cabe na caixa de busca: no máximo 4 campos alterados, cada
      valor dentro da faixa listada, e todo par `{min, max}` com `min < max`

@@ -38,6 +38,7 @@ from adversarial_ids.experiments.metrics import (  # noqa: E402
 )
 from adversarial_ids.experiments.protocol import FrozenIds  # noqa: E402
 from adversarial_ids.experiments.search import (  # noqa: E402
+    OBJECTIVE,
     PRIMARY_BUDGET,
     PROPOSALS_PER_CAMPAIGN,
     CandidateEvaluator,
@@ -140,6 +141,7 @@ def cmd_references(args) -> None:
         print(
             f"  status={measured['status']} oráculo AP={oracle.get('ap', float('nan')):.3f} "
             f"p={oracle.get('prevalence', float('nan')):.3f} λ_obs={oracle.get('lambda_observed')} | "
+            f"evasão suave busca={measured['search'][OBJECTIVE]:.3f} teste={test[OBJECTIVE]:.3f} | "
             f"evasão@10 busca={measured['search']['evasion'][PRIMARY_BUDGET]:.3f} "
             f"teste={test['evasion'][PRIMARY_BUDGET]:.3f} AP teste={test['ap']:.3f}",
             flush=True,
@@ -192,16 +194,27 @@ def cmd_campaign(args) -> int:
             print(
                 f"  propostas={result['proposals']} validade={result['validity']:.0%} "
                 f"chamadas={result['llm_calls']} tokens={result['input_tokens'] + result['output_tokens']} "
-                f"teste evasão@10={test['evasion'][PRIMARY_BUDGET] if test else 'sem candidato válido'}",
+                + (
+                    f"teste evasão suave={test[OBJECTIVE]:.3f} evasão@10={test['evasion'][PRIMARY_BUDGET]:.3f}"
+                    if test
+                    else "teste: sem candidato válido"
+                ),
                 flush=True,
             )
     return 0
 
 
-def _test_evasion(result: dict | None, budget: str) -> float:
-    if not result or not result.get("test"):
+# A métrica primária é a evasão suave (o objetivo de busca); as evasões por
+# orçamento vêm ao lado, como o protocolo fixou antes do piloto.
+METRICS = (OBJECTIVE, "evasion@1.0", "evasion@10.0", "evasion@100.0")
+
+
+def _metric(summary: dict | None, metric: str) -> float:
+    if not summary:
         return float("nan")
-    return float(result["test"]["evasion"][budget])
+    if metric.startswith("evasion@"):
+        return float(summary["evasion"][metric.split("@", 1)[1]])
+    return float(summary.get(metric, float("nan")))
 
 
 def cmd_report(args) -> None:
@@ -210,19 +223,16 @@ def cmd_report(args) -> None:
     for path in sorted((root / "results").glob("*/*/rep*.json")):
         data = _load(path)
         results.setdefault(data["family"], {}).setdefault(data["strategy"], {})[data["rep"]] = data
-    references = {
-        p.stem: _load(p) for p in sorted((E1_DIR / "references").glob("*.json"))
-    }
+    references = {p.stem: _load(p) for p in sorted((E1_DIR / "references").glob("*.json"))}
     families = sorted(results)
-    report: dict = {"budgets": {}, "per_campaign": results}
-    for budget in ("1.0", "10.0", "100.0"):
+    report: dict = {"metrics": {}, "per_campaign": results}
+    for metric in METRICS:
         def series(family: str, strategy: str, reps: list[int]) -> list[float]:
             if strategy == "B0":
                 ref = references.get(family)
-                value = float(ref["test"]["evasion"][budget]) if ref else float("nan")
-                return [value] * len(reps)
+                return [_metric(ref and ref["test"], metric)] * len(reps)
             runs = results[family].get(strategy, {})
-            return [_test_evasion(runs.get(r), budget) for r in reps]
+            return [_metric((runs.get(r) or {}).get("test"), metric) for r in reps]
 
         table = {}
         for family in families:
@@ -245,17 +255,18 @@ def cmd_report(args) -> None:
                 "aggregate": stratified_paired_difference(first, second).as_dict() if first else None,
                 "per_family": per_family,
             }
-        report["budgets"][budget] = {"mean_test_evasion": table, "comparisons": comparisons}
+        report["metrics"][metric] = {"mean_test": table, "comparisons": comparisons}
     _dump(root / "results.json", report)
-    primary = report["budgets"][PRIMARY_BUDGET]
-    print(f"Evasão de teste média @ {PRIMARY_BUDGET} alarmes/10k:")
-    for family, row in primary["mean_test_evasion"].items():
-        print(f"  {family:18s} " + "  ".join(f"{s}={v:.3f}" if v is not None else f"{s}=—" for s, v in row.items()))
-    for name, comparison in primary["comparisons"].items():
-        agg = comparison["aggregate"]
-        if agg:
-            flag = "separa" if agg["excludes_zero"] else "não separa"
-            print(f"  {name}: {agg['value']:+.3f} [{agg['low']:+.3f}, {agg['high']:+.3f}] ({flag})")
+    for metric in (OBJECTIVE, f"evasion@{PRIMARY_BUDGET}"):
+        block = report["metrics"][metric]
+        print(f"\n{metric} no teste (média das campanhas):")
+        for family, row in block["mean_test"].items():
+            print(f"  {family:18s} " + "  ".join(f"{s}={v:.3f}" if v is not None else f"{s}=—" for s, v in row.items()))
+        for name, comparison in block["comparisons"].items():
+            agg = comparison["aggregate"]
+            if agg:
+                flag = "separa" if agg["excludes_zero"] else "não separa"
+                print(f"  {name}: {agg['value']:+.3f} [{agg['low']:+.3f}, {agg['high']:+.3f}] ({flag})")
     print(f"\n-> {root / 'results.json'}")
 
 
