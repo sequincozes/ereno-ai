@@ -39,8 +39,10 @@ determinísticas, como no pipeline.
 ## Fixos
 
 - **Famílias:** `masquerade_fault`, `random_replay`, `inverse_replay`,
-  `injection`, `high_stnum` (catálogos `.v2`/`.v1` pós-E0). Se o piloto mostrar
-  que a cota da Groq não comporta as cinco, corta-se para três famílias —
+  `high_stnum` (catálogos `.v2` pós-E0). `injection` saiu em 15/10, depois das
+  referências e antes de qualquer campanha: teto de evasão (ver
+  "Referências"). Se o piloto mostrar que a cota da Groq não comporta as
+  quatro, corta-se para três famílias —
   nunca para menos de 5 repetições, que é o mínimo para o bootstrap por
   campanha dizer alguma coisa. `grayhole` fica fora
   do E1 (caso-limite, paper próprio).
@@ -66,11 +68,21 @@ O mesmo espaço para todas as estratégias:
 
 - os campos editáveis do catálogo da família (todos, não só os de evasão);
 - os limites do catálogo; um lado sem limite no catálogo é limitado a
-  **4 × o valor de referência** do campo (ou do `max` do par, se for par).
-  Só afeta `masquerade_fault` (`fault.durationMs`, `analog.deltaAbs`,
-  `trapArea.multiplier`). **Pendente:** trocar o fator por um limite físico
-  justificado (duração de falha plausível, desvio analógico plausível) antes
-  das execuções principais;
+  um **limite físico** (aprovado em 15/10; escalas medidas no benigno das
+  seeds de treino 101–103, `scripts/run_e1.py::PHYSICAL_BOUNDS`). Só afeta
+  `masquerade_fault`:
+  - `fault.durationMs` ≤ **1000 ms**. No gerador o campo não é a duração da
+    falha: é um atraso somado ao timestamp da cópia. O heartbeat do
+    publicador chega a 1,031 s; um atraso maior faria a cópia cruzar a
+    próxima mensagem legítima (reordenação, outro ataque);
+  - `analog.deltaAbs` ≤ **10**: a maior |corrente| do benigno (10,31), das
+    faltas reais simuladas. O gerador aplica o mesmo desvio a corrente e a
+    tensão (|v| ≤ 0,14), acoplamento que a caixa não separa — limitação;
+  - `trapArea.multiplier` ≤ **2,5**, o máximo da referência. Faltas reais
+    movem as somas de trapézio 0,71–1,41× a mediana; a referência já
+    excede isso, e a caixa não estica além dela.
+
+  Sem limite físico, um lado aberto seria 4 × a referência (do `max` do par);
 - no máximo **4** campos alterados por candidato;
 - pares `{min,max}` com `min < max` estrito (o ERENO recusa `min == max`).
 
@@ -87,9 +99,9 @@ Em ordem; a primeira falha dá o motivo:
 4. **o ataque continua detectável por um oráculo**: um RF com o mesmo
    preprocessamento, treinado no trace do próprio candidato na seed 301 e
    avaliado na 302, precisa de `AP ≥ p + λ·(1 − p)`, com `p` a prevalência
-   do ataque na 302. **λ ainda não está fixado**: antes das execuções o
-   oráculo roda nas 5 referências, e λ fica abaixo do pior valor observado
-   nelas, com folga. Se alguma referência não separar do normal nem com o
+   do ataque na 302. **λ = 0,5**, fixado em 15/10 a partir das referências
+   (as quatro famílias do E1 têm λ observado ≥ 0,9998; ver "Referências").
+   Se alguma referência não separar do normal nem com o
    oráculo, o problema é do critério, não da família — e o critério é revisto
    antes de qualquer execução.
 
@@ -102,7 +114,7 @@ mesmo critério; se a referência falhar, a família sai do E1 com o motivo.
 ## Medidas
 
 - **Objetivo de busca** (o que B2–B4 veem e o que seleciona): evasão no ponto
-  primário, média das duas seeds de busca. Desempate: menor AP médio, depois a
+  primário, média das três seeds de busca. Desempate: menor AP médio, depois a
   proposta mais antiga.
 - **Seleção e teste:** ao fim da campanha, o melhor candidato válido é
   regenerado nas 5 seeds de teste e medido contra o detector congelado. Campanha
@@ -174,8 +186,48 @@ Decide, nesta ordem, com os tokens medidos por chamada:
    que a comparação B4−B3 exige;
 3. se ainda não couber, três famílias, mantendo 5 repetições.
 
+## Implementação
+
+- `experiments/search.py` — caixa (`SearchBox`), cadeia de validade
+  (`CandidateEvaluator`, `Oracle`), B1 (`RandomSearch`), B2 (`OpenLoopLadder`,
+  sobre `core/feedback_policy.py::escalate_intent`), ledger e campanha
+  retomável, seleção e teste. Sem LLM.
+- `agents/attacker/` — B3/B4 (`LlmAttacker`), prompt em `prompts/attacker.md`.
+  Toda estratégia propõe uma `IntentSpec` (o B1 como `target_values`), então
+  compilador, caixa e validade são o mesmo código para as quatro.
+- `scripts/run_e1.py` — `references` (IDS congelado, B0, AP do oráculo nas
+  referências → λ), `campaign` (com `--pilot` para o piloto) e `report`.
+- Erros do provedor são lidos antes de contar a proposta: limite por minuto
+  espera e repete (não conta); cota diária ou prompt grande demais param a
+  campanha sem registrar a proposta em curso. Uma resposta sem chamada da
+  ferramenta, ou recusada pelos portões, **conta** como proposta inválida
+  (`no_intent`).
+- O B4 reusa o plano quando o último candidato válido não mudou desde a
+  consulta anterior ao Defensor: mesma evidência, nenhuma chamada a mais.
+- O B2 tem no máximo 6 degraus (4 em `injection`) até a largura da caixa; a
+  curva repete o melhor valor depois do esgotamento.
+
+## Referências (15/10/2026)
+
+`scripts/run_e1.py references`, detector congelado de verdade (seeds de
+treino 101–103, limiares calibrados em 201–202):
+
+| Família | evasão@10 busca | evasão@10 teste | AP teste | AP oráculo | p | λ observado |
+|---|---|---|---|---|---|---|
+| masquerade_fault | 0,000 | 0,000 | 1,000 | 1,000 | 0,375 | 1,000 |
+| random_replay | 0,000 | 0,000 | 1,000 | 1,000 | 0,500 | 1,000 |
+| inverse_replay | 0,000 | 0,000 | 1,000 | 1,000 | 0,500 | 1,000 |
+| high_stnum | 0,008 | 0,007 | 1,000 | 1,000 | 0,500 | 1,000 |
+| injection | 0,981 | 0,980 | 0,346 | 0,363 | 0,048 | 0,331 |
+
+- As quatro famílias do E1 partem de detecção perfeita: B0 está no piso, e
+  toda evasão que uma estratégia achar é mensurável.
+- `injection` evade 98% **sem busca nenhuma**: nenhuma estratégia pode
+  melhorar sobre o B0, e a comparação entre elas mediria ruído. Ela também era
+  o único caso que puxaria λ para baixo — nem um RF treinado nela passa de
+  AP 0,36, coerente com um ataque que clona mensagens legítimas. Sai do E1
+  como achado próprio (ponto cego do detector na referência), não como falha.
+
 ## Pendências antes das execuções principais
 
-- λ do oráculo, a partir das 5 referências;
-- limite físico para os lados abertos da caixa (masquerade);
 - piloto de tokens e a decisão de escala acima.
