@@ -190,6 +190,12 @@ Decide, nesta ordem, com os tokens medidos por chamada:
    que a comparação B4−B3 exige;
 3. se ainda não couber, três famílias, mantendo 5 repetições.
 
+**Decisão (15/10):** passo 2. Projeção do piloto para 4 famílias × 5
+repetições: ~1,85M tokens, ~9 dias num modelo só no teto diário estimado
+(200k/modelo, não confirmado). O Defensor vai para `openai/gpt-oss-20b`
+(default de `--defender-model-id`); o atacante segue em `openai/gpt-oss-120b`
+nas duas condições. As quatro famílias ficam (~6 dias).
+
 ### O que o piloto mostrou (15/10/2026, `masquerade_fault`, rep 1)
 
 | | propostas | válidas | chamadas | tokens | evasão@10 |

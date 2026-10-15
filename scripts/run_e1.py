@@ -292,7 +292,9 @@ def main(argv: list[str] | None = None) -> int:
     camp.add_argument("--pilot", action="store_true")
     camp.add_argument("--budget", type=int, default=PROPOSALS_PER_CAMPAIGN)
     camp.add_argument("--model-id", default=MODEL_ID)
-    camp.add_argument("--defender-model-id", default=None)
+    # Decidido em 15/10 pelo piloto: o Defensor roda num modelo com cota diária
+    # própria; o atacante (--model-id) é o mesmo no B3 e no B4.
+    camp.add_argument("--defender-model-id", default="openai/gpt-oss-20b")
     camp.add_argument("--min-interval", type=float, default=20.0, help="segundos entre chamadas ao LLM")
 
     rep = sub.add_parser("report")
