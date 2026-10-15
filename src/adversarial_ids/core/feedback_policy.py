@@ -151,6 +151,17 @@ def _escalate(intent: IntentSpec) -> tuple[IntentSpec | None, str]:
     return None, ""
 
 
+def escalate_intent(intent: IntentSpec) -> tuple[IntentSpec | None, str]:
+    """O próximo degrau da escada, fora de uma decisão de feedback.
+
+    O B2 do E1 (controle em malha aberta, ``experiments/search.py``) percorre
+    exatamente esta escada sem olhar métrica nenhuma; expor o degrau evita que
+    o experimento mantenha uma cópia dela que envelheça separada da política.
+    """
+
+    return _escalate(intent)
+
+
 def _best_so_far(
     history: tuple[RoundOutcome, ...],
 ) -> tuple[float | None, int | None]:
