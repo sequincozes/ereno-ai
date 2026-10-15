@@ -50,6 +50,12 @@ from adversarial_ids.experiments.protocol import FrozenIds, protocol_evaluator
 from adversarial_ids.experiments.traces import TraceError
 
 PRIMARY_BUDGET = "10.0"
+# O objetivo de busca (15/10/2026, depois do piloto): 1 − score médio do detector
+# congelado nas mensagens de ataque. A evasão por orçamento ficou presa em 0 no
+# piloto — o RF dá score exatamente 0 ao normal, então os limiares de 10 e 100
+# alarmes calibram em 0 e qualquer voto de ataque dispara. O score médio, não:
+# foi de 1,00 a 0,44 nas mesmas propostas. A evasão segue reportada.
+OBJECTIVE = "soft_evasion"
 MAX_FIELDS_PER_CANDIDATE = 4
 OPEN_BOUND_FACTOR = 4.0
 MIN_ATTACK_ROWS = 50
@@ -369,6 +375,7 @@ def _compact_run(run: dict[str, Any]) -> dict[str, Any]:
         "rows": run["rows"],
         "attack_rows": run["attack_rows"],
         "ap": run["ap"],
+        "attack_score_mean": run["attack_score_mean"],
         "budgets": {
             budget: {
                 "evasion": values["evasion"],
@@ -390,6 +397,8 @@ def summarize_runs(runs: Sequence[dict[str, Any]]) -> dict[str, Any]:
             for b in budgets
         },
         "ap": float(np.nanmean([r["ap"] for r in runs])),
+        "attack_score_mean": (score := float(np.nanmean([r["attack_score_mean"] for r in runs]))),
+        OBJECTIVE: 1.0 - score,
         "per_seed": [_compact_run(r) for r in runs],
     }
 
@@ -451,7 +460,7 @@ class CandidateEvaluator:
                 "status": ORACLE_FAILED,
                 "reason": f"AP do oráculo {oracle['ap']:.3f} < {oracle['required_ap']:.3f}",
             }
-        out["objective"] = search["evasion"][PRIMARY_BUDGET]
+        out["objective"] = search[OBJECTIVE]
         return {**out, "status": VALID, "reason": None}
 
 
@@ -543,7 +552,7 @@ def proposals(entries: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def select_best(entries: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
-    """Maior evasão de busca; desempate por menor AP, depois a mais antiga."""
+    """Maior evasão suave de busca; desempate por menor AP, depois a mais antiga."""
 
     valid = [e for e in proposals(entries) if e["status"] == VALID]
     if not valid:
@@ -552,7 +561,7 @@ def select_best(entries: Sequence[dict[str, Any]]) -> dict[str, Any] | None:
 
 
 def best_so_far_curve(entries: Sequence[dict[str, Any]], budget: int) -> list[float | None]:
-    """Melhor evasão de busca até a consulta k (k = 1..budget).
+    """Melhor objetivo de busca (evasão suave) até a consulta k (k = 1..budget).
 
     Uma campanha que esgotou antes do orçamento repete o último valor: a
     comparação é por orçamento consumido, e o B2 não ganha nem perde consultas.
@@ -583,7 +592,8 @@ def campaign_result(
     result: dict[str, Any] = {
         "proposals": len(real),
         "exhausted": len(real) < len(entries),
-        "validity": sum(e["status"] == VALID for e in real) / budget,
+        # Sobre as propostas feitas: uma escada esgotada não propôs nada inválido.
+        "validity": sum(e["status"] == VALID for e in real) / len(real) if real else float("nan"),
         "invalid_reasons": _count(e["status"] for e in real if e["status"] != VALID),
         "curve": best_so_far_curve(entries, budget),
         "elapsed_s": round(sum(e.get("elapsed_s", 0.0) for e in real), 1),

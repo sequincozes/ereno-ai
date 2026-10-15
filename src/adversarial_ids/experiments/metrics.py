@@ -116,6 +116,9 @@ def run_summary(
         "rows": int(attack.size),
         "attack_rows": int(attack.sum()),
         "ap": average_precision(attack, scores),
+        # Confiança média do detector nas mensagens de ataque: contínua, se move
+        # mesmo quando todo limiar ainda dispara (ver docs/experiments_e1.md).
+        "attack_score_mean": float(np.mean(np.asarray(scores)[attack])) if attack.any() else float("nan"),
         "argmax": {**argmax, **rates(argmax)},
         "budgets": {
             str(p.budget_per_10k): {**(c := counts_at(attack, scores, p.threshold)), **rates(c)}

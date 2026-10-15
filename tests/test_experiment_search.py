@@ -30,6 +30,7 @@ from adversarial_ids.experiments.search import (
     RandomSearch,
     SearchBox,
     best_so_far_curve,
+    summarize_runs,
     read_ledger,
     run_campaign,
     select_best,
@@ -217,13 +218,13 @@ def test_provider_errors_are_told_apart():
 def test_round_message_shows_box_history_and_plan():
     history = [
         {"index": 0, "status": VALID, "diff": [{"path": "fault.prob", "new_value": 0.3}],
-         "search": {"ap": 0.9, "evasion": {"1.0": 0.2, "10.0": 0.1, "100.0": 0.05}}},
+         "search": {"ap": 0.9, "soft_evasion": 0.52, "evasion": {"1.0": 0.2, "10.0": 0.1, "100.0": 0.05}}},
         {"index": 1, "status": "oracle_failed", "diff": [], "reason": "AP baixo"},
     ]
     message = build_round_message(_context("masquerade_fault", 2, history=history), plan_block="PLANO")
     assert "proposta 3 de 10" in message
     assert "fault.durationMs.max: [0, 3200]" in message
-    assert "#1 [valid] fault.prob=0.300" in message and "0.100" in message
+    assert "#1 [valid] fault.prob=0.300" in message and "evasão suave = 0.520" in message
     assert "#2 [oracle_failed]" in message and "AP baixo" in message
     assert "PLANO" in message
 
@@ -297,3 +298,18 @@ def test_no_tool_call_is_an_invalid_proposal():
     response = SimpleNamespace(tools=[], metrics=None, status="COMPLETED", content="não vou chamar")
     proposal = _attacker(_Agent(response)).propose(_context("injection", 0))
     assert proposal.intent is None and "não chamou" in proposal.error
+
+
+def test_soft_evasion_moves_when_every_threshold_still_fires():
+    """O caso do piloto: evasão 0 em todo orçamento, mas confiança pela metade."""
+
+    def run(score):
+        return {
+            "seed": 301, "rows": 100, "attack_rows": 40, "ap": 1.0, "attack_score_mean": score,
+            "budgets": {"10.0": {"evasion": 0.0, "false_alerts_per_10k_normal": 0.0}},
+        }
+
+    summary = summarize_runs([run(0.4), run(0.6)])
+    assert summary["evasion"]["10.0"] == 0.0
+    assert summary["attack_score_mean"] == pytest.approx(0.5)
+    assert summary["soft_evasion"] == pytest.approx(0.5)
