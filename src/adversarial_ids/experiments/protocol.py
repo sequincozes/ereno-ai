@@ -47,6 +47,24 @@ class SeedPlan:
             raise ValueError("Nenhum conjunto de seeds pode ser vazio.")
 
 
+def protocol_evaluator(label: str, detector: str, protocol_features: str) -> IdsEvaluator:
+    """O pipeline fixado pelo protocolo, imune a variáveis de ambiente.
+
+    Preprocessamento E6, sem seleção nem undersampling (E7): os defaults do
+    ``IdsEvaluator`` vêm de ``config.settings``, e um ``UNDERSAMPLING_MODE`` no
+    ``.env`` mudaria o detector do experimento em silêncio.
+    """
+
+    return IdsEvaluator(
+        target_attack_label=label,
+        preprocessor_mode="modular",
+        protocol_features=protocol_features,
+        feature_selection="none",
+        undersampling="none",
+        detector=detector,
+    )
+
+
 @dataclass
 class FrozenIds:
     """Um detector treinado uma vez por família e nunca reajustado depois.
@@ -72,11 +90,7 @@ class FrozenIds:
     def fit(self) -> "FrozenIds":
         spec = get_attack_spec(self.attack_key)
         train = [self.store.trace(self.attack_key, self.reference_config, s) for s in self.seeds.train]
-        self.evaluator = IdsEvaluator(
-            target_attack_label=spec.label,
-            protocol_features=self.protocol_features,
-            detector=self.detector,
-        )
+        self.evaluator = protocol_evaluator(spec.label, self.detector, self.protocol_features)
         self.training = self.evaluator.fit_traces([str(p) for p in train])
 
         normal_scores = []

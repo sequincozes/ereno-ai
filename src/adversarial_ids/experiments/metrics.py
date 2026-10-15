@@ -176,3 +176,46 @@ def paired_difference(
         raise ValueError(f"Pareamento exige o mesmo número de unidades ({a.size} != {b.size}).")
     keep = ~(np.isnan(a) | np.isnan(b))
     return bootstrap_mean(list(a[keep] - b[keep]), iterations=iterations, seed=seed, confidence=confidence)
+
+
+def stratified_paired_difference(
+    first: dict[str, Sequence[float]],
+    second: dict[str, Sequence[float]],
+    *,
+    iterations: int = 1000,
+    seed: int = 42,
+    confidence: float = 0.95,
+) -> Interval:
+    """IC da diferença média pareada, reamostrando unidades **dentro** de cada estrato.
+
+    O E1 compara estratégias em famílias com espaços de busca muito diferentes;
+    uma reamostragem livre deixaria o agregado depender de quantas vezes cada
+    família foi sorteada. Aqui cada família contribui sempre com o mesmo
+    número de unidades (as repetições), reamostradas só entre si, e o agregado
+    é a média das diferenças sobre todas as unidades.
+    """
+
+    if set(first) != set(second):
+        raise ValueError(f"Estratos diferentes: {sorted(first)} != {sorted(second)}.")
+    strata = []
+    for key in sorted(first):
+        a = np.asarray(first[key], dtype=float)
+        b = np.asarray(second[key], dtype=float)
+        if a.shape != b.shape:
+            raise ValueError(f"Pareamento exige o mesmo número de unidades em {key!r}.")
+        diff = a - b
+        diff = diff[~np.isnan(diff)]
+        if diff.size:
+            strata.append(diff)
+    if not strata:
+        return Interval(float("nan"), float("nan"), float("nan"))
+    rng = np.random.default_rng(seed)
+    total = sum(s.size for s in strata)
+    means = np.zeros(iterations)
+    for s in strata:
+        draws = rng.integers(0, s.size, size=(iterations, s.size))
+        means += s[draws].sum(axis=1)
+    means /= total
+    observed = float(np.concatenate(strata).mean())
+    alpha = (1 - confidence) / 2
+    return Interval(observed, float(np.quantile(means, alpha)), float(np.quantile(means, 1 - alpha)))
