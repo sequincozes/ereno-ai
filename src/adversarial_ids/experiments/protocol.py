@@ -81,6 +81,11 @@ class FrozenIds:
     detector: str = "random_forest"
     protocol_features: str = "deltas"
     budgets: tuple[float, ...] = DEFAULT_BUDGETS
+    # E3: (config, seed) cujas linhas de ataque se somam ao treino — as
+    # variantes do atacante (treino adversarial) ou a referência em seeds
+    # extras (placebo). Vazio = o detector do E1, inalterado.
+    extra_attack: tuple[tuple[dict[str, Any], int], ...] = ()
+    extra_attack_max_rows: int | None = None
 
     def __post_init__(self) -> None:
         self.evaluator: IdsEvaluator | None = None
@@ -91,7 +96,15 @@ class FrozenIds:
         spec = get_attack_spec(self.attack_key)
         train = [self.store.trace(self.attack_key, self.reference_config, s) for s in self.seeds.train]
         self.evaluator = protocol_evaluator(spec.label, self.detector, self.protocol_features)
-        self.training = self.evaluator.fit_traces([str(p) for p in train])
+        extra = [str(self.store.trace(self.attack_key, config, seed)) for config, seed in self.extra_attack]
+        if extra:
+            self.training = self.evaluator.fit_traces(
+                [str(p) for p in train],
+                attack_only_paths=extra,
+                attack_only_max_rows=self.extra_attack_max_rows,
+            )
+        else:
+            self.training = self.evaluator.fit_traces([str(p) for p in train])
 
         normal_scores = []
         for seed in self.seeds.calibration:
