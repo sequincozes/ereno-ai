@@ -38,6 +38,7 @@ from adversarial_ids.experiments.search import (
     Proposal,
     ProposalContext,
     ProposerUnavailable,
+    stage_label,
 )
 
 ATTACKER_TEMPERATURE = 0.7
@@ -150,7 +151,9 @@ class LlmAttacker:
             content = str(getattr(response, "content", "") or "")[:300]
             return Proposal(None, error=f"o LLM não chamou submit_intent_spec: {content}", meta=meta)
         try:
-            intent = compile_intent(tool_result, f"E1 {self.strategy} {context.family} rep{context.rep} proposta {context.index}")
+            intent = compile_intent(
+                tool_result, f"{stage_label(context)} {self.strategy} {context.family} rep{context.rep} proposta {context.index}"
+            )
         except IntentCompilationError as error:
             return Proposal(None, error=str(error)[:600], meta=meta)
         if intent.base_attack != context.family:
@@ -184,6 +187,8 @@ class LlmAttacker:
 
         report = candidate_report(self.frozen, source["config"], self.frozen.seeds.search)
         ref = f"e1://{context.family}/B4/rep{context.rep}/proposal{source['index']}"
+        if context.race_round:
+            ref = f"e3://{context.family}/B4/rep{context.rep}/round{context.race_round}/proposal{source['index']}"
         prompt = self.defender.build_prompt(report, report_ref=ref)
         response, text = _call(
             self.defender.agent, prompt, self.pacer,

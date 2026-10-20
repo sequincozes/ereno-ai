@@ -455,7 +455,13 @@ class IdsEvaluator:
         self.model = self.detector.estimator
         return X_selected
 
-    def fit_traces(self, dataset_paths: Sequence[str | Path]) -> dict[str, Any]:
+    def fit_traces(
+        self,
+        dataset_paths: Sequence[str | Path],
+        *,
+        attack_only_paths: Sequence[str | Path] = (),
+        attack_only_max_rows: int | None = None,
+    ) -> dict[str, Any]:
         """Treina sobre **todos** os traces dados, sem split interno.
 
         É o regime de IDS congelado dos experimentos: o treino é um conjunto de
@@ -463,11 +469,29 @@ class IdsEvaluator:
         detector resultante pontua outros traces sem nunca ser reajustado. Mesmo
         pipeline de ``train_baseline`` (preprocessador ajustado só aqui, depois
         ``_fit_downstream``); só não há partição de teste dentro dele.
+
+        ``attack_only_paths`` (E3, treino adversarial): desses traces entram só
+        as linhas de ataque. O normal de um trace é função da seed, então o de
+        uma variante na seed de treino repete, linha a linha, o da referência
+        na mesma seed. ``attack_only_max_rows`` amostra essas linhas (semente
+        fixa) até o teto — é o que iguala o volume do retreino placebo.
         """
 
         if not dataset_paths:
             raise ValueError("fit_traces precisa de ao menos um trace.")
         frames = [pd.read_csv(path) for path in dataset_paths]
+        extra_rows = None
+        if attack_only_paths:
+            label = self._find_label_column(frames[0])
+            extra = []
+            for path in attack_only_paths:
+                frame = pd.read_csv(path)
+                extra.append(frame[frame[label].astype(str).str.lower() != "normal"])
+            extra_frame = pd.concat(extra, ignore_index=True)
+            if attack_only_max_rows is not None and len(extra_frame) > attack_only_max_rows:
+                extra_frame = extra_frame.sample(n=attack_only_max_rows, random_state=42)
+            extra_rows = len(extra_frame)
+            frames.append(extra_frame)
         df = pd.concat(frames, ignore_index=True)
         if df.empty:
             raise ValueError("Traces de treino vazios.")
@@ -484,12 +508,16 @@ class IdsEvaluator:
         X_train = self.preprocessor.fit_transform(X, label_column=self.label_column)
         self._fit_downstream(X_train, y_encoded)
 
-        return {
+        summary = {
             "traces": [str(path) for path in dataset_paths],
             "rows": len(df),
             "class_counts": {str(k): int(v) for k, v in df[self.label_column].astype(str).value_counts().items()},
             "features": list(self.feature_columns or []),
         }
+        if extra_rows is not None:
+            summary["attack_only_traces"] = [str(path) for path in attack_only_paths]
+            summary["attack_only_rows"] = extra_rows
+        return summary
 
     def score_trace(self, dataset_path: str | Path) -> dict[str, Any]:
         """Pontua um trace com o detector congelado, sem reajustar nada.

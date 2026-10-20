@@ -188,6 +188,10 @@ class ProposalContext:
     budget: int
     box: SearchBox
     history: tuple[dict[str, Any], ...]
+    # E3: a rodada da corrida (0 = a campanha do E1) e o que o atacante
+    # adaptativo lembra das rodadas anteriores, re-medido contra o detector atual.
+    race_round: int = 0
+    prior: tuple[dict[str, Any], ...] = ()
 
 
 @dataclass
@@ -238,6 +242,10 @@ def pinned_intent(family: str, values: dict[str, Any], *, seed: int, note: str) 
     )
 
 
+def stage_label(context: ProposalContext) -> str:
+    return "E1" if context.race_round == 0 else f"E3 rodada {context.race_round}"
+
+
 class RandomSearch:
     """B1: sorteio uniforme na caixa.
 
@@ -250,7 +258,12 @@ class RandomSearch:
     _MAX_TRIES = 200
 
     def propose(self, context: ProposalContext) -> Proposal:
-        rng = random.Random(f"B1:{context.family}:{context.rep}:{context.index}")
+        # A rodada 0 mantém a chave do E1 (é a mesma campanha); as seguintes
+        # sorteiam propostas novas, senão a rodada r repetiria a rodada 0.
+        key = f"B1:{context.family}:{context.rep}:{context.index}"
+        if context.race_round:
+            key = f"B1:{context.family}:{context.rep}:r{context.race_round}:{context.index}"
+        rng = random.Random(key)
         box = context.box
         for _ in range(self._MAX_TRIES):
             k = rng.randint(1, min(box.max_fields, len(box.fields)))
@@ -261,7 +274,7 @@ class RandomSearch:
                     context.family,
                     values,
                     seed=context.rep,
-                    note=f"E1 B1 {context.family} rep{context.rep} proposta {context.index}",
+                    note=f"{stage_label(context)} B1 {context.family} rep{context.rep} proposta {context.index}",
                 )
                 return Proposal(intent)
         return Proposal(None, error="sorteio sem candidato distinto da referência")
@@ -509,11 +522,14 @@ def run_campaign(
     rep: int,
     ledger_path: Path,
     budget: int = PROPOSALS_PER_CAMPAIGN,
+    race_round: int = 0,
+    prior: Sequence[dict[str, Any]] = (),
 ) -> list[dict[str, Any]]:
     """Roda (ou retoma) uma campanha até o orçamento ou o esgotamento.
 
     ``ProposerUnavailable`` atravessa: a proposta em curso não é registrada e
-    a próxima execução retoma dela.
+    a próxima execução retoma dela. ``race_round``/``prior`` são do E3 e vão
+    só para o ``ProposalContext``.
     """
 
     entries = read_ledger(ledger_path)
@@ -521,7 +537,9 @@ def run_campaign(
         return entries
     while len(entries) < budget:
         index = len(entries)
-        context = ProposalContext(family, rep, index, budget, evaluator.box, tuple(entries))
+        context = ProposalContext(
+            family, rep, index, budget, evaluator.box, tuple(entries), race_round, tuple(prior)
+        )
         started = time.monotonic()
         proposal = proposer.propose(context)
         if proposal is None:
@@ -535,6 +553,7 @@ def run_campaign(
             "strategy": proposer.strategy,
             "family": family,
             "rep": rep,
+            **({"race_round": race_round} if race_round else {}),
             **result,
             "proposer": proposal.meta,
             "elapsed_s": round(time.monotonic() - started, 3),

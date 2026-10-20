@@ -46,6 +46,16 @@ def render_entry(entry: dict[str, Any]) -> str:
     return line
 
 
+def render_prior(item: dict[str, Any]) -> str:
+    """Um selecionado de rodada anterior: o que evadia e o que evade agora."""
+
+    changes = ", ".join(f"{c['path']}={_fmt(c['new_value'])}" for c in item.get("diff") or ()) or "—"
+    return (
+        f"rodada {item['race_round']}: {changes} | evasão suave contra o detector daquela rodada = "
+        f"{item['objective_then']:.3f}, contra o atual = {item['objective_now']:.3f}"
+    )
+
+
 def render_plan(plan: DefensePlan) -> str:
     lines = [f"Prioridade: {plan.priority}"]
     for bucket, actions in (
@@ -83,6 +93,13 @@ def build_round_message(
         "## Histórico desta campanha",
         *([render_entry(e) for e in history] or ["(nenhuma proposta ainda)"]),
     ]
+    if context.prior:
+        # E3: o detector foi retreinado com o que as rodadas anteriores acharam.
+        sections[:0] = [
+            "## Rodadas anteriores (o detector foi retreinado com as melhores variantes delas)",
+            *(f"- {render_prior(item)}" for item in context.prior),
+            "",
+        ]
     if plan_block is not None:
         sections += ["", "## Último plano do Defensor (sobre o último candidato válido)", plan_block]
     sections += ["", "Proponha a próxima variante chamando `submit_intent_spec`."]
