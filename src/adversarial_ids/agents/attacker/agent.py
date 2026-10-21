@@ -21,6 +21,7 @@ from agno.models.groq import Groq
 from adversarial_ids.agents.attacker.context import (
     DAILY,
     MINUTE,
+    TRANSIENT,
     build_attacker_instructions,
     build_round_message,
     classify_provider_error,
@@ -73,12 +74,15 @@ def _call(agent: Any, message: str, pacer: Pacer, *, minute_retries: int, minute
         try:
             response = agent.run(message)
             text = None
-            if getattr(response, "status", None) and "error" in str(response.status).lower():
-                text = str(getattr(response, "content", ""))
+            failed = getattr(response, "status", None) and "error" in str(response.status).lower()
+            # O agno também devolve o erro do provedor como conteúdo de uma
+            # resposta sem ferramenta e sem status de erro ("Connection error.").
+            if failed or not getattr(response, "tools", None):
+                text = str(getattr(response, "content", "") or "") or None
         except Exception as error:  # noqa: BLE001 — classificado abaixo
             response, text = None, f"{type(error).__name__}: {error}"
         kind = classify_provider_error(text)
-        if kind == MINUTE and attempt < minute_retries:
+        if kind in (MINUTE, TRANSIENT) and attempt < minute_retries:
             pacer._sleep(minute_wait_s)
             continue
         if kind is not None:

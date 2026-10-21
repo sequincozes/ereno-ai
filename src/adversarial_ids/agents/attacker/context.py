@@ -112,14 +112,23 @@ def build_round_message(
 DAILY = "daily"
 MINUTE = "minute"
 TOO_LARGE = "too_large"
+TRANSIENT = "transient"
 
 _DAILY_MARKERS = ("per day", "(tpd)", "(rpd)", "tokens per day", "requests per day")
 _TOO_LARGE_MARKERS = ("request too large", "request_too_large", "413")
 _MINUTE_MARKERS = ("rate_limit_exceeded", "rate limit", "429", "(tpm)", "(rpm)")
+# Rede e servidor (21/10/2026: um "Connection error." no B3 virou proposta
+# inválida no ledger do high_stnum rep5). Não é decisão do LLM: repete, e se
+# persistir para a campanha como a cota diária.
+_TRANSIENT_MARKERS = (
+    "connection error", "connecterror", "timed out", "timeout", "service unavailable",
+    "bad gateway", "internal server error", "502", "503", "504",
+)
 
 
 def classify_provider_error(text: str | None) -> str | None:
-    """413 = prompt grande, 429 por minuto = espaçar, 429 por dia = parar.
+    """413 = prompt grande, 429 por minuto = espaçar, 429 por dia = parar,
+    rede/servidor = repetir e, se persistir, parar.
 
     Os três aparecem de fora como "a LLM não chamou a ferramenta"; ler o erro
     antes de contar a proposta como inválida é o que impede uma cota esgotada
@@ -135,4 +144,6 @@ def classify_provider_error(text: str | None) -> str | None:
         return TOO_LARGE
     if any(marker in lowered for marker in _MINUTE_MARKERS):
         return MINUTE
+    if any(marker in lowered for marker in _TRANSIENT_MARKERS):
+        return TRANSIENT
     return None

@@ -16,6 +16,7 @@ from adversarial_ids.agents.attacker.context import (
     DAILY,
     MINUTE,
     TOO_LARGE,
+    TRANSIENT,
     build_round_message,
     classify_provider_error,
 )
@@ -213,6 +214,8 @@ def test_provider_errors_are_told_apart():
     assert classify_provider_error("Error code: 413 Request too large") == TOO_LARGE
     assert classify_provider_error("tool_use_failed: additionalProperties") is None
     assert classify_provider_error(None) is None
+    assert classify_provider_error("Connection error.") == TRANSIENT
+    assert classify_provider_error("Error code: 503 Service Unavailable") == TRANSIENT
 
 
 def test_round_message_shows_box_history_and_plan():
@@ -292,6 +295,22 @@ def test_daily_quota_stops_the_campaign():
     agent = _Agent(RuntimeError("rate_limit_exceeded: tokens per day (TPD)"))
     with pytest.raises(ProposerUnavailable):
         _attacker(agent).propose(_context("injection", 0))
+
+
+def test_connection_error_retries_without_counting():
+    # Como o agno devolveu no B3: resposta sem ferramenta, erro no conteúdo.
+    dropped = SimpleNamespace(tools=[], metrics=None, status="COMPLETED", content="Connection error.")
+    response = _tool_response(
+        objective="evade_detection", base_attack="injection", desired_effect="lower_recall",
+    )
+    proposal = _attacker(_Agent(dropped, response)).propose(_context("injection", 0))
+    assert proposal.intent is not None and proposal.meta["llm_calls"] == 1
+
+
+def test_persistent_connection_error_stops_the_campaign():
+    dropped = SimpleNamespace(tools=[], metrics=None, status="COMPLETED", content="Connection error.")
+    with pytest.raises(ProposerUnavailable):
+        _attacker(_Agent(*[dropped] * 5)).propose(_context("injection", 0))
 
 
 def test_no_tool_call_is_an_invalid_proposal():
