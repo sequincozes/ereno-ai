@@ -181,6 +181,21 @@ foi cortado antes dela e as propostas 6–10 refeitas, porque as seguintes viram
 a falha no histórico. O original ficou ao lado, em `rep5.jsonl.bak-20261021`
 (e `results/…/rep5.json.bak-20261021`). Nenhum outro ledger do E1 tem o erro.
 
+**JSON do Defensor recusado pela Groq (22/10/2026).** No primeiro B4 de
+verdade (`masquerade_fault` rep1), 3 das 7 chamadas ao Defensor no
+`gpt-oss-20b` voltaram como `400 json_validate_failed` com `failed_generation`
+vazio: o provedor recusou a geração antes de existir um plano para o portão
+julgar. No piloto, ainda no 120b, foram 8 de 8 aceitos. Deixar isso como
+"plano recusado" tiraria o plano de ~40% das rodadas do B4 por um defeito do
+modo JSON, não por uma decisão do Defensor, e diluiria justamente o que o
+B4−B3 mede. Regra desde então: essa recusa é repetida até 2 vezes
+(temperatura 0,2), e só então a rodada fica sem plano; as repetições ficam
+registradas (`provider_retries`) e contam nas chamadas. Para as 20 campanhas
+do B4 seguirem uma regra só, o rep1 foi arquivado
+(`ledger/…/B4/rep1.jsonl.bak-20261022`, `results/…/rep1.json.bak-20261022`) e
+é refeito. Na mesma mudança, o texto de uma resposta normal deixou de ser lido
+como erro do provedor: um plano com 0,9502 não pode passar por um 502.
+
 ## Saídas
 
 `outputs/experiments/e1/`:

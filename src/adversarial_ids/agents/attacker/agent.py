@@ -20,6 +20,7 @@ from agno.models.groq import Groq
 
 from adversarial_ids.agents.attacker.context import (
     DAILY,
+    MALFORMED,
     MINUTE,
     TRANSIENT,
     build_attacker_instructions,
@@ -61,34 +62,76 @@ class Pacer:
         self._last = time.monotonic()
 
 
-def _call(agent: Any, message: str, pacer: Pacer, *, minute_retries: int, minute_wait_s: float):
+# Como o agno devolve uma falha de transporte: resposta "COMPLETED", sem
+# ferramenta, cujo conteúdo é só a mensagem do erro.
+_AGNO_TRANSPORT_ERRORS = {"connection error", "request timed out"}
+# Quantas vezes repetir o Defensor quando a Groq recusa o JSON que ele gerou.
+DEFENDER_MALFORMED_RETRIES = 2
+
+
+def _provider_text(response: Any) -> str | None:
+    """O texto de erro do provedor numa resposta do agno, ou ``None``.
+
+    Só o conteúdo de uma resposta que **é** um erro: status de erro, ou o
+    transporte que o agno embrulha como resposta. Nunca o conteúdo de uma
+    resposta normal — um ``DefensePlan`` traz números como 0,9502 e 429
+    mensagens, que um marcador de erro confundiria com um 502 ou um 429.
+    """
+
+    content = str(getattr(response, "content", "") or "")
+    if getattr(response, "status", None) and "error" in str(response.status).lower():
+        return content or None
+    if not getattr(response, "tools", None):
+        stripped = content.strip()
+        if stripped.lower().rstrip(".") in _AGNO_TRANSPORT_ERRORS or stripped.startswith('{"error"'):
+            return stripped
+    return None
+
+
+def _call(
+    agent: Any,
+    message: str,
+    pacer: Pacer,
+    *,
+    minute_retries: int,
+    minute_wait_s: float,
+    malformed_retries: int = 0,
+    retries: list[str] | None = None,
+):
     """``agent.run`` com o erro do provedor lido antes de qualquer conclusão.
 
     Devolve ``(response, provider_text)``: quando a chamada não produziu nada
     utilizável e o texto do erro não é limite do provedor, quem chama decide.
-    Limite diário (ou prompt grande demais) vira ``ProposerUnavailable``.
+    Limite por minuto e falha de rede repetem até ``minute_retries``; JSON
+    recusado pelo provedor repete até ``malformed_retries`` e depois volta para
+    quem chama (o Defensor registra a recusa). Cota diária, prompt grande
+    demais, ou rede/limite que persiste viram ``ProposerUnavailable``.
+    ``retries`` (se dado) recebe o tipo de cada repetição.
     """
 
-    for attempt in range(minute_retries + 1):
+    minute = malformed = 0
+    while True:
         pacer.wait()
         try:
             response = agent.run(message)
-            text = None
-            failed = getattr(response, "status", None) and "error" in str(response.status).lower()
-            # O agno também devolve o erro do provedor como conteúdo de uma
-            # resposta sem ferramenta e sem status de erro ("Connection error.").
-            if failed or not getattr(response, "tools", None):
-                text = str(getattr(response, "content", "") or "") or None
+            text = _provider_text(response)
         except Exception as error:  # noqa: BLE001 — classificado abaixo
             response, text = None, f"{type(error).__name__}: {error}"
         kind = classify_provider_error(text)
-        if kind in (MINUTE, TRANSIENT) and attempt < minute_retries:
+        if kind in (MINUTE, TRANSIENT) and minute < minute_retries:
+            minute += 1
+            if retries is not None:
+                retries.append(kind)
             pacer._sleep(minute_wait_s)
             continue
-        if kind is not None:
+        if kind == MALFORMED and malformed < malformed_retries:
+            malformed += 1
+            if retries is not None:
+                retries.append(kind)
+            continue
+        if kind is not None and kind != MALFORMED:
             raise ProposerUnavailable(f"limite do provedor ({kind}): {str(text)[:300]}")
         return response, text
-    raise AssertionError("inalcançável")
 
 
 class LlmAttacker:
@@ -194,12 +237,17 @@ class LlmAttacker:
         if context.race_round:
             ref = f"e3://{context.family}/B4/rep{context.rep}/round{context.race_round}/proposal{source['index']}"
         prompt = self.defender.build_prompt(report, report_ref=ref)
+        retries: list[str] = []
         response, text = _call(
             self.defender.agent, prompt, self.pacer,
             minute_retries=self.minute_retries, minute_wait_s=self.minute_wait_s,
+            malformed_retries=DEFENDER_MALFORMED_RETRIES, retries=retries,
         )
         self._count(meta, response)
+        meta["llm_calls"] += retries.count(MALFORMED)  # as recusadas também foram chamadas
         out: dict[str, Any] = {"source_index": source["index"], "report_split": report.split}
+        if retries:
+            out["provider_retries"] = retries
         try:
             if response is None:
                 raise ValueError(f"chamada falhou: {text}")
