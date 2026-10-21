@@ -170,6 +170,17 @@ O executor espaça as chamadas, contabiliza tokens por chamada e, em erro de
 cota diária, salva o ledger e retoma depois — a campanha é retomável e nunca
 repete uma proposta já registrada.
 
+Regra: **uma falha do provedor nunca é um ponto de dado.** Cota (diária ou por
+minuto), prompt grande demais e, desde 21/10/2026, erro de rede ou de servidor
+(`Connection error`, 5xx, timeout) são lidos antes de qualquer conclusão: o
+executor repete e, se persistir, para sem registrar a proposta. Até 21/10 o
+erro de rede passava como "o LLM não chamou a ferramenta" e contava como
+proposta inválida — aconteceu uma vez, no B3 de `high_stnum` rep5, proposta 6.
+Pela regra (aplicada pela causa, não pelo resultado), o ledger dessa campanha
+foi cortado antes dela e as propostas 6–10 refeitas, porque as seguintes viram
+a falha no histórico. O original ficou ao lado, em `rep5.jsonl.bak-20261021`
+(e `results/…/rep5.json.bak-20261021`). Nenhum outro ledger do E1 tem o erro.
+
 ## Saídas
 
 `outputs/experiments/e1/`:
