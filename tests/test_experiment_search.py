@@ -313,6 +313,37 @@ def test_persistent_connection_error_stops_the_campaign():
         _attacker(_Agent(*[dropped] * 5)).propose(_context("injection", 0))
 
 
+def _json_refused():
+    return SimpleNamespace(
+        tools=[], metrics=None, status="ERROR",
+        content='{"error":{"message":"Failed to validate JSON.","code":"json_validate_failed"}}',
+    )
+
+
+def test_refused_json_is_retried_then_handed_back():
+    from adversarial_ids.agents.attacker.agent import Pacer, _call
+
+    plan = SimpleNamespace(tools=[], metrics=None, status="COMPLETED", content='{"priority": "high"}')
+    retries: list[str] = []
+    response, text = _call(_Agent(_json_refused(), plan), "m", Pacer(0, sleep=lambda s: None),
+                           minute_retries=4, minute_wait_s=0, malformed_retries=2, retries=retries)
+    assert response is plan and text is None and retries == ["malformed"]
+
+    response, text = _call(_Agent(*[_json_refused()] * 3), "m", Pacer(0, sleep=lambda s: None),
+                           minute_retries=4, minute_wait_s=0, malformed_retries=2)
+    assert "json_validate_failed" in text  # esgotou: volta para o Defensor registrar a recusa
+
+
+def test_a_normal_answer_is_never_read_as_a_provider_error():
+    from adversarial_ids.agents.attacker.agent import Pacer, _call
+
+    # Um plano sem ferramenta com números que contêm "502" e "429".
+    plan = SimpleNamespace(tools=[], metrics=None, status="COMPLETED",
+                           content='{"evidence": [{"value": 0.9502}, {"value": 429}], "note": "timeout"}')
+    response, text = _call(_Agent(plan), "m", Pacer(0, sleep=lambda s: None), minute_retries=4, minute_wait_s=0)
+    assert response is plan and text is None
+
+
 def test_no_tool_call_is_an_invalid_proposal():
     response = SimpleNamespace(tools=[], metrics=None, status="COMPLETED", content="não vou chamar")
     proposal = _attacker(_Agent(response)).propose(_context("injection", 0))

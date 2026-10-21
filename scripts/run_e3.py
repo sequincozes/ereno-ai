@@ -229,7 +229,7 @@ def cmd_matrix(args) -> int:
 
 
 def cmd_plans(args) -> int:
-    from adversarial_ids.agents.attacker.agent import Pacer, _call
+    from adversarial_ids.agents.attacker.agent import DEFENDER_MALFORMED_RETRIES, Pacer, _call
     from adversarial_ids.agents.defender import DefenderAgent
     from adversarial_ids.agents.defender.tools import parse_defense_plan, validate_plan_against_report
     from adversarial_ids.agents.usage import usage_from_response
@@ -258,7 +258,8 @@ def cmd_plans(args) -> int:
             ref = f"e3://{lineage.family}/{lineage.name}/rep{lineage.rep}/round{race_round}/selected{best['index']}"
             try:
                 response, text = _call(defender.agent, defender.build_prompt(report, report_ref=ref), pacer,
-                                       minute_retries=4, minute_wait_s=65.0)
+                                       minute_retries=4, minute_wait_s=65.0,
+                                       malformed_retries=DEFENDER_MALFORMED_RETRIES)
             except ProposerUnavailable as error:
                 print(f"  parado (retome depois, nada foi perdido): {error}", file=sys.stderr)
                 return 3

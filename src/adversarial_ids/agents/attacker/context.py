@@ -113,6 +113,7 @@ DAILY = "daily"
 MINUTE = "minute"
 TOO_LARGE = "too_large"
 TRANSIENT = "transient"
+MALFORMED = "malformed"
 
 _DAILY_MARKERS = ("per day", "(tpd)", "(rpd)", "tokens per day", "requests per day")
 _TOO_LARGE_MARKERS = ("request too large", "request_too_large", "413")
@@ -120,6 +121,10 @@ _MINUTE_MARKERS = ("rate_limit_exceeded", "rate limit", "429", "(tpm)", "(rpm)")
 # Rede e servidor (21/10/2026: um "Connection error." no B3 virou proposta
 # inválida no ledger do high_stnum rep5). Não é decisão do LLM: repete, e se
 # persistir para a campanha como a cota diária.
+# 22/10/2026: o gpt-oss-20b do Defensor teve 3 de 7 planos recusados pela
+# própria Groq no B4 (400, "failed_generation" vazio) — o modelo não chegou a
+# produzir um plano. Repete-se (temperatura 0,2) antes de registrar a recusa.
+_MALFORMED_MARKERS = ("json_validate_failed", "failed to validate json")
 _TRANSIENT_MARKERS = (
     "connection error", "connecterror", "timed out", "timeout", "service unavailable",
     "bad gateway", "internal server error", "502", "503", "504",
@@ -142,6 +147,8 @@ def classify_provider_error(text: str | None) -> str | None:
         return DAILY
     if any(marker in lowered for marker in _TOO_LARGE_MARKERS):
         return TOO_LARGE
+    if any(marker in lowered for marker in _MALFORMED_MARKERS):
+        return MALFORMED
     if any(marker in lowered for marker in _MINUTE_MARKERS):
         return MINUTE
     if any(marker in lowered for marker in _TRANSIENT_MARKERS):
