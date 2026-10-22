@@ -196,6 +196,15 @@ do B4 seguirem uma regra só, o rep1 foi arquivado
 é refeito. Na mesma mudança, o texto de uma resposta normal deixou de ser lido
 como erro do provedor: um plano com 0,9502 não pode passar por um 502.
 
+**B4 recortado a 2 famílias (22/10/2026).** As 20 campanhas do B4 custam ~6
+dias de cota do 120b, e o prazo do artigo não comporta isso. O B4 roda só em
+`masquerade_fault` e `high_stnum` × 5 reps (10 campanhas, ~3 dias): as duas
+famílias que o E3 já tinha fixado pelo B1 do E1 (maior evasão suave e maior
+evasão@10), escolhidas antes de qualquer B4 e sem olhar o B3. O B4−B3 é
+pareado e estratificado só nessas duas; o `report` já faz isso, porque cada
+comparação usa apenas as famílias em que os dois lados existem. No artigo, o
+B4−B3 é lido como resultado em subconjunto, não como agregado das quatro.
+
 ## Saídas
 
 `outputs/experiments/e1/`:
