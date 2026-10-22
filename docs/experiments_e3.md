@@ -97,7 +97,7 @@ interferem na corrida e gastam a cota do 20b, não a do atacante.
 | Braço | Atacante por rodada | Famílias | Repetições | Custo |
 |---|---|---|---|---|
 | E3-B1 | busca aleatória (B1 do E1) | as 4 | 5 | sem tokens |
-| E3-LLM | o vencedor do E1 entre B3 e B4 | 2: `masquerade_fault`, `high_stnum` | 5 | Groq |
+| E3-LLM | o vencedor do E1 entre B3 e B4 → **B3, recortado em 22/10** | 2: `masquerade_fault`, `high_stnum` → **`high_stnum`** | 5 → **2** | Groq |
 
 - **E3-B1** é o braço principal: barato, completo, e responde RQ3a–d sozinho.
 - **Famílias do E3-LLM**, fixadas antes do B3/B4 e só pelo B1 do E1: a de maior
@@ -235,3 +235,32 @@ O usuário delegou as cinco à proposta do rascunho:
 3. R = 4 rodadas.
 4. E3-LLM em 2 famílias (`masquerade_fault`, `high_stnum`), pela regra acima.
 5. O placebo entra, no E3-B1, só avaliado.
+
+## Recorte do E3-LLM (22/10/2026)
+
+O prazo do artigo não comporta os 4–5 dias de cota do E3-LLM completo, e o B4
+do E1 foi recortado no mesmo dia (`docs/experiments_e1.md`, "Custo e cota").
+Decidido antes de qualquer resultado do B4 e de qualquer rodada do E3:
+
+- **Braço B3, fixado agora**, em vez de esperar a regra do B4−B3. É uma
+  quebra da regra de 20/10, e por isso fica registrada: a escolha é por custo
+  (~28k tokens por campanha contra ~65k do B4), não por resultado, que ainda
+  não existe.
+- **1 família, `high_stnum`** (a de maior evasão@10 no B1 do E1), **2
+  repetições** (reps 1 e 2) e R = 4. A rodada 0 é o B3 do E1 dessas reps. São
+  6 campanhas novas, ~170k tokens no 120b (~1 dia de cota), mais 8 planos do
+  Defensor no 20b.
+- **Leitura: estudo de caso, não estatística.** Com 2 linhagens, o agregado
+  pareado do `report` não tem poder. O E3-LLM é lido pelas matrizes D_i × A_j
+  de cada linhagem, ao lado do E3-B1 de `high_stnum` nas mesmas reps, e
+  responde descritivamente se o atacante LLM reage à defesa (a memória entre
+  rodadas). RQ3a–d com intervalo de confiança vêm só do E3-B1.
+- Sem controle sem defesa, como já era no E3-LLM.
+
+Comandos (depois do B4 do E1, nunca junto com outra campanha):
+
+```bash
+uv run python scripts/run_e3.py campaign --arm B3 --family high_stnum --reps 1 2
+uv run python scripts/run_e3.py matrix   --arm B3 --family high_stnum --reps 1 2
+uv run python scripts/run_e3.py plans    --arm B3 --family high_stnum --reps 1 2
+```
