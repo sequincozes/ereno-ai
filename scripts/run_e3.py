@@ -51,9 +51,11 @@ from adversarial_ids.experiments.arms_race import (  # noqa: E402
     plan_measures,
     race_measures,
     round_complete,
+    saturated_budgets,
     score_detector,
+    trace_alarm_cost,
 )
-from adversarial_ids.experiments.metrics import stratified_paired_difference  # noqa: E402
+from adversarial_ids.experiments.metrics import is_saturated, stratified_paired_difference  # noqa: E402
 from adversarial_ids.experiments.search import (  # noqa: E402
     OBJECTIVE,
     PRIMARY_BUDGET,
@@ -254,6 +256,13 @@ def cmd_plans(args) -> int:
                 _dump(out, {"plan": None, "accepted": False, "note": "rodada sem candidato válido"})
                 continue
             frozen = dl.detector(race_round)
+            point = next(p for p in frozen.points if str(p.budget_per_10k) == PRIMARY_BUDGET)
+            if is_saturated(point):
+                # O relatório diria recall 0 por causa do limiar; o Defensor
+                # leria isso como evidência. Fica fora da medida, não recusado.
+                _dump(out, {"plan": None, "accepted": False, "saturated": True,
+                            "note": f"ponto primário ({PRIMARY_BUDGET}/10k) saturado em D{race_round}"})
+                continue
             report = candidate_report(frozen, best["config"], dl.seeds.search)
             ref = f"e3://{lineage.family}/{lineage.name}/rep{lineage.rep}/round{race_round}/selected{best['index']}"
             try:
@@ -306,16 +315,24 @@ def cmd_report(args) -> int:
             values = matrix_values(m["detectors"], metric)
             measures = race_measures(values)
             last = m["rounds"] - 1
-            refs = [d["reference"] for d in m["detectors"]]
+            refs = [_reference(d) for d in m["detectors"]]
+            trace_alarms = matrix_values(m["detectors"], f"false_alerts@{PRIMARY_BUDGET}")
             item = {
                 "matrix": values.tolist(),
                 **measures,
                 "reference_recall": [r["recall"] for r in refs],
                 "reference_f1": [r["f1"] for r in refs],
                 "reference_false_alerts": [r["false_alerts_per_10k_normal"] for r in refs],
+                "saturated_budgets": [sorted(saturated_budgets(d)) for d in m["detectors"]],
+                "trace_false_alerts": trace_alarms.tolist(),
+                "trace_alarm_cost": trace_alarm_cost(trace_alarms),
             }
             if m["placebo"]:
                 item["placebo_closure"] = placebo_closure(values, matrix_values(m["placebo"], metric))
+                placebo_alarms = matrix_values(m["placebo"], f"false_alerts@{PRIMARY_BUDGET}")
+                item["placebo_trace_alarm_cost"] = [
+                    float(placebo_alarms[r][r] - trace_alarms[r][r]) for r in range(trace_alarms.shape[1])
+                ]
             control = nodef.get((m["family"], m["arm"], m["rep"]))
             if control:
                 item["nodefense_race"] = matrix_values(control["detectors"], metric)[0].tolist()
@@ -338,6 +355,11 @@ def cmd_report(args) -> int:
             put("reference recall D_R - D_0", refs[-1]["recall"], refs[0]["recall"])
             put("reference F1 D_R - D_0", refs[-1]["f1"], refs[0]["f1"])
             put("reference false alerts D_R - D_0", refs[-1]["false_alerts_per_10k_normal"], refs[0]["false_alerts_per_10k_normal"])
+            # RQ3d secundário (registrado em 22/10/2026, depois do piloto e antes do E3-B1).
+            put("trace alarm cost (vs 0)", float(np.nanmean(item["trace_alarm_cost"])), 0.0)
+            if "placebo_trace_alarm_cost" in item:
+                put("trace alarm cost - placebo", float(np.nanmean(item["trace_alarm_cost"])),
+                    float(np.nanmean(item["placebo_trace_alarm_cost"])))
         report["metrics"][metric] = {
             arm: {name: {"aggregate": _paired(values), "units": sum(len(v) for v in values.values())}
                   for name, values in comparisons.items()}
@@ -361,6 +383,15 @@ def cmd_report(args) -> int:
     return 0
 
 
+def _reference(row: dict) -> dict:
+    """O custo na referência, com NaN se o ponto primário saturou neste detector."""
+
+    if PRIMARY_BUDGET in saturated_budgets(row):
+        nan = float("nan")
+        return {**row["reference"], "precision": nan, "recall": nan, "f1": nan, "false_alerts_per_10k_normal": nan}
+    return row["reference"]
+
+
 def _defender_measures(root: Path, matrices: list[dict]) -> dict:
     rows = []
     for m in (m for m in matrices if m["defended"]):
@@ -370,6 +401,8 @@ def _defender_measures(root: Path, matrices: list[dict]) -> dict:
             if not path.exists():
                 continue
             entry = _load(path)
+            if entry.get("saturated"):
+                continue
             before, after = m["detectors"][race_round], m["detectors"][race_round + 1]
             features = {i["feature"] for i in before["importances"]} | set(entry.get("report_features") or ())
             shifted = importance_shift(before["importances"], after["importances"])

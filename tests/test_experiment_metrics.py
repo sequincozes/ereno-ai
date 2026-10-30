@@ -9,6 +9,7 @@ from adversarial_ids.experiments.metrics import (
     bootstrap_mean,
     calibrate_threshold,
     counts_at,
+    is_saturated,
     paired_difference,
     rates,
     run_summary,
@@ -53,6 +54,21 @@ def test_run_summary_reports_every_budget():
     summary = run_summary(is_attack, scores, scores > 0.5, points)
     assert summary["ap"] == 1.0
     assert set(summary["budgets"]) == {"1.0", "100.0"}
+
+
+def test_a_saturated_budget_has_no_operating_point_not_full_evasion():
+    # Piloto do E3 (22/10/2026): o normal de calibração empata em 1,0 no topo e
+    # o limiar de 1/10k fica acima de tudo — evasão "1,0" seria do limiar.
+    normal = np.array([1.0] * 5 + [0.2] * 9995)
+    point = calibrate_threshold(normal, budget_per_10k=1.0)
+    assert is_saturated(point)
+    assert not is_saturated(calibrate_threshold(normal, budget_per_10k=10.0))
+    is_attack = np.array([1, 1, 0], dtype=bool)
+    scores = np.array([0.9, 1.0, 0.1])
+    block = run_summary(is_attack, scores, scores > 0.5, [point])["budgets"]["1.0"]
+    assert block["saturated"] is True
+    assert np.isnan(block["evasion"]) and np.isnan(block["recall"])
+    assert block["fn"] == 2  # as contagens continuam lá; só as taxas viram NaN
 
 
 def test_paired_difference_detects_a_consistent_shift():

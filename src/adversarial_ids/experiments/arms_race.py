@@ -212,6 +212,13 @@ def reference_cost(runs: Sequence[dict[str, Any]], budget: str = PRIMARY_BUDGET)
     """
 
     totals = {key: sum(int(run["budgets"][budget][key]) for run in runs) for key in ("tp", "fn", "fp", "tn")}
+    if any(run["budgets"][budget].get("saturated") for run in runs):
+        # Limiar acima do maior score do normal: recall 0 aqui seria do limiar,
+        # não do detector (ver metrics.is_saturated).
+        nan = float("nan")
+        return {**totals, "precision": nan, "recall": nan, "f1": nan,
+                "false_alerts_per_10k_normal": nan, "ap": float(np.nanmean([run["ap"] for run in runs])),
+                "saturated": True}
     tp, fn, fp, tn = totals["tp"], totals["fn"], totals["fp"], totals["tn"]
     precision = tp / (tp + fp) if tp + fp else float("nan")
     recall = tp / (tp + fn) if tp + fn else float("nan")
@@ -251,13 +258,43 @@ def _value(cell: dict[str, Any] | None, metric: str) -> float:
         return float("nan")
     if metric.startswith("evasion@"):
         return float(cell["evasion"][metric.split("@", 1)[1]])
+    if metric.startswith("false_alerts@"):
+        return float(cell["false_alerts_per_10k_normal"][metric.split("@", 1)[1]])
     return float(cell[metric])
+
+
+def saturated_budgets(row: dict[str, Any]) -> set[str]:
+    """Orçamentos sem ponto de operação neste detector (``metrics.is_saturated``)."""
+
+    return {str(p["budget_per_10k"]) for p in row.get("points", ()) if p["calibration_alert_rate"] == 0.0}
+
+
+def _row_value(row: dict[str, Any], cell: dict[str, Any] | None, metric: str) -> float:
+    # Matrizes gravadas antes de 22/10/2026 trazem "evasão 1,0" no ponto
+    # saturado; a linha do detector guarda os pontos, então a leitura corrige.
+    if "@" in metric and metric.split("@", 1)[1] in saturated_budgets(row):
+        return float("nan")
+    return _value(cell, metric)
 
 
 def matrix_values(rows: Sequence[dict[str, Any]], metric: str = OBJECTIVE) -> np.ndarray:
     """``E[i][j]``: ``metric`` de ``A_j`` contra ``D_i`` (``nan`` sem selecionado)."""
 
-    return np.array([[_value(cell, metric) for cell in row["attacks"]] for row in rows], dtype=float)
+    return np.array([[_row_value(row, cell, metric) for cell in row["attacks"]] for row in rows], dtype=float)
+
+
+def trace_alarm_cost(false_alerts: np.ndarray) -> list[float]:
+    """RQ3d, secundário: ``F[r+1][r] − F[r][r]``, alarmes falsos/10k no normal
+    **do trace da variante** que o retreino acrescentou ao fechar a rodada *r*.
+
+    As features de delta de uma mensagem normal são calculadas contra a
+    mensagem anterior, que pode ser de ataque; um detector pode "fechar" a
+    variante alarmando também o contexto em volta dela. O custo no normal da
+    referência (``reference_cost``) não enxerga isso (piloto de 22/10/2026:
+    D0 7% → D1 20% no normal dos traces de A0, placebo 5%).
+    """
+
+    return [float(false_alerts[r + 1][r] - false_alerts[r][r]) for r in range(false_alerts.shape[1])]
 
 
 def race_measures(matrix: np.ndarray) -> dict[str, Any]:
