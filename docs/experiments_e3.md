@@ -341,3 +341,45 @@ uv run python scripts/run_e3.py campaign --arm B3 --family high_stnum --reps 1 2
 uv run python scripts/run_e3.py matrix   --arm B3 --family high_stnum --reps 1 2
 uv run python scripts/run_e3.py plans    --arm B3 --family high_stnum --reps 1 2
 ```
+
+## Resultados do E3-LLM (30/10/2026)
+
+Campanhas (23/10) e matrizes (30/10) fechadas, B3 × high_stnum × reps 1–2,
+R = 4. O passo `plans` ainda não rodou. Matrizes em
+`outputs/experiments/e3/matrix/high_stnum/B3/rep{1,2}.json`.
+
+Evasão suave no teste, linha = detector D_i, coluna = ataque A_j:
+
+| | A0 | A1 | A2 | A3 |
+|---|---|---|---|---|
+| **rep1** D0 | 0,235 | 0,247 | 0,160 | 0,084 |
+| D1 | 0,000 | *0,175* | 0,125 | 0,072 |
+| D2 | 0,000 | 0,002 | *0,024* | 0,007 |
+| D3 | 0,000 | 0,002 | 0,009 | *0,006* |
+| D4 | 0,000 | 0,002 | 0,008 | 0,004 |
+| **rep2** D0 | 0,236 | 0,235 | 0,185 | 0,194 |
+| D1 | 0,000 | *0,195* | 0,156 | 0,164 |
+| D2 | 0,000 | 0,014 | *0,029* | 0,025 |
+| D3 | 0,000 | 0,011 | 0,017 | *0,015* |
+| D4 | 0,000 | 0,010 | 0,013 | 0,011 |
+
+Em itálico, D_r × A_r: a resposta do atacante ao detector daquela rodada.
+
+- **D_{r+1} fecha A_r.** D1 zera A0; D2 leva A1 a 0,002 / 0,014.
+- **O atacante não acompanha.** A diagonal cai de ~0,18–0,20 para ~0,025 e
+  depois ~0,01. A corrida se encerra a favor da defesa na 2ª rodada.
+- **O retreino generaliza para frente.** D2 já cobre A2 e A3, que nunca viu:
+  depois de A1, o atacante não achou direção nova na caixa.
+- **Custo de especialização (só rep1).** Contra D0, A3 evade 0,084, contra 0,235
+  do A0: ao se adaptar ao detector retreinado, o atacante piorou contra o
+  original. Na rep2 isso não aparece (0,194).
+- **Custo para a defesa.**
+  - Alarmes falsos por 10k na referência: ~7,7 em D0, 10–15 em D2/D3.
+  - Em D4, o ponto de 10/10k saturou nas duas reps: a evasão@10 é NaN (regra 1
+    de "Depois do piloto").
+  - A evasão@10 cai menos que a suave: contra D2/D3 fica em 0,04–0,13.
+  - Nos traces das variantes, os alarmes falsos/10k no normal ficam na casa
+    dos milhares (`trace_alarm_cost`, regra 2).
+
+Leitura descritiva, como fixado no recorte: os intervalos de confiança do RQ3
+vêm do E3-B1.
