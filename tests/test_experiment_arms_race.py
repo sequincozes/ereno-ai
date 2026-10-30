@@ -21,13 +21,16 @@ from adversarial_ids.experiments.arms_race import (
     Lineage,
     adversarial_extras,
     importance_shift,
+    matrix_values,
     placebo_closure,
     placebo_seeds,
     plan_measures,
     race_measures,
     reference_cost,
     round_complete,
+    saturated_budgets,
     top_variants,
+    trace_alarm_cost,
 )
 from adversarial_ids.experiments.protocol import SeedPlan
 from adversarial_ids.experiments.search import (
@@ -249,6 +252,42 @@ def test_reference_cost_sums_counts_before_the_ratios():
     assert cost["precision"] == pytest.approx(100 / 102)
     assert cost["f1"] == pytest.approx(2 * (100 / 102) * 0.5 / (100 / 102 + 0.5))
     assert cost["ap"] == pytest.approx(0.8)
+
+
+def test_reference_cost_is_nan_when_the_primary_point_saturated():
+    runs = [{"ap": 0.9, "budgets": {"10.0": {"tp": 0, "fn": 100, "fp": 0, "tn": 900, "saturated": True}}}]
+    cost = reference_cost(runs)
+    assert cost["saturated"] is True
+    assert np.isnan(cost["recall"]) and np.isnan(cost["f1"])
+
+
+def test_matrix_reads_a_saturated_budget_as_nan_even_from_an_old_file():
+    # Matriz gravada antes da correção: a célula diz 1,0, o ponto diz 0 alarmes.
+    cell = {"evasion": {"1.0": 1.0, "10.0": 0.04}, "false_alerts_per_10k_normal": {"1.0": 0.0, "10.0": 265.3},
+            "soft_evasion": 0.01}
+    row = {"points": [{"budget_per_10k": 1.0, "threshold": 1.0, "calibration_alert_rate": 0.0},
+                      {"budget_per_10k": 10.0, "threshold": 0.93, "calibration_alert_rate": 8.4}],
+           "attacks": [cell]}
+    assert saturated_budgets(row) == {"1.0"}
+    assert np.isnan(matrix_values([row], "evasion@1.0")[0][0])
+    assert matrix_values([row], "evasion@10.0")[0][0] == pytest.approx(0.04)
+    assert matrix_values([row], "false_alerts@10.0")[0][0] == pytest.approx(265.3)
+    assert matrix_values([row], "soft_evasion")[0][0] == pytest.approx(0.01)
+
+
+def test_trace_alarm_cost_is_what_closing_each_round_added_on_the_variant_normal():
+    alarms = np.array([[704.0, 291.0], [1986.0, 390.0], [1431.0, 265.0]])  # D0..D2 × A0..A1
+    assert trace_alarm_cost(alarms) == pytest.approx([1986.0 - 704.0, 265.0 - 390.0])
+
+
+def test_round_message_never_shows_a_saturated_budget_as_evasion():
+    entry = {"index": 0, "status": VALID, "diff": [{"path": "jump.max", "new_value": 366}],
+             "search": {"soft_evasion": 0.02, "ap": 0.98,
+                        "evasion": {"1.0": float("nan"), "10.0": 0.035, "100.0": 0.019}}}
+    box = SearchBox.for_family("high_stnum", reference_config("high_stnum"))
+    message = build_round_message(ProposalContext("high_stnum", 1, 1, 10, box, (entry,), 2, ()))
+    assert "n/d / 0.035 / 0.019" in message
+    assert "nan" not in message
 
 
 def test_importance_shift_and_plan_overlap():

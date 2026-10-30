@@ -60,6 +60,23 @@ def calibrate_threshold(normal_scores: np.ndarray, budget_per_10k: float) -> Ope
     return OperatingPoint(budget_per_10k, threshold, rate)
 
 
+def is_saturated(point: OperatingPoint) -> bool:
+    """O orçamento não admite nenhum alarme: o limiar ficou acima do maior score.
+
+    Acontece quando os scores do normal de calibração empatam no topo — no E3,
+    o retreino só soma linhas de ataque e o desequilíbrio empurra o normal para
+    perto de 1,0 (piloto de 22/10/2026: D2 do high_stnum, 1/10k). Nesse ponto
+    nenhuma mensagem dispara, e a "evasão 1,0" que sairia dele é do limiar, não
+    do ataque: as taxas viram NaN (sem ponto de operação), nunca 1,0.
+    """
+
+    return point.calibration_alert_rate == 0.0
+
+
+def _no_operating_point(counts: dict[str, int]) -> dict[str, Any]:
+    return {**counts, **{key: float("nan") for key in rates(counts)}, "saturated": True}
+
+
 def counts_at(is_attack: np.ndarray, scores: np.ndarray, threshold: float) -> dict[str, int]:
     alarm = np.asarray(scores) >= threshold
     attack = np.asarray(is_attack, dtype=bool)
@@ -121,8 +138,11 @@ def run_summary(
         "attack_score_mean": float(np.mean(np.asarray(scores)[attack])) if attack.any() else float("nan"),
         "argmax": {**argmax, **rates(argmax)},
         "budgets": {
-            str(p.budget_per_10k): {**(c := counts_at(attack, scores, p.threshold)), **rates(c)}
+            str(p.budget_per_10k): _no_operating_point(c)
+            if is_saturated(p)
+            else {**c, **rates(c)}
             for p in points
+            for c in (counts_at(attack, scores, p.threshold),)
         },
     }
 

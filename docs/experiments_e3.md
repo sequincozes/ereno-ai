@@ -152,6 +152,9 @@ Métrica primária: **evasão suave** (a mesma do E1). Evasão@10 e AP ao lado.
   entram também **precisão, recall e F1** do ataque de referência: a
   prevalência da referência é fixa, então o F1 compara detectores sem a
   distorção que tem na comparação entre variantes (ver E1, "Medidas").
+  **Secundário, registrado depois do piloto** (ver "Depois do piloto"): alarmes
+  falsos por 10k no normal **do trace da variante**, `F[r+1][r] − F[r][r]`
+  (`trace_alarm_cost`), e o mesmo contra o placebo.
 - **Defensor:** fração de planos aceitos pelo portão, fração que recomenda
   `detector_retraining`, sobreposição entre features citadas e a mudança de
   importância (top-5).
@@ -181,7 +184,8 @@ Os quatro são publicáveis; nenhum é "o experimento falhou".
 - Proposta: ~35–80 s (3 gerações + oráculo, medido no E1). Retreino: 3 traces de
   referência + as linhas de ataque acumuladas, por linhagem e rodada.
 - **E3-B1** (3 rodadas novas × 4 famílias × 5 reps × 10 propostas = 600
-  propostas): ~12–27 h de geração, sem tokens. O controle sem defesa reusa os
+  propostas): ~12–27 h de geração, sem tokens (o piloto de 22/10 dá ~25–30 h
+  com as matrizes; ver "Depois do piloto"). O controle sem defesa reusa os
   traces de busca (mesmas propostas): custa o oráculo e a pontuação, não a
   geração. O retreino gera 9 traces por rodada e linhagem (3 variantes × 3
   seeds de treino); o placebo, 36 traces de referência por família (seeds
@@ -201,7 +205,8 @@ Os quatro são publicáveis; nenhum é "o experimento falhou".
   - `Lineage` e `DetectorLineage`: os ledgers da linhagem, `D_r`, o placebo `D'_r` e a memória do atacante.
   - `top_variants`.
   - A matriz: `score_detector` e `matrix_values`.
-  - As medidas: `race_measures`, `placebo_closure` e `reference_cost`.
+  - As medidas: `race_measures`, `placebo_closure`, `reference_cost` e `trace_alarm_cost`.
+  - `saturated_budgets`: lê como NaN o orçamento sem ponto de operação (`metrics.is_saturated`).
   - As do Defensor: `importance_shift` e `plan_measures`.
   - Nenhum modelo é persistido, porque retreinar `D_r` é determinístico.
 - `FrozenIds.extra_attack` / `IdsEvaluator.fit_traces(attack_only_paths=…)`:
@@ -225,6 +230,78 @@ Os quatro são publicáveis; nenhum é "o experimento falhou".
 repetição, R = 2. Mede tempo de retreino e memória, confere que D₁ fecha a
 brecha de A₀ (se nem isso acontecer, o problema é o desenho e não a família) e
 que o placebo é distinguível. Não entra nos resultados.
+
+## Depois do piloto (22/10/2026)
+
+O piloto rodou em 22/10 (`outputs/experiments/e3/pilot/`). O desenho
+funcionou: D₁ fecha A₀ (evasão suave de 0,186 para 0,0004 no teste) e o
+placebo do mesmo tamanho não fecha (0,212), então o ganho vem das variantes,
+não de mais dado. Contra D₁, o atacante B1 só chegou a 0,027. Custo na
+referência no ponto de 10/10k: recall de 0,993 para 0,984 e alarmes de 7,7
+para 14,1 por 10k (D₀ → D₂). Tempo: ~5,5 min por rodada de campanha e ~19 min
+para a matriz (5 detectores, até 1,2M linhas), sem estourar a memória. Isso dá
+~25–30 h para o E3-B1 completo.
+
+O piloto mostrou duas coisas que o protocolo não previa. As duas foram
+registradas **antes** das campanhas do E3-B1 e do E3-LLM:
+
+1. **Ponto de operação saturado vira NaN, não evasão 1,0.** O retreino só
+   soma linhas de ataque. Com isso, o desequilíbrio do treino cresce a cada
+   rodada (1:1, 4:1, 7:1 no piloto, ~13:1 em D₄), e o limiar de calibração
+   sobe junto: em 1/10k ele foi de 0,85 a 0,93 e, no D₂, chegou a 1,00, com
+   **zero alarmes possíveis**. A "evasão 1,0" desse ponto vem do limiar, não do
+   ataque.
+   - **Regra:** quando a taxa de alarmes na calibração é 0
+     (`metrics.is_saturated`), as taxas daquele orçamento valem NaN e o bloco
+     leva `saturated: true`. As contagens ficam.
+   - **Onde vale:**
+     - na matriz e no `report` (`saturated_budgets`; uma matriz gravada antes
+       da correção é corrigida na leitura);
+     - no custo na referência;
+     - no histórico que o atacante LLM lê (aparece "n/d", e não "1.000", que
+       faria o atacante achar que evadiu tudo);
+     - no passo `plans`: se o ponto primário saturou, o Defensor não recebe um
+       relatório com recall 0. A rodada fica fora da medida do Defensor, sem
+       contar como plano recusado.
+   - **O que não muda:** a evasão suave, métrica primária, não usa limiar.
+     Nenhuma campanha, seleção ou oráculo muda.
+   - **Ressalva:** se o ponto de 10/10k saturar em D₃ ou D₄, a evasão@10 e o
+     RQ3d daquela linhagem e rodada ficam sem valor (NaN). Isso é reportado
+     como limite do retreino que só soma ataque, não escondido.
+   - **Descartado:** balancear o treino (undersampling ou peso de classe).
+     Mudaria o pipeline do detector entre rodadas, o que o guardrail do E3
+     proíbe (só os **dados** mudam).
+
+2. **Custo de alarme no trace da variante (RQ3d, secundário).** Os deltas de
+   uma mensagem normal (`stDiff`, `sqDiff`, `timestampDiff`…) são calculados
+   contra a mensagem anterior do fluxo, que pode ser de ataque. Assim, um
+   detector pode "fechar" uma variante alarmando também o normal em volta
+   dela. No piloto, no ponto de 10/10k e no normal dos traces de A₀:
+   - D₀ alarmava **7%** (704/10k);
+   - D₁ alarma **20%** (1986/10k);
+   - o placebo D'₁ alarma 5%.
+
+   Parte do fechamento, portanto, é pago com alarme no contexto do ataque, e o
+   custo medido no normal da referência (RQ3d) não enxerga isso. Passa a ser
+   reportado, sem mudar nada na corrida:
+   - `trace_alarm_cost` = `F[r+1][r] − F[r][r]`, com F = alarmes falsos/10k no
+     normal do trace de A_r;
+   - a diferença contra o placebo, com o mesmo bootstrap pareado dos demais.
+
+   Fica **secundário**: o primário do RQ3d continua o normal da referência, que
+   é o normal "de verdade" do operador. Este mede o que o retreino custa perto
+   do ataque.
+
+**Desvio no E3-LLM (22/10/2026).** A primeira campanha B3 × high_stnum carregou
+`metrics.py` um minuto antes da regra 1 entrar. Em três rodadas o atacante viu
+"evasão@1 = 1,000" em todas as propostas: rep1 r3, rep2 r2 e rep2 r3, todas
+com o ponto de 1/10k saturado. Essas rodadas foram arquivadas com o sufixo
+`.bak-20261022-saturado`, junto com o cartão D3 da rep2, e refeitas com o
+código novo. Nos ledgers refeitos o ponto de 1/10k é NaN, e o atacante vê "n/d".
+As rodadas 1 (e a 2 da rep1) não tinham ponto saturado e ficaram como estavam.
+Evasão suave no teste, antes e depois:
+- rep1 r3: 0,017 → 0,006;
+- rep2 r2: 0,038 → 0,029.
 
 ## Decisões (20/10/2026)
 

@@ -6,6 +6,7 @@ testáveis sem LLM. Ver docs/experiments_e1.md, "O que o LLM vê".
 
 from __future__ import annotations
 
+import math
 from typing import Any, Sequence
 
 from adversarial_ids.agents.intent.catalog_context import build_capability_context
@@ -36,7 +37,12 @@ def render_entry(entry: dict[str, Any]) -> str:
     line = f"#{entry['index'] + 1} [{entry['status']}] {changes}"
     search = entry.get("search")
     if entry["status"] == VALID and search:
-        evasion = " / ".join(f"{search['evasion'][b]:.3f}" for b in sorted(search["evasion"], key=float))
+        # NaN = orçamento sem ponto de operação neste detector (metrics.is_saturated);
+        # mostrar "1.000" ali faria o atacante achar que evadiu tudo.
+        evasion = " / ".join(
+            "n/d" if math.isnan(value := search["evasion"][b]) else f"{value:.3f}"
+            for b in sorted(search["evasion"], key=float)
+        )
         line += (
             f" | evasão suave = {search[OBJECTIVE]:.3f} | evasão@1/10/100 = {evasion}"
             f" | AP = {search['ap']:.3f}"
