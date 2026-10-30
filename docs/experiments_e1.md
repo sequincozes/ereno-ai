@@ -303,6 +303,50 @@ treino 101–103, limiares calibrados em 201–202):
   AP 0,36, coerente com um ataque que clona mensagens legítimas. Sai do E1
   como achado próprio (ponto cego do detector na referência), não como falha.
 
+## Resultados (30/10/2026)
+
+Todas as campanhas fechadas: B0–B3 nas 4 famílias × 5 reps, B4 no recorte
+(masquerade_fault e high_stnum × 5 reps; ver "Custo e cota").
+`scripts/run_e1.py report` → `outputs/experiments/e1/results.json`.
+
+Evasão suave no teste (média das campanhas):
+
+| Família | B0 | B1 | B2 | B3 | B4 |
+|---|---|---|---|---|---|
+| high_stnum | 0,007 | 0,166 | 0,102 | 0,231 | 0,223 |
+| inverse_replay | 0,001 | 0,180 | 0,027 | 0,191 | — |
+| masquerade_fault | 0,000 | 0,515 | 0,514 | 0,537 | 0,539 |
+| random_replay | 0,002 | 0,092 | 0,062 | 0,189 | — |
+
+Diferenças pareadas (bootstrap estratificado por família, IC 95%):
+
+| | evasão suave | evasão@10 |
+|---|---|---|
+| B1 − B0 | +0,236 [+0,216, +0,257] | +0,061 [+0,050, +0,072] |
+| B2 − B0 | +0,174 [+0,157, +0,191] | +0,017 [+0,012, +0,023] |
+| B3 − B1 | **+0,049 [+0,011, +0,088]** | +0,030 [+0,018, +0,042] |
+| B3 − B2 | **+0,111 [+0,067, +0,160]** | +0,074 [+0,064, +0,084] |
+| B4 − B3 | −0,003 [−0,036, +0,033] (não separa) | −0,008 [−0,023, +0,008] (não separa) |
+
+- O atacante LLM (B3) supera a busca aleatória e a escada aberta. Ver o plano
+  do Defensor (B4) não acrescenta nada.
+- Evasão@10 só sai de 0 em high_stnum (B3 0,290, B4 0,274) e inverse_replay
+  (B3 0,082). Em masquerade e random_replay ela fica em 0 em todas as
+  estratégias: a evasão suave existe, mas não cruza o limiar de 10/10k.
+- **Por que B4 ≈ B3.** O portão aceitou 87 de 90 planos do B4 (as propostas 0
+  não têm candidato e não contam; as 3 recusas foram `validation_test`
+  ausente). Os planos são quase todos o mesmo: 81 de 94 ações são
+  `detector_threshold_tuning` para reduzir falso positivo, e 78 de 87 têm
+  prioridade `low`. O plano diz pouco ao atacante sobre o que o detector olha.
+- Os retries de `json_validate_failed` do 20b (`c1e8fca3`) recuperaram todos os
+  planos que falharam no provedor, incluindo um caso novo, "max completion
+  tokens reached".
+- As 5 reps do B2 não são independentes (seeds fixas, escada converge): o B2 é
+  determinístico por família.
+- Pela regra de 20/10 do E3, B4 − B3 sem separação escolheria B3 para o braço
+  LLM. O recorte de 22/10 (`docs/experiments_e3.md`), fixado antes deste
+  resultado, já tinha escolhido B3.
+
 ## Pendências antes das execuções principais
 
 - piloto de tokens e a decisão de escala acima.
