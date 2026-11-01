@@ -383,3 +383,24 @@ Em itálico, D_r × A_r: a resposta do atacante ao detector daquela rodada.
 
 Leitura descritiva, como fixado no recorte: os intervalos de confiança do RQ3
 vêm do E3-B1.
+
+## Recorte dos planos do E3-B1 (01/11/2026)
+
+O passo `plans --arm B1` completo pede 80 planos (4 famílias × 5 reps × 4
+rodadas) no `gpt-oss-20b`. Com os retries do B4, são ~5–6k tokens por plano,
+~450–500k no total: quase 3 dias de cota (200k/dia), que a semana de execução
+(30/10 → 06/11) não comporta. Decidido antes de qualquer campanha do E3-B1:
+
+- **Planos do E3-B1 só em `high_stnum`**, as 5 reps, R = 4: 20 planos,
+  ~120k tokens, um dia de cota. É a mesma família do E3-LLM, então as medidas
+  do Defensor dos dois braços ficam comparáveis.
+- **O que muda:** só as medidas do Defensor (aceitação, fração que recomenda
+  `detector_retraining`, sobreposição entre features citadas e mudança de
+  importância). Nas outras três famílias essas medidas ficam ausentes, e o
+  `report` já pula rodadas sem plano.
+- **O que não muda:** a corrida, o placebo e o controle sem defesa (RQ3a–d)
+  nas 4 famílias. O plano é só medido e nunca entra no retreino.
+
+```bash
+uv run python scripts/run_e3.py plans --arm B1 --family high_stnum
+```
