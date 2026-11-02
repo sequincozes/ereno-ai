@@ -404,3 +404,47 @@ rodadas) no `gpt-oss-20b`. Com os retries do B4, são ~5–6k tokens por plano,
 ```bash
 uv run python scripts/run_e3.py plans --arm B1 --family high_stnum
 ```
+
+## Campanhas do E3-B1 (02/11/2026)
+
+`campaign --arm B1` (01/11 ~20:50 → 02/11 06:08, ~9,5 h) e
+`campaign --arm B1 --no-defense` (02/11 ~10:05 → 12:40, ~2,6 h) fechados:
+4 famílias × 5 reps × rodadas 1–3, 10 propostas por rodada, validade 100%,
+0 tokens. Um timeout do gerador (inverse_replay, sem defesa, rep3 rodada 3)
+foi absorvido pelo retry. Com a regra do recorte (cortar o controle só se o
+B1 passasse de ~15 h), o controle rodou nas 4 famílias.
+
+Evasão suave no teste da rodada r, média das 5 reps. Com defesa, contra o D_r
+retreinado; sem defesa, contra D0 (o log imprime "D_r", mas a linhagem sem
+defesa sempre usa o índice 0, `arms_race.py`). A0 é o B1 do E1, contra D0.
+
+| Família | A0 | r1 def / sem | r2 def / sem | r3 def / sem |
+|---|---|---|---|---|
+| masquerade_fault | 0,515 | 0,139 / 0,547 | 0,100 / 0,519 | 0,027 / 0,563 |
+| high_stnum | 0,166 | 0,045 / 0,185 | 0,021 / 0,152 | 0,014 / 0,180 |
+| inverse_replay | 0,180 | 0,006 / 0,164 | 0,001 / 0,176 | 0,000 / 0,164 |
+| random_replay | 0,092 | 0,010 / 0,173 | 0,006 / 0,062 | 0,001 / 0,146 |
+
+Por rep, com defesa (r1 / r2 / r3):
+
+| Família | rep1 | rep2 | rep3 | rep4 | rep5 |
+|---|---|---|---|---|---|
+| masquerade_fault | ,284/,034/,001 | ,161/,016/,004 | ,190/,006/,087 | ,036/,427/,044 | ,022/,016/,001 |
+| high_stnum | ,027/,034/,006 | ,020/,011/,018 | ,067/,010/,021 | ,030/,012/,011 | ,079/,036/,014 |
+| inverse_replay | ,004/,001/,001 | ,008/,001/,000 | ,001/,000/,001 | ,004/,004/,000 | ,011/,001/,000 |
+| random_replay | ,002/,000/,001 | ,002/,000/,001 | ,000/,014/,000 | ,008/,017/,001 | ,036/,000/,000 |
+
+- **A queda é do retreino, não do ruído da busca.** Sem defesa, a busca
+  aleatória fica no patamar do E1 nas três rodadas (masquerade ~0,52–0,56,
+  high_stnum ~0,15–0,19, inverse ~0,16–0,18). Com defesa, cai uma ordem de
+  grandeza já em D1 e segue caindo.
+- **O ruído da busca é grande no random_replay.** Sem defesa, a média por
+  rodada oscila 0,062–0,173 (rep4: 0,375 na r1); por isso o controle é por rep
+  e por rodada, não contra o A0.
+- **Uma recuperação do atacante:** masquerade rep4, 0,036 em D1 → 0,427 em D2
+  → 0,044 em D3. Sem ela, a média da r2 seria 0,018.
+- **B1 × B3 em high_stnum (reps 1–2):** na r1 o LLM evade ~7× mais
+  (0,175 / 0,195 contra 0,027 / 0,020); a partir da r2 os braços empatam
+  (~0,01–0,03).
+
+Próximo: `matrix --arm B1` (com placebo) e `matrix --arm B1 --no-defense`.
