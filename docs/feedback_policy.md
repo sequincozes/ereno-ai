@@ -70,6 +70,16 @@ alargar":
    (`domain.intent_spec.MAX_FIELDS_CHANGED_CEILING`, hoje 16) é só uma trava
    de sanidade acima desse número — nunca o número em si.
 
+Valores ditados (`restrictions.target_values`) ficam fora da escada de
+intensidade, mas consomem a cota: o compilador só dá à intensidade
+`max_fields_changed - len(target_values)` campos. Quando essa sobra é zero, o
+degrau 1 é pulado e a escada vai direto para o 2, porque subir a intensidade
+compilaria a mesma variante. Antes dessa regra, os exemplos intent 1a e 1b
+(03/11/2026, `docs/intent_examples.md`) mediam na rodada 2 o mesmo trace da
+rodada 1, byte a byte, e paravam em `no_improvement`. O LLM costuma pôr
+`max_fields_changed` igual ao número de campos ditados, então esse caso é o
+comum quando há valores ditados, não uma exceção.
+
 A `seed` não é alavanca: `intent_compiler._select_field_paths` embaralha os
 candidatos com `random.Random(intent.seed)` e corta em `[:limite]`, então
 manter a seed fixa faz de `limite+1` um superconjunto do conjunto anterior
