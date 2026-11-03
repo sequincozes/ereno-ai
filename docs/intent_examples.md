@@ -85,3 +85,46 @@ Saída 0, 17,3k tokens.
 
 Este é o exemplo 1 que vai para o artigo. O 1a e o 1b ficam como registro
 do defeito que ele expôs.
+
+## Exemplo 2: programmable, atraso seletivo (03/11/2026)
+
+```bash
+uv run adversarial-ids --engine intent --generator-mode jar --rounds 3 --prompt \
+  "Atrase em 20 ms só as mensagens com o disjuntor fechado."
+```
+
+Rodadas `10247d66…` (1), `3b82f168…` (2) e `d0ac8093…` (3). Log em
+`outputs/experiments/intent_ex2_programmable.log`. Saída 0, 23,5k tokens.
+
+**O LLM autorou a regra certa na primeira tentativa.** Foram 7 `target_values`
+em `rules.r0`: `when cbStatus eq 1`, `op = add`, `field = t`, `value = 0.02`,
+`fraction = 1`. O compilador os aplicou literalmente.
+
+| rodada | intensidade | campos | o que a escada mudou | recall | F1 |
+|---|---|---|---|---|---|
+| 1 | medium | 7 | nada (todos os 7 ditados) | 0,637 | 0,702 |
+| 2 | medium | 8 | `rules.r1.fraction` 0,5 → 0,275 | 0,560 | 0,628 |
+| 3 | high | 8 | `rules.r1.fraction` 0,5 → 0,1175 | 0,504 | 0,572 |
+
+- **A escada completa apareceu, e já com a correção do `ae300678`.** Com os
+  7 campos todos ditados, a rodada 2 alargou de 7 para 8 sem passar pela
+  intensidade (antes da correção, ela teria repetido o trace). A rodada 3
+  subiu medium → high. A campanha parou em `levers_exhausted`, com o teto de
+  8 campos atingido.
+- **Ressalva: o ataque não é só o atraso.** A baseline do `uc11_programmable`
+  traz uma segunda regra, `r1` (soma 1 ao stNum em 50% das mensagens), que o
+  prompt não mencionou e que continuou ativa. O campo que a escada mexeu foi
+  justamente a fração dela. A queda do F1 vem de diluir o salto de stNum que
+  o detector reconhece, não de o atraso de 20 ms ter ficado mais furtivo.
+- **Ressalva: o detector foi treinado na baseline do `uc11`.** Essa baseline é
+  outro ataque (`set cbStatus = 1` mais stNum + 1), com recall interno de
+  apenas 0,775. A variante, portanto, é avaliada fora da distribuição de
+  treino.
+- **Pela primeira vez, um plano cita feature.** O `device_quarantine` das
+  rodadas 1 e 2 cita `stDiff` (a de maior importância, 0,27). A prioridade
+  ficou medium nas três rodadas. O resto continua genérico: ajuste de
+  limiar, enriquecimento do dataset e segmentação de rede.
+
+Para o artigo, o exemplo 2 mostra que a DSL e o LLM produzem o comportamento
+pedido e que a escada percorre os dois degraus. Ele **não** serve como
+evidência de que o atraso evade, por causa da regra `r1` que sobrou.
