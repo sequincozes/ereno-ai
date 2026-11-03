@@ -130,9 +130,20 @@ def _derive_intent(intent: IntentSpec, **changes: Any) -> IntentSpec:
 
 
 def _escalate(intent: IntentSpec) -> tuple[IntentSpec | None, str]:
-    """Sobe um degrau da escada; ``None`` quando não há degrau restante."""
+    """Sobe um degrau da escada; ``None`` quando não há degrau restante.
 
-    deeper = _next_intensity(intent.intensity)
+    O degrau de intensidade só vale quando sobra cota para algum campo **não**
+    fixado: o compilador aplica os ``target_values`` fora da escada e dá à
+    intensidade só ``max_fields_changed - len(target_values)`` campos. Com a
+    cota toda nos valores ditados, subir a intensidade compilaria a mesma
+    variante, e a rodada seguinte mediria o mesmo trace byte a byte e pararia
+    em ``no_improvement``. Nesse caso a escada pula direto para alargar.
+    """
+
+    free_slots = intent.restrictions.max_fields_changed - len(
+        intent.restrictions.target_values
+    )
+    deeper = _next_intensity(intent.intensity) if free_slots > 0 else None
     if deeper is not None:
         return (
             _derive_intent(intent, intensity=deeper),

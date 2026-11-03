@@ -192,6 +192,53 @@ def test_escalation_widens_max_fields_changed_once_intensity_is_high():
     )
 
 
+def _pinned_jump_intent(**overrides: object) -> IntentSpec:
+    # O caso do exemplo intent 1b (03/11/2026): o LLM fixou o salto e pôs
+    # max_fields_changed = 2, o mesmo número de campos ditados.
+    data: dict[str, object] = {
+        "source_prompt": "evada o IDS com o ataque high_stnum usando salto de stNum entre 2 e 5",
+        "base_attack": "high_stnum",
+        "desired_effect": DesiredEffect.LOWER_F1,
+        "intensity": IntentIntensity.MEDIUM,
+        "restrictions": {
+            "max_fields_changed": 2,
+            "target_values": [
+                {"path": "jump.min", "value": 2},
+                {"path": "jump.max", "value": 5},
+            ],
+        },
+    }
+    data.update(overrides)
+    return _intent(**data)
+
+
+def test_escalation_skips_intensity_when_every_changed_field_is_pinned():
+    # Valor ditado fica fora da escada de intensidade: subir a intensidade
+    # compilaria a mesma variante, e a rodada seguinte mediria o mesmo trace.
+    intent = _pinned_jump_intent()
+    decision = decide_feedback(
+        intent=intent, report=_report(f1=0.99), plan=_plan(),
+        run_id="run-1", max_rounds=3,
+    )
+    nxt = decision.next_intent
+    assert nxt.restrictions.max_fields_changed == 3
+    assert nxt.intensity == IntentIntensity.MEDIUM
+    assert compile_attack_candidate(nxt).config != compile_attack_candidate(intent).config
+
+
+def test_escalation_with_pinned_fields_raises_intensity_once_a_field_is_free():
+    intent = _pinned_jump_intent(restrictions={
+        "max_fields_changed": 3,
+        "target_values": [{"path": "jump.min", "value": 2}, {"path": "jump.max", "value": 5}],
+    })
+    decision = decide_feedback(
+        intent=intent, report=_report(f1=0.99), plan=_plan(),
+        run_id="run-1", max_rounds=3,
+    )
+    assert decision.next_intent.intensity == IntentIntensity.HIGH
+    assert decision.next_intent.restrictions.max_fields_changed == 3
+
+
 def test_escalation_never_exceeds_the_number_of_candidate_fields():
     # 12 campos candidatos em masquerade_fault/lower_recall.
     intent = _intent(
