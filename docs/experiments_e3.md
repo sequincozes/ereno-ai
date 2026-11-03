@@ -513,4 +513,36 @@ em itálico, a diagonal D_r × A_r.
   detector retreinado alarma mais, e o ataque residual fica abaixo dele. Em D4 do B1, o ponto de 10/10k não saturou
   (ao contrário do B3).
 
-Próximo: `matrix --arm B1 --no-defense` (só a linha D0).
+### Sem defesa (03/11/2026)
+
+`matrix --arm B1 --no-defense` (~1 h, saída 0): só D0 contra A0…A3 da
+linhagem sem defesa, em `outputs/experiments/e3/matrix/<família>/B1-nodef/rep{1..5}.json`.
+
+**Conferência.** Nas 60 células D0 × A_r (r = 1–3), a evasão suave é idêntica
+à do teste da campanha sem defesa (diferença máxima 0). Nas 20 células
+D0 × A0, é idêntica à da matriz com defesa (mesmo D0, mesmo A0).
+
+Evasão suave contra D0, média das 5 reps. Na coluna "com def.", os A_r da
+linhagem com defesa contra o mesmo D0 (linha D0 da tabela acima).
+
+| Família | A0 | A1 sem / com def. | A2 sem / com def. | A3 sem / com def. | Evasão@10 sem def. (A0…A3) |
+|---|---|---|---|---|---|
+| masquerade_fault | 0,515 | 0,547 / 0,172 | 0,519 / 0,380 | 0,563 / 0,466 | 0 em todas |
+| high_stnum | 0,166 | 0,185 / 0,141 | 0,152 / 0,134 | 0,180 / 0,146 | 0,19 / 0,22 / 0,16 / 0,21 |
+| inverse_replay | 0,180 | 0,164 / 0,049 | 0,176 / 0,121 | 0,164 / 0,096 | 0,06 / 0,05 / 0,06 / 0,05 |
+| random_replay | 0,092 | 0,173 / 0,132 | 0,062 / 0,048 | 0,146 / 0,070 | 0 em todas |
+
+FA/10k na referência: o do D0 (2,7 / 7,7 / 9,7 / 4,3), como esperado.
+
+- **Sem defesa, não há corrida.** O atacante otimiza sempre contra o mesmo D0
+  e fica no patamar do A0 nas três rodadas (é a diagonal da campanha sem
+  defesa, agora conferida). A busca aleatória não melhora sobre o A0 de forma
+  consistente. O ganho máximo é em random_replay (0,173 na r1), puxado pela
+  rep4 (0,375).
+- **O custo de especialização se confirma.** Contra o mesmo D0, os A_r da
+  linhagem com defesa evadem menos que os da linhagem sem defesa em todas as
+  12 células. A diferença é grande em masquerade A1 (0,172 contra 0,547) e
+  inverse A1 (0,049 contra 0,164). Fugir do D_r retreinado empurra o ataque
+  para regiões que o D0 já pega.
+
+Matrizes do E3-B1 completas (com defesa, placebo e sem defesa).
