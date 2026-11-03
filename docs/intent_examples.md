@@ -49,7 +49,7 @@ Repetiu o defeito do 1a. O LLM pôs `max_fields_changed = 2`, o mesmo número de
 campos ditados, então a intensidade de novo não tinha campo livre. O trace da
 rodada 2 saiu idêntico ao da 1, e a campanha parou em `no_improvement`. A
 variante evade ainda menos que a do 1a: recall 0,996 e F1 0,997. Sem fixar
-`sqnumResetProb = 0`, vale o 0,4 da baseline, e os reinícios de sqNum também
+`sqnumResetProb = 0`, vale o 0,4 da baseline, e os reinícios de sqNum provavelmente também
 denunciam o ataque.
 
 Com dois casos seguidos ficou claro que o problema é estrutural, não do
