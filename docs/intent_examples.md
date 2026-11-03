@@ -56,3 +56,32 @@ Com dois casos seguidos ficou claro que o problema é estrutural, não do
 prompt. A política passou a pular o degrau de intensidade quando toda a cota
 está nos valores ditados, e vai direto para alargar `max_fields_changed`
 (`core/feedback_policy.py::_escalate`, ver `docs/feedback_policy.md`).
+
+## Exemplo 1c: o prompt do 1a, com a correção (03/11/2026)
+
+Mesmo prompt do 1a, depois do commit `ae300678`. Rodadas `9afdc23e…` (1) e
+`ae8d609b…` (2). Log em `outputs/experiments/intent_ex1c_high_stnum.log`.
+Saída 0, 17,3k tokens.
+
+| rodada | intensidade | campos | diff compilado | recall | F1 |
+|---|---|---|---|---|---|
+| 1 | medium | 3 | jump 20–50 → 2–5 (ditado), sqnumResetProb 0,4 → 0 (ditado) | 0,9899 | 0,9944 |
+| 2 | medium | 4 | os mesmos, mais `sqNumDelta.max` 5 → 2 (escada) | 0,9772 | 0,9877 |
+
+- **A escada agora anda.** A rodada 1 é byte a byte a mesma do 1a (mesma
+  intenção, mesmo seed). Na rodada 2 a política alargou os campos de 3 para 4
+  (teto 5) sem tocar na intensidade. O campo novo saiu da escada, com os
+  valores ditados intactos.
+- **A campanha parou em `no_improvement`, e agora com motivo.** A queda do F1
+  (0,0066) ficou abaixo do mínimo de 0,01 (`FEEDBACK_MIN_DELTA`). Desta vez a
+  variante mudou de fato; ela só não melhorou o bastante para justificar a
+  rodada 3.
+- **A evasão continua pequena,** porque `stDiff` segue enxergando qualquer
+  salto de stNum. Os falsos negativos subiram de 503 para 1139 em 50k.
+- **Os planos do Defensor continuam genéricos e com prioridade low.** Na
+  rodada 1: `detector_threshold_tuning` (falsos positivos) e
+  `network_segmentation` (latência). Na rodada 2: `detector_retraining`
+  (recall) e `traffic_rate_limiting` (latência).
+
+Este é o exemplo 1 que vai para o artigo. O 1a e o 1b ficam como registro
+do defeito que ele expôs.
