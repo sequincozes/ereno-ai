@@ -546,3 +546,33 @@ FA/10k na referência: o do D0 (2,7 / 7,7 / 9,7 / 4,3), como esperado.
   para regiões que o D0 já pega.
 
 Matrizes do E3-B1 completas (com defesa, placebo e sem defesa).
+
+## Planos do E3-LLM (03/11/2026)
+
+`plans --arm B3 --family high_stnum --reps 1 2`, com Defensor `openai/gpt-oss-20b`.
+Saída 0, 8 planos em `outputs/experiments/e3/plans/high_stnum/B3/rep{1,2}/round{0..3}.json`.
+Nenhum ponto saturou. Cada chamada gastou ~3,7k tokens de entrada e 0,9–1,5k de
+saída, ~41k no total.
+
+| rep / rodada | prioridade | ações (técnica ← evidência citada) |
+|---|---|---|
+| 1 / 0 | medium | threshold_tuning ← recall; dataset_enrichment ← accuracy |
+| 1 / 1 | medium | threshold_tuning ← recall, fn |
+| 1 / 2 | — | **recusado**: resposta cortada em 2048 tokens de saída, sem `validation_test` |
+| 1 / 3 | low | threshold_tuning ← fp |
+| 2 / 0 | medium | threshold_tuning ← recall; operator_alerting ← fn |
+| 2 / 1 | medium | threshold_tuning ← recall, fn |
+| 2 / 2 | low | threshold_tuning ← recall |
+| 2 / 3 | low | threshold_tuning ← fn (aceito depois de um 400 `json_validate_failed` do Groq) |
+
+- **Aceitação de 7/8.** A recusa veio do parse (o JSON não fechou), não do
+  portão de evidência. Nenhum plano foi recusado por citar evidência inventada.
+- **O Defensor só cita métricas, nunca features.** Os relatórios trazem
+  `stDiff`, `sqDiff`, `SqNum` e `timeFromLastChange` no topo das importâncias,
+  e nenhum dos 7 planos cita alguma delas. Todos recomendam ajuste de limiar,
+  e só dois acrescentam outra técnica. É um Defensor genérico: o plano
+  responde ao recall baixo, não ao mecanismo do ataque.
+- **A prioridade acompanha o relatório.** Fica medium nas rodadas 0–1 e cai
+  para low nas rodadas 2–3, à medida que o detector retreinado pega mais.
+  Como o validador exige que ela bata com `priority_from_report`, isso é
+  consequência da métrica, não um julgamento do LLM.
