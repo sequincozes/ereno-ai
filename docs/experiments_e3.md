@@ -447,4 +447,70 @@ Por rep, com defesa (r1 / r2 / r3):
   (0,175 / 0,195 contra 0,027 / 0,020); a partir da r2 os braços empatam
   (~0,01–0,03).
 
-Próximo: `matrix --arm B1` (com placebo) e `matrix --arm B1 --no-defense`.
+## Matrizes do E3-B1 (03/11/2026)
+
+`matrix --arm B1` (02/11 à noite → 03/11) fechado, saída 0: 4 famílias × 5
+reps, D0…D4 e placebo D'1…D'4 contra A0…A3, em
+`outputs/experiments/e3/matrix/<família>/B1/rep{1..5}.json`.
+
+**Conferência com as campanhas.** Nas 60 células D_r × A_r (r = 1–3), a
+evasão suave da matriz é idêntica à do teste da campanha (diferença máxima 0).
+O retreino é determinístico, como previsto (nenhum modelo persistido).
+
+Evasão suave no teste, média das 5 reps. Linha = detector, coluna = ataque;
+em itálico, a diagonal D_r × A_r.
+
+| Família | Det. | A0 | A1 | A2 | A3 | FA/10k ref. |
+|---|---|---|---|---|---|---|
+| masquerade_fault | D0 | *0,515* | 0,172 | 0,380 | 0,466 | 2,7 |
+| | D1 | 0,000 | *0,138* | 0,159 | 0,195 | 5,6 |
+| | D2 | 0,000 | 0,000 | *0,100* | 0,116 | 6,4 |
+| | D3 | 0,000 | 0,000 | 0,000 | *0,027* | 6,1 |
+| | D4 | 0,000 | 0,000 | 0,000 | 0,000 | 6,2 |
+| | D'1…D'4 | 0,60–0,62 | 0,20–0,21 | 0,43–0,44 | 0,54–0,55 | |
+| high_stnum | D0 | *0,166* | 0,141 | 0,134 | 0,146 | 7,7 |
+| | D1 | 0,002 | *0,045* | 0,027 | 0,027 | 14,2 |
+| | D2 | 0,001 | 0,007 | *0,020* | 0,018 | 14,7 |
+| | D3 | 0,001 | 0,005 | 0,013 | *0,014* | 14,5 |
+| | D4 | 0,001 | 0,004 | 0,011 | 0,010 | 12,4 |
+| | D'1…D'4 | 0,18–0,19 | 0,15 | 0,14 | 0,16 | |
+| inverse_replay | D0 | *0,180* | 0,049 | 0,121 | 0,096 | 9,7 |
+| | D1 | 0,001 | *0,006* | 0,006 | 0,004 | 9,1 |
+| | D2 | 0,001 | 0,000 | *0,001* | 0,002 | 9,1 |
+| | D3 | 0,000 | 0,000 | 0,000 | *0,001* | 9,2 |
+| | D4 | 0,000 | 0,000 | 0,000 | 0,000 | 9,3 |
+| | D'1…D'4 | 0,16–0,19 | 0,05–0,06 | 0,11–0,13 | 0,08–0,10 | |
+| random_replay | D0 | *0,092* | 0,132 | 0,048 | 0,070 | 4,3 |
+| | D1 | 0,000 | *0,009* | 0,008 | 0,009 | 6,1 |
+| | D2 | 0,000 | 0,000 | *0,006* | 0,002 | 6,1 |
+| | D3 | 0,000 | 0,000 | 0,000 | *0,001* | 3,9 |
+| | D4 | 0,000 | 0,000 | 0,000 | 0,000 | 5,0 |
+| | D'1…D'4 | 0,11–0,12 | 0,15–0,17 | 0,04–0,05 | 0,08 | |
+
+- **D_{r+1} fecha A_r.** Em masquerade, inverse e random, a célula logo abaixo
+  da diagonal é ≤ 0,002. Em high_stnum, D1 zera A0 (0,002), mas as seguintes
+  ficam em 0,007 / 0,013 / 0,010: reduzem, sem zerar.
+- **O placebo não fecha nada.** Com o mesmo volume de traces da config de
+  referência, D'_r fica no patamar de D0 ou um pouco acima (masquerade A0:
+  0,60 contra 0,515). O ganho de D_r vem das variantes, não de mais dado. É o
+  resultado do piloto, agora nas 4 famílias × 5 reps.
+- **Generalização para frente depende da família.** Em inverse e random,
+  D1 já cobre A2/A3 (≤ 0,009). Em high_stnum, cobre em boa parte (0,027). Em
+  masquerade, não: D1 ainda deixa 0,16–0,20 em A2/A3, e só a fila inteira
+  (D3/D4) zera. Masquerade é a família em que o atacante B1 acha direções
+  novas por mais rodadas.
+- **Custo de especialização do atacante.** Contra D0, A1 de masquerade evade
+  0,172 e A1 de inverse 0,049, contra 0,515 / 0,180 do A0. No high_stnum isso
+  quase não acontece (0,141–0,146). Mesma leitura do B3 rep1.
+- **Custo para a defesa (RQ3d, referência).** Os alarmes falsos/10k sobem com
+  o retreino em masquerade (2,7 → ~6) e high_stnum (7,7 → 12–15). Em inverse e
+  random ficam estáveis (9,1–9,7 e 3,9–6,1).
+- **Evasão@10.** É 0 em todas as células de masquerade e random (já era no
+  E1). Em inverse, vai de 0,02–0,06 (D0) a 0. Em high_stnum, cai de ~0,15
+  para 0,02–0,10 em D1/D2, mas **volta a subir** em D3/D4 (até 0,078),
+  enquanto a evasão suave continua caindo. Leitura provável, ainda não
+  conferida: o limiar calibrado no normal da referência sobe quando o
+  detector retreinado alarma mais, e o ataque residual fica abaixo dele. Em D4 do B1, o ponto de 10/10k não saturou
+  (ao contrário do B3).
+
+Próximo: `matrix --arm B1 --no-defense` (só a linha D0).
