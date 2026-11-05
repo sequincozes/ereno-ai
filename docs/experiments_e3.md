@@ -576,3 +576,25 @@ saída, ~41k no total.
   para low nas rodadas 2–3, à medida que o detector retreinado pega mais.
   Como o validador exige que ela bata com `priority_from_report`, isso é
   consequência da métrica, não um julgamento do LLM.
+
+## Planos do E3-B1 (03/11/2026)
+
+`plans --arm B1 --family high_stnum`, com Defensor `openai/gpt-oss-20b`. Rodou
+sem parar por cota: 20 planos em
+`outputs/experiments/e3/plans/high_stnum/B1/rep{1..5}/round{0..3}.json`.
+Log em `outputs/experiments/e3_b1_plans_hs.log`. Nenhum ponto saturou. Foram
+~3,7k tokens de entrada e 0,9–2,0k de saída por plano, ~100k no total. Houve
+erros 400 `json_validate_failed` do Groq, todos resolvidos na nova tentativa.
+
+- **Aceitação de 20/20** (no B3 foram 7/8).
+- **Técnicas, 24 ações no total:** `detector_threshold_tuning` em 19
+  (presente em 19 dos 20 planos), `dataset_enrichment` em 3,
+  `operator_alerting` em 1 e `device_quarantine` em 1. Nenhum plano recomenda
+  `detector_retraining`.
+- **Só uma citação de feature em 20 planos:** `device_quarantine ← stDiff`,
+  na rep2 rodada 1. O resto cita apenas métricas (recall, fn, fp, precision,
+  accuracy). É o mesmo Defensor genérico do B3 e do E1.
+- **Prioridade low em todos os 20 planos.** No B3 ela foi medium nas rodadas
+  0–1. Isso é coerente com o atacante do B3 evadir mais (~7× na r1): a
+  prioridade vem de `priority_from_report`, então segue a métrica e não o
+  braço.
