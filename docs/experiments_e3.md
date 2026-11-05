@@ -598,3 +598,57 @@ erros 400 `json_validate_failed` do Groq, todos resolvidos na nova tentativa.
   0–1. Isso é coerente com o atacante do B3 evadir mais (~7× na r1): a
   prioridade vem de `priority_from_report`, então segue a métrica e não o
   braço.
+
+## Relatório do E3 (05/11/2026)
+
+`run_e3.py report`, saída 0. O resultado está em
+`outputs/experiments/e3/results.json`, e o log em
+`outputs/experiments/e3_report.log`. Os intervalos são de 95%, por bootstrap
+pareado e estratificado por família. B1 tem n = 20 (4 famílias × 5 reps); B3
+tem n = 2 (só high_stnum).
+
+| medida (evasão suave) | B1 | B3 |
+|---|---|---|
+| fechamento médio `E[r][r] − E[r+1][r]` | +0,080 [+0,071, +0,090] | +0,107 [+0,106, +0,108] |
+| esquecimento médio | −0,001 [−0,001, −0,000] | −0,002 [−0,003, −0,001] |
+| corrida `E[3][3] − E[0][0]` | −0,228 [−0,251, −0,206] | −0,225 [−0,229, −0,221] |
+| fechamento − placebo | +0,203 [+0,175, +0,239] | — |
+| `E[3][3]` com defesa − sem defesa | −0,253 [−0,277, −0,233] | — |
+
+Em evasion@10/10k (B1): fechamento +0,019 [+0,014, +0,024], esquecimento
++0,006 [+0,005, +0,007], corrida −0,049 [−0,059, −0,038], fechamento − placebo
++0,090 [+0,076, +0,106] e com − sem defesa −0,051 [−0,060, −0,043]. No B3, o
+fechamento foi +0,166 e a corrida −0,239.
+
+Custo na referência (B1, D_R − D_0): recall −0,008 [−0,009, −0,007], F1
+−0,004 e +2,1 [+1,6, +2,6] alarmes falsos/10k no normal.
+
+- **RQ3a/b: a defesa fecha, e não é efeito de "mais treino".** O fechamento é
+  positivo nos dois braços e supera o placebo em +0,20 de evasão suave. A
+  corrida termina ~0,23 abaixo do ponto de partida, e o detector com defesa
+  termina 0,25 abaixo do controle sem defesa.
+- **RQ3c: quase não há esquecimento.** Na evasão suave o esquecimento até
+  separa de zero, mas é negativo e da ordem de 0,001: o D_R final pega as
+  variantes antigas ainda melhor que o D_{r+1} que as fechou. Em evasion@10
+  ele é positivo (+0,006). É pequeno, mas indica que o D_R final deixa passar
+  um pouco mais no limiar operacional do que o detector que fechou cada
+  rodada.
+- **RQ3d: o custo na referência é pequeno.** No normal dos traces das
+  variantes, porém, ele é grande e de cauda pesada. O custo de alarme no trace
+  é +92 [+44, +166]/10k no B1 e +579/10k no B3, e se concentra na rodada 0 de
+  high_stnum: D1 sobre o trace de A0 soma de +245 a +1300/10k nas 5 reps do
+  B1, e +1234/+1300 no B3. Houve um outlier em masquerade rep2 (+3043). O
+  placebo tem custo negativo em quase todas as linhagens, o que explica
+  "custo − placebo" = +354 ficar maior que o próprio custo.
+- **B3 versus B1.** O B3 fecha um pouco mais (+0,107 contra +0,080) e
+  termina no mesmo lugar (−0,225 contra −0,228). Mas o B3 tem n = 2, numa
+  família só: o intervalo apertado vem de haver duas unidades, não de
+  precisão. Não serve para comparar braços. No B3 o último ponto do custo de
+  alarme é NaN porque o ponto primário saturou.
+- **Defensor: 28 planos (8 do B3, 20 do B1), 27 aceitos (96%).**
+  "Recomendam retreino 0,148" são 4 de 27: a medida conta `detector_retraining`
+  **ou** `dataset_enrichment` (`arms_race.RETRAINING_TECHNIQUES`), e todos os 4
+  são `dataset_enrichment`. "Sobreposição média 1,0" vem de **um** plano só
+  (B1 rep2 rodada 1, `device_quarantine ← stDiff`), o único que cita feature.
+  Com n = 1, a média não diz nada sobre o Defensor ler a mudança de
+  importância. O que os dados mostram é que ele quase nunca cita feature.
