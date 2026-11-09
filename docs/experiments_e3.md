@@ -652,3 +652,57 @@ Custo na referência (B1, D_R − D_0): recall −0,008 [−0,009, −0,007], F1
   (B1 rep2 rodada 1, `device_quarantine ← stDiff`), o único que cita feature.
   Com n = 1, a média não diz nada sobre o Defensor ler a mudança de
   importância. O que os dados mostram é que ele quase nunca cita feature.
+
+## Extensão do E3-LLM para 5 repetições (09/11/2026)
+
+**Motivo:** a revisão do artigo apontou que o braço LLM do E3, com n=2, não
+sustenta comparação com o B1. Por isso o recorte de 22/10 foi estendido para
+B3 × high_stnum × reps 1–5, com o mesmo código, protocolo e família. As reps 1–2
+não foram refeitas, e as cinco entram no artigo; a extensão está declarada nas
+ameaças.
+
+**Execução:**
+- Comando: `campaign --arm B3 --family high_stnum --reps 3 4 5`. Teve saída 0
+  num único dia, com ~25k tokens por rodada, ~230k no total.
+- Em seguida, `matrix` das mesmas reps e `report` (backup do anterior em
+  `results.json.bak-20261109`).
+
+**`E[r][r]` (evasão suave, teste)**, rodadas r0–r3:
+
+| rep | B3 | B1 |
+|---|---|---|
+| 1 | 0,235 / 0,175 / 0,024 / 0,006 | 0,186 / 0,027 / 0,034 / 0,006 |
+| 2 | 0,236 / 0,195 / 0,029 / 0,015 | 0,155 / 0,020 / 0,011 / 0,018 |
+| 3 | 0,247 / 0,083 / 0,032 / 0,032 | 0,201 / 0,067 / 0,010 / 0,021 |
+| 4 | 0,229 / 0,024 / 0,003 / 0,032 | 0,158 / 0,030 / 0,012 / 0,011 |
+| 5 | 0,208 / 0,035 / 0,023 / 0,007 | 0,132 / 0,079 / 0,036 / 0,014 |
+| média | 0,231 / 0,103 / 0,022 / 0,018 | 0,166 / 0,045 / 0,020 / 0,014 |
+
+**B3 sozinho (n=5):**
+- fechamento: +0,085 [+0,066, +0,104];
+- esquecimento: −0,002;
+- corrida: −0,213 [−0,223, −0,202];
+- custo de alarme no trace: +383 [+181, +619] por 10k.
+
+**B3 − B1 (pareado por rep, high_stnum):**
+- `E[0][0]`: +0,065 [+0,052, +0,077]. Separa.
+- `E[1][1]`: +0,058 [−0,013, +0,132]. Não separa: as reps 1–2 acharam direção
+  nova (0,18–0,20) e as reps 3–5 não (0,02–0,08).
+- `E[2][2]`: +0,002, e `E[3][3]`: +0,004. Os dois não separam.
+- Fechamento: +0,032 [+0,012, +0,051]. Corrida: −0,060 [−0,077, −0,044]. Os dois
+  vêm do ponto de partida mais alto, não de uma defesa melhor.
+- Custo de alarme no trace: +165 [+2, +367] por 10k. Separa por pouco, e
+  depende quase todo da rep1 (797).
+
+**Matriz média do B3:**
+- D1 ainda deixa 0,07–0,10 em A1–A3.
+- D2 segura A2/A3 em 0,022–0,023.
+- A3 contra D0 fica em 0,164 (A0: 0,231).
+
+**Leitura:** a vantagem do LLM sobre o B1 não sobrevive ao retreino. Ela existe
+no E1 (D0), fica incerta contra D1 e desaparece a partir de D2.
+
+**Artigo:**
+- A figura `e3_llm_matrix.pdf` passou a ter dois painéis: a matriz média e a
+  corrida B1 × B3.
+- O estudo de caso ("Case study") foi reescrito.
