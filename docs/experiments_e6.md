@@ -1,5 +1,11 @@
 # E6 — custo (09/11/2026)
 
+> **Numeração no artigo (10/11/2026):** no `main.tex`, este experimento é o
+> **E4** (`sec:e4`, `tab:e4`). A SHAP × features citadas e a comparação dos
+> injetores, que eram E4 e E5 no plano original, saíram sem número para os
+> trabalhos futuros. No repositório os nomes ficam como estão: `report_e6.py`,
+> `experiments_e6.md` e `outputs/experiments/e6/`.
+
 O E6 não roda nada. Ele lê o custo do E1 e do E3 a partir do que já foi
 gravado (`scripts/report_e6.py` → `outputs/experiments/e6/results.json`).
 
