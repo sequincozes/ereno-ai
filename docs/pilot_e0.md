@@ -1,308 +1,308 @@
-# Piloto E0 — validade das variantes por família de ataque
+# Pilot E0 — variant validity per attack family
 
-O E0 é o primeiro experimento do artigo e não produz resultado sobre o IDS:
-ele decide **quais famílias de ataque podem ser usadas** nos experimentos
-seguintes, e a que custo. O roteiro pede três coisas — gerar baseline e
-variantes de `masquerade_fault`, `random_replay` e `grayhole`; confirmar que
-mexer nos parâmetros altera o tráfego e preserva o ataque; estimar tempo e
-tokens para fixar o orçamento — e pede explicitamente que uma família
-reprovada tenha a causa registrada *antes* de o escopo encolher.
+E0 is the first experiment and produces no result about the IDS:
+it decides **which attack families can be used** in the following
+experiments, and at what cost. The plan asks for three things — generate the baseline and
+variants of `masquerade_fault`, `random_replay` and `grayhole`; confirm that
+changing the parameters alters the traffic while preserving the attack; estimate time and
+tokens to fix the budget — and explicitly asks that a failed family have its
+cause recorded *before* the scope shrinks.
 
-Quem executa é `scripts/run_pilot.py`:
+It is run by `scripts/run_pilot.py`:
 
 ```bash
-uv run python scripts/run_pilot.py                      # as três famílias (~90s, precisa do JAR)
+uv run python scripts/run_pilot.py                      # the three families (~90s, needs the JAR)
 uv run python scripts/run_pilot.py --attack grayhole --replicates 5
-uv run python scripts/run_pilot.py --llm-probe          # inclui o custo em token do estágio intent
-uv run python scripts/run_pilot.py --llm-probe-only     # só o custo em token, sem gerar trace
-uv run python scripts/run_pilot.py --attack grayhole --max-fields 11 --label campos11  # execução separada
+uv run python scripts/run_pilot.py --llm-probe          # includes the token cost of the intent stage
+uv run python scripts/run_pilot.py --llm-probe-only     # token cost only, without generating a trace
+uv run python scripts/run_pilot.py --attack grayhole --max-fields 11 --label campos11  # separate run
 ```
 
-Saída: `outputs/pilot/pilot_report.json` (JSON simples com `schema_version`; é
-artefato de experimento, nada em `src/` o lê) e, por família,
-`outputs/pilot/<ataque>/` com cada trace, a config que o gerou e uma amostra de
-linhas de ataque para inspeção manual. Código de saída 0 se todas as famílias
-pedidas passaram, 1 se alguma reprovou.
+Output: `outputs/pilot/pilot_report.json` (plain JSON with `schema_version`; it is
+an experiment artifact, nothing in `src/` reads it) and, per family,
+`outputs/pilot/<ataque>/` with each trace, the config that generated it and a sample of
+attack rows for manual inspection. Exit code 0 if all requested families
+passed, 1 if any failed.
 
-## As variantes não vêm de LLM
+## The variants do not come from an LLM
 
-Cada variante sai de uma `IntentSpec` compilada por `core/intent_compiler.py`,
-uma por intensidade (`low`/`medium`/`high`), sob o mesmo `desired_effect`. É a
-mecânica que a política de feedback (E10) usa da rodada 2 em diante — ou seja,
-o piloto mede exatamente o gerador de variação que a campanha vai usar, sem
-gastar chamada de modelo e sem introduzir variabilidade de LLM na medição.
+Each variant comes from an `IntentSpec` compiled by `core/intent_compiler.py`,
+one per intensity (`low`/`medium`/`high`), under the same `desired_effect`. This is the
+mechanism the feedback policy (E10) uses from round 2 onward — that is, the
+pilot measures exactly the variation generator the campaign will use, without
+spending a model call and without introducing LLM variability into the measurement.
 
-O custo em token entra por outro caminho: `--llm-probe` faz **uma** chamada real
-do `IntentAgent` por família só para registrar o consumo (`--llm-probe-only`
-mede sem gerar trace nenhum). As chamadas são espaçadas em 90s porque o prompt
-com o catálogo de capacidades injetado pesa 6,66k tokens e o tier `on_demand` da
-conta tem TPM 8000 — duas chamadas na mesma janela viram `rate_limit_exceeded`,
-que aparece de fora como "a LLM não chamou submit_intent_spec".
+The token cost comes in through another path: `--llm-probe` makes **one** real call
+to the `IntentAgent` per family just to record consumption (`--llm-probe-only`
+measures without generating any trace). The calls are spaced 90s apart because the prompt
+with the injected capability catalog weighs 6.66k tokens and the account's `on_demand` tier
+has a TPM of 8000 — two calls in the same window become `rate_limit_exceeded`,
+which shows up from the outside as "the LLM did not call submit_intent_spec".
 
-## Três medidas, e o que cada uma deixa passar
+## Three measures, and what each one lets through
 
-**1. Portão de volume (E4).** `build_dataset_bundle` sobre cada trace: classes
-presentes, contagens, prevalência da classe de ataque. Pega trace vazio,
-quebrado, sem a classe esperada ou raro demais para medir. Não diz nada sobre o
-ataque estar ativo.
+**1. Volume gate (E4).** `build_dataset_bundle` over each trace: classes
+present, counts, prevalence of the attack class. It catches an empty or broken trace,
+one without the expected class, or one too rare to measure. It says nothing about
+whether the attack is active.
 
-**2. Assinatura.** Diferença padronizada de médias entre as linhas de ataque e
-as linhas normais **do mesmo trace**, por feature. Um trace pode ter 50% de
-linhas rotuladas como ataque e ainda assim ser indistinguível do tráfego normal:
-o rótulo vem do gerador, não da física. O relatório traz o pico, quantas
-features passam do limiar e o ranking — porque uma separação enorme numa coluna
-só e uma separação moderada em oito são evidências diferentes sobre o mesmo
-ataque.
+**2. Signature.** Standardized difference of means between the attack rows and
+the normal rows **of the same trace**, per feature. A trace can have 50% of its
+rows labeled as attack and still be indistinguishable from normal traffic:
+the label comes from the generator, not from physics. The report gives the peak, how many
+features exceed the threshold, and the ranking — because a huge separation in a single
+column and a moderate separation in eight are different evidence about the same
+attack.
 
-Isto é evidência estatística de que a classe é **distinguível**, não prova de
-semântica preservada. É por isso que o script também salva
-`<tag>_sample.csv`: a inspeção das mensagens é parte do E0 e nenhuma estatística
-a substitui.
+This is statistical evidence that the class is **distinguishable**, not proof of
+preserved semantics. That is why the script also saves
+`<tag>_sample.csv`: inspecting the messages is part of E0 and no statistic
+replaces it.
 
-**3. Deriva contra o ruído do gerador.** É a medida que justifica o piloto
-existir, e a que mais deu trabalho.
+**3. Drift against the generator's noise.** This is the measure that justifies the pilot
+existing, and the one that took the most work.
 
-## O gerador não é determinístico (sem `randomSeed`)
+## The generator is not deterministic (without `randomSeed`)
 
-> **Atualização (Fase 2.0, 26/09/2026):** isto valia porque os creators
-> sorteavam por `Math.random()`, fora da RNG semeada. A Fase 2.0 roteou esses
-> sorteios pela `ConfigLoader.RNG` e fez o `GeneratorRunner` gravar um
-> `randomSeed` no action config — com a seed fixa, a mesma config passa a
-> produzir **os mesmos bytes** (verificado: `seed=123` deu hash idêntico em duas
-> execuções). O texto abaixo descreve o comportamento **sem** `randomSeed`, que
-> continua sendo o default fora do pipeline intent-driven. Ver
+> **Update (Phase 2.0, 2026-09-26):** this held because the creators
+> drew from `Math.random()`, outside the seeded RNG. Phase 2.0 routed those
+> draws through `ConfigLoader.RNG` and made `GeneratorRunner` write a
+> `randomSeed` into the action config — with a fixed seed, the same config now
+> produces **the same bytes** (verified: `seed=123` gave an identical hash in two
+> runs). The text below describes the behavior **without** `randomSeed`, which
+> remains the default outside the intent-driven pipeline. See
 > `docs/phase2_plan.md`.
 
-A mesma configuração, rodada duas vezes **sem `randomSeed`**, produz **bytes
-diferentes** (medido em 17/09/2026 no `random_replay`: dois `content_hash`
-distintos para o mesmo JSON). Consequência direta: "o hash da variante é
-diferente do hash da baseline" não é evidência de nada — seria diferente de
-qualquer jeito.
+The same configuration, run twice **without `randomSeed`**, produces **different
+bytes** (measured on 2026-09-17 on `random_replay`: two distinct `content_hash`
+values for the same JSON). Direct consequence: "the variant's hash is
+different from the baseline's hash" is not evidence of anything — it would differ
+either way.
 
-Por isso o piloto gera a baseline `--replicates` vezes (default 3) e mede a
-separação **entre réplicas da mesma config**. Isso é o ruído do gerador, e é o
-piso que qualquer deriva precisa superar.
+That is why the pilot generates the baseline `--replicates` times (default 3) and measures the
+separation **between replicates of the same config**. That is the generator's noise, and it is the
+floor that any drift needs to exceed.
 
-A primeira versão usava um piso único: o máximo dessa separação sobre todas as
-features. Não funcionou. O máximo sobre ~40 colunas é o máximo de estimativas
-ruidosas; ele mesmo oscila entre execuções, e com ele o veredito da família
-oscilava junto — em 18/09/2026, `grayhole` saiu 3/3 numa execução e 1/3 na
-seguinte, sem nada ter mudado entre as duas.
+The first version used a single floor: the maximum of that separation over all
+features. It did not work. The maximum over ~40 columns is the maximum of noisy
+estimates; it itself oscillates between runs, and with it the family's verdict
+oscillated too — on 2026-09-18, `grayhole` came out 3/3 in one run and 1/3 in the
+next, with nothing having changed between the two.
 
-A versão atual compara **coluna a coluna**: o ruído de `timestampDiff` é o piso
-de `timestampDiff`. Uma feature conta como movida quando sua deriva supera
-`--min-drift` (piso absoluto, default 0.05 — sem ele, uma coluna quase sem ruído
-passaria por qualquer deslocamento) **e** `--drift-margin` vezes o ruído da
-própria coluna (default 2x). A variante é distinta da baseline quando pelo menos
-`--min-moved-features` colunas (default 1) se movem. Com isso o veredito por
-família passou a se repetir entre execuções idênticas.
+The current version compares **column by column**: the noise of `timestampDiff` is the floor
+of `timestampDiff`. A feature counts as moved when its drift exceeds
+`--min-drift` (absolute floor, default 0.05 — without it, a column with almost no noise
+would pass with any shift) **and** `--drift-margin` times the noise of its
+own column (default 2x). The variant is distinct from the baseline when at least
+`--min-moved-features` columns (default 1) move. With this, the per-family verdict
+started repeating across identical runs.
 
-Duas exclusões deliberadas: colunas de identidade e relógio absoluto
-(`always_drop_for`, o mesmo descarte do preprocessador) ficam de fora da
-medição, senão a "separação" mediria o bloco de geração e não o ataque; e uma
-coluna que o próprio gerador desloca por inteiro entre réplicas entra em
-`unusable_features` — ela não pode servir de evidência para nada.
+Two deliberate exclusions: identity columns and absolute clock
+(`always_drop_for`, the same drop as the preprocessor) are left out of the
+measurement, otherwise the "separation" would measure the generation block and not the attack; and a
+column that the generator itself shifts entirely between replicates goes into
+`unusable_features` — it cannot serve as evidence for anything.
 
-O default de `--protocol-features` aqui é `deltas`, e não o `drop` do resto do
-repo: sem `stDiff`/`sqDiff`/`tDiff`/`timestampDiff` não sobra nada em que replay
-e grayhole possam ter assinatura.
+The default of `--protocol-features` here is `deltas`, and not the `drop` used by the rest of the
+repo: without `stDiff`/`sqDiff`/`tDiff`/`timestampDiff` there is nothing left on which replay
+and grayhole could have a signature.
 
-## Resultado da execução de 18/09/2026
+## Result of the 2026-09-18 run
 
-Três famílias, efeito `lower_recall`, três intensidades, três réplicas de
-baseline, 18 gerações: 88s gerando (~4,9s por trace), 891 MB em disco.
+Three families, effect `lower_recall`, three intensities, three baseline
+replicates, 18 generations: 88s generating (~4.9s per trace), 891 MB on disk.
 
-| família | veredito | variantes distintas | o que carrega a deriva |
+| family | verdict | distinct variants | what carries the drift |
 |---|---|---|---|
-| `masquerade_fault` | passou | 3/3 | `cbStatus`, `cbStatusDiff`, `SqNum`, `sqDiff`, `stDiff` (6–7 features) |
-| `random_replay` | passou | 3/3 | elétricas em `low`/`medium`; `timestampDiff` e `timeFromLastChange` em `high` |
-| `grayhole` | reprovou | 2/3 | só `timestampDiff`, no limite do ruído |
+| `masquerade_fault` | passed | 3/3 | `cbStatus`, `cbStatusDiff`, `SqNum`, `sqDiff`, `stDiff` (6–7 features) |
+| `random_replay` | passed | 3/3 | electrical ones in `low`/`medium`; `timestampDiff` and `timeFromLastChange` in `high` |
+| `grayhole` | failed | 2/3 | only `timestampDiff`, at the edge of the noise |
 
-A primeira execução, antes da correção descrita abaixo, tinha reprovado também
-o `random_replay`.
+The first run, before the fix described below, had also failed
+`random_replay`.
 
-### Corrigido: o compilador fechava intervalos
+### Fixed: the compiler was closing intervals
 
-A primeira rodada do piloto matou a variante `high` do `random_replay` no
-gerador: o compilador produzia `windowS = {min: 2.0, max: 2.0}` e o ERENO
-recusava o processo inteiro com *"The lower limit (2000) must be less than the
-upper limit (2000)"*. O clamp de pares preservava `min <= max`, o schema do
-ataque valida `min <= max`, o portão de capacidade não olha pares — um
-intervalo degenerado passava por tudo que o repo tem e morria no Java.
+The first round of the pilot killed the `high` variant of `random_replay` in the
+generator: the compiler produced `windowS = {min: 2.0, max: 2.0}` and ERENO
+refused the entire process with *"The lower limit (2000) must be less than the
+upper limit (2000)"*. The pair clamp preserved `min <= max`, the attack's schema
+validates `min <= max`, the capability gate does not look at pairs — a
+degenerate interval passed through everything the repo has and died in Java.
 
-Não era um caso isolado: varrendo cada campo de cada ataque sozinho, o clamp
-antigo produzia par degenerado em **22 pares distintos, em 10 dos 11 ataques
-registrados** (`windowS`, `burst`, `gapMs`, `dropRate`, `burstInterval`,
-`networkDelayMs`, `jump`, `blockLen`, `analog.deltaAbs`, ...). Atingia a
-campanha do E1 do mesmo jeito que atingiu o piloto.
+It was not an isolated case: sweeping every field of every attack alone, the old clamp
+produced a degenerate pair in **22 distinct pairs, in 10 of the 11 registered
+attacks** (`windowS`, `burst`, `gapMs`, `dropRate`, `burstInterval`,
+`networkDelayMs`, `jump`, `blockLen`, `analog.deltaAbs`, ...). It hit the
+E1 campaign the same way it hit the pilot.
 
-`intent_compiler._clamp_paired` passou a garantir `min <` **estrito**: quando o
-valor calculado cruzaria o irmão, **o irmão vira o limite efetivo** e o mesmo
-passo da intensidade é reaplicado contra ele. Não há épsilon inventado — a
-distância sai da política de escalada que já estava em uso — e a escada segue
-monotônica (`windowS.max` agora dá 6.42 / 4.05 / 2.9 em low/medium/high, contra
-um piso de 2.0). Em pares de inteiros, quando o arredondamento cola no irmão o
-valor recua uma unidade; se nem isso couber, o campo não se move e some do
-`diff`, que passa a dizer a verdade sobre o que mudou.
+`intent_compiler._clamp_paired` now guarantees a **strict** `min <`: when the
+computed value would cross its sibling, **the sibling becomes the effective bound** and the same
+intensity step is reapplied against it. No epsilon is invented — the
+distance comes from the escalation policy that was already in use — and the ladder stays
+monotonic (`windowS.max` now gives 6.42 / 4.05 / 2.9 at low/medium/high, against
+a floor of 2.0). For integer pairs, when rounding sticks to the sibling the
+value steps back one unit; if even that does not fit, the field does not move and disappears from the
+`diff`, which now tells the truth about what changed.
 
-A invariante é varrida em `tests/test_intent_compiler_ranges.py`: todo ataque,
-todo efeito, toda intensidade, **e cada campo compilado sozinho** — que é o
-caso perigoso, um limite empurrado contra um irmão congelado.
+The invariant is swept in `tests/test_intent_compiler_ranges.py`: every attack,
+every effect, every intensity, **and each field compiled alone** — which is the
+dangerous case, a bound pushed against a frozen sibling.
 
-### O que continua de pé
+### What still stands
 
-**`grayhole` é a família frágil, nos dois eixos.** Sua assinatura contra o
-tráfego normal é 0.80 e **uma única feature** passa do limiar de 0.2 (contra 14
-no `masquerade_fault` e 7 no `random_replay`). A variação também é magra: só
-`timestampDiff` se move, e a variante `low` fica dentro do ruído do gerador —
-é ela que reprova a família. O efeito `lower_recall` empurra
-`dropRate`/`burstDropProb` para baixo, ou seja, torna o ataque mais discreto; o
-espaço de busca que sobra é estreito.
+**`grayhole` is the fragile family, on both axes.** Its signature against normal
+traffic is 0.80 and **a single feature** exceeds the 0.2 threshold (against 14
+in `masquerade_fault` and 7 in `random_replay`). The variation is also thin: only
+`timestampDiff` moves, and the `low` variant falls within the generator's noise —
+it is the one that fails the family. The `lower_recall` effect pushes
+`dropRate`/`burstDropProb` down, that is, it makes the attack more discreet; the
+search space that remains is narrow.
 
-**Em `random_replay`, só a intensidade alta mexe na temporização.** As variantes
-`low` e `medium` movem 11 features, todas **elétricas** (`vsbARmsValue`,
-`isbARmsValue`, trap areas): mudar a janela de replay muda *quais* mensagens
-legítimas são recapturadas, e com elas os valores analógicos carregados. Só em
-`high` — a variante que a correção acima destravou — a deriva alcança
-`timestampDiff` e `timeFromLastChange`, que é onde um replay deveria aparecer.
-Atribuir a deriva de `low`/`medium` à temporização do ataque seria ler errado o
-que a medição diz.
+**In `random_replay`, only the high intensity affects timing.** The `low`
+and `medium` variants move 11 features, all **electrical** (`vsbARmsValue`,
+`isbARmsValue`, trap areas): changing the replay window changes *which* legitimate
+messages are recaptured, and with them the analog values carried. Only at
+`high` — the variant that the fix above unblocked — does the drift reach
+`timestampDiff` and `timeFromLastChange`, which is where a replay should show up.
+Attributing the drift of `low`/`medium` to the attack's timing would be misreading
+what the measurement says.
 
-## O grayhole está espremido pelos dois lados
+## The grayhole is squeezed from both sides
 
-A reprovação do `grayhole` com `lower_recall` e 3 campos não bastava para cortar
-a família — podia ser o piloto que rodou estreito. Duas execuções de diagnóstico
-(`--label`, que separa os diretórios para não sobrescrever os traces do E0)
-fecharam a questão, e a resposta é mais interessante que "passa" ou "não passa":
+The failure of `grayhole` with `lower_recall` and 3 fields was not enough to cut
+the family — it could be that the pilot ran too narrow. Two diagnostic runs
+(`--label`, which separates the directories so as not to overwrite the E0 traces)
+settled the question, and the answer is more interesting than "passes" or "does not pass":
 
-| execução | campos | prevalência low→high | deriva low/medium/high |
+| run | fields | prevalence low→high | drift low/medium/high |
 |---|---|---|---|
-| `lower_recall`, 3 campos | 3 | — | 0.045 / 0.073 / 0.163 |
-| `lower_recall`, 11 campos | 9–11 | 0.27 → 0.41 | 0.039 / 0.084 / 0.115 |
-| `increase_attack_activity` | 6 | 0.13 → **abaixo do piso** | 0.108 / 0.063 / — |
+| `lower_recall`, 3 fields | 3 | — | 0.045 / 0.073 / 0.163 |
+| `lower_recall`, 11 fields | 9–11 | 0.27 → 0.41 | 0.039 / 0.084 / 0.115 |
+| `increase_attack_activity` | 6 | 0.13 → **below the floor** | 0.108 / 0.063 / — |
 
-As duas direções mexem na prevalência em sentidos **opostos**, e as duas têm
-parede:
+The two directions move the prevalence in **opposite** senses, and both have
+a wall:
 
-- Empurrar para **evasão** significa descartar menos. Sobram mais mensagens
-  rotuladas como ataque (0.23 na baseline → 0.41), mas o tráfego fica cada vez
-  mais parecido com a baseline — a variante `low` cai dentro do ruído do
-  gerador e é ela que reprova a família.
-- Empurrar para **atividade** significa descartar mais. Em intensidade alta
-  sobram 115 linhas de ataque em 50.112 (0.23%), e o portão de prevalência do E4
-  rejeita o dataset: um recall calculado sobre 115 amostras é ruído amostral.
-  A classe de ataque do grayhole desaparece justamente quando o ataque fica
-  mais agressivo, porque as linhas dele *são* as mensagens que ele não descartou.
+- Pushing toward **evasion** means dropping less. More messages labeled as attack
+  remain (0.23 at baseline → 0.41), but the traffic looks more and more like the
+  baseline — the `low` variant falls within the generator's noise and it is the one that fails the
+  family.
+- Pushing toward **activity** means dropping more. At high intensity
+  115 attack rows remain out of 50,112 (0.23%), and the E4 prevalence gate
+  rejects the dataset: a recall computed over 115 samples is sampling noise.
+  The grayhole's attack class disappears precisely when the attack becomes
+  more aggressive, because its rows *are* the messages it did not drop.
 
-E em toda configuração testada — 3, 6, 9 ou 11 campos, nas duas direções — a
-deriva se concentra em **uma única feature**, `timestampDiff`. A família é
-usável, mas numa faixa estreita e num eixo só: com 11 campos, `medium` e `high`
-são distintas da baseline e monotônicas. O E1 pode usá-la desde que não conte
-com a intensidade `low` nem com a direção de atividade.
+And in every configuration tested — 3, 6, 9 or 11 fields, in both directions — the
+drift concentrates in **a single feature**, `timestampDiff`. The family is
+usable, but in a narrow band and on a single axis: with 11 fields, `medium` and `high`
+are distinct from the baseline and monotonic. E1 can use it as long as it does not
+count on the `low` intensity or on the activity direction.
 
-### Ressalva: três creators liam campos do lugar errado (corrigido em 13/10)
+### Caveat: three creators read fields from the wrong place (fixed on 2026-10-13)
 
-Os números acima foram medidos com um JAR em que três creators configuráveis
-chamavam `getNestedRangeMinInt(parent, child)` — que lê `parent.child.min` —
-para campos que são um intervalo **de topo** (`blockLen`, `burstDropLen`) ou
-um inteiro **dentro** de um objeto (`burst.min`/`burst.max`). O caminho nunca
-existia e o default entrava calado:
+The numbers above were measured with a JAR in which three configurable creators
+called `getNestedRangeMinInt(parent, child)` — which reads `parent.child.min` —
+for fields that are a **top-level** range (`blockLen`, `burstDropLen`) or
+an integer **inside** an object (`burst.min`/`burst.max`). The path never
+existed and the default silently kicked in:
 
-| ataque | campo | efeito no JAR antigo |
+| attack | field | effect in the old JAR |
 |---|---|---|
-| `inverse_replay` (uc02) | `blockLen` | default 1..1 → `randomBetween(1,1)` → geração abortava sempre (o "returncode=3") |
-| `inverse_replay` (uc02) | `burst.{min,max}` | default 0 → o burst nunca disparava |
-| `random_replay` (uc01) | `burst.{min,max}` | idem: com `burst.prob=1.0`, `bursts=0` no log do creator (o JAR corrigido, mesma seed: `bursts=1926`) |
-| `grayhole` (uc08) | `burstDropLen.{min,max}` | sempre 3..7, qualquer que fosse o config (o baseline coincide com o default) |
+| `inverse_replay` (uc02) | `blockLen` | default 1..1 → `randomBetween(1,1)` → generation always aborted (the "returncode=3") |
+| `inverse_replay` (uc02) | `burst.{min,max}` | default 0 → the burst never fired |
+| `random_replay` (uc01) | `burst.{min,max}` | same: with `burst.prob=1.0`, `bursts=0` in the creator's log (the fixed JAR, same seed: `bursts=1926`) |
+| `grayhole` (uc08) | `burstDropLen.{min,max}` | always 3..7, whatever the config (the baseline coincides with the default) |
 
-Ou seja: no `random_replay` todo o bloco `burst.*` era inerte, e no `grayhole`
-`burstDropLen` também. Sem burst configurado (`burst.prob=0`), o JAR corrigido
-gera os mesmos bytes que o antigo.
+That is: in `random_replay` the entire `burst.*` block was inert, and in `grayhole`
+`burstDropLen` too. Without a configured burst (`burst.prob=0`), the fixed JAR
+generates the same bytes as the old one.
 
-A reexecução com 11 campos expôs mais dois bugs, que também derrubavam a
-geração (commit `46b0039` no ERENO):
+Re-running with 11 fields exposed two more bugs, which also brought generation
+down (commit `46b0039` in ERENO):
 
-- `delayMs` abaixo de 10 era convertido de segundos **limite a limite**:
-  `{min: 8, max: 80}` virava 8000..80 ms. A unidade agora é decidida uma vez
-  para o par, pelo `max`.
-- `randomBetween(int, int)` é inclusivo nas duas pontas, mas recusava
-  `lower == upper`. Uma janela de replay menor que um intervalo GOOSE (o
-  `windowS.min = 0,385` da intensidade `high`) ou um `ttlOverride.valuesMs` de
-  um elemento abortavam o run.
+- `delayMs` below 10 was converted from seconds **bound by bound**:
+  `{min: 8, max: 80}` became 8000..80 ms. The unit is now decided once
+  for the pair, by the `max`.
+- `randomBetween(int, int)` is inclusive at both ends, but it refused
+  `lower == upper`. A replay window smaller than one GOOSE interval (the
+  `windowS.min = 0.385` of the `high` intensity) or a one-element `ttlOverride.valuesMs`
+  aborted the run.
 
-Com seed fixa, o baseline dos 12 ataques registrados é idêntico byte a byte
-antes e depois das duas correções.
+With a fixed seed, the baseline of the 12 registered attacks is byte-for-byte identical
+before and after the two fixes.
 
-## Reexecução de 13/10/2026, com o JAR corrigido
+## Re-run on 2026-10-13, with the fixed JAR
 
-Mesmos recortes de 18/09 (rótulos `posfix*`; os relatórios antigos continuam em
-`outputs/pilot/`), mais o `inverse_replay`, que nunca tinha gerado, e um recorte
-de replay com 11 campos, o único em que o compilador escolhe os campos de
-`burst`.
+Same cuts as 2026-09-18 (labels `posfix*`; the old reports remain in
+`outputs/pilot/`), plus `inverse_replay`, which had never generated, and a
+replay cut with 11 fields, the only one in which the compiler chooses the `burst`
+fields.
 
-| recorte | família | 18/09 | 13/10 | o que mudou |
+| cut | family | 2026-09-18 | 2026-10-13 | what changed |
 |---|---|---|---|---|
-| default (3 campos) | `masquerade_fault` | passou, 3/3 | passou, 3/3 | nada — controle: o creator não foi tocado |
-| default (3 campos) | `random_replay` | passou, 3/3 | passou, 3/3 | nada: com 3 campos o compilador escolhe `delayMs`/`ethSpoof`/`windowS`, nunca `burst` |
-| default (3 campos) | `grayhole` | reprovou, 2/3 | reprovou, 2/3 | nada: `burstDropLen` não está entre os 3 campos |
-| default (3 campos) | `inverse_replay` | não gerava | passou, 3/3 | só `timestampDiff` se move |
-| 11 campos | `grayhole` | reprovou, 2/3 | reprovou, 2/3 | a variante reprovada trocou de `low` para `medium`; a deriva segue só em `timestampDiff` |
-| atividade (6 campos) | `grayhole` | reprovou, 2/3 | reprovou, 1/3 | **pior**: com `burstDropLen` ativo a classe some mais cedo (`medium` já fica com 0,47% de prevalência) |
-| 11 campos | `random_replay` | — | passou, 3/3 | **15 features em todas as intensidades**, inclusive `timestampDiff`, `timeFromLastChange`, `SqNum`, `sqDiff` |
-| 11 campos | `inverse_replay` | — | passou, 3/3 | `low` move 1 feature; `medium`/`high` movem 4 (`timestampDiff`, `tDiff`, `stDiff`) |
+| default (3 fields) | `masquerade_fault` | passed, 3/3 | passed, 3/3 | nothing — control: the creator was not touched |
+| default (3 fields) | `random_replay` | passed, 3/3 | passed, 3/3 | nothing: with 3 fields the compiler chooses `delayMs`/`ethSpoof`/`windowS`, never `burst` |
+| default (3 fields) | `grayhole` | failed, 2/3 | failed, 2/3 | nothing: `burstDropLen` is not among the 3 fields |
+| default (3 fields) | `inverse_replay` | did not generate | passed, 3/3 | only `timestampDiff` moves |
+| 11 fields | `grayhole` | failed, 2/3 | failed, 2/3 | the failing variant switched from `low` to `medium`; the drift remains only in `timestampDiff` |
+| activity (6 fields) | `grayhole` | failed, 2/3 | failed, 1/3 | **worse**: with `burstDropLen` active the class disappears earlier (`medium` already has 0.47% prevalence) |
+| 11 fields | `random_replay` | — | passed, 3/3 | **15 features at every intensity**, including `timestampDiff`, `timeFromLastChange`, `SqNum`, `sqDiff` |
+| 11 fields | `inverse_replay` | — | passed, 3/3 | `low` moves 1 feature; `medium`/`high` move 4 (`timestampDiff`, `tDiff`, `stDiff`) |
 
-O que isso faz com as leituras anteriores:
+What this does to the previous readings:
 
-- **"Em `random_replay`, só a intensidade alta mexe na temporização"** era
-  verdade sobre o recorte de 3 campos, não sobre a família. Com o `burst` ativo,
-  a temporização e a sequência se movem já em `low`. A frase só pode ser citada
-  com o recorte junto.
-- **"O grayhole está espremido pelos dois lados"** se mantém, e a parede do lado
-  da atividade ficou mais perto: `burstDropLen`, agora efetivo, descarta mais, e
-  a classe de ataque cai abaixo do piso de prevalência já em `medium`. A deriva
-  continua numa feature só, `timestampDiff`, em todos os recortes.
-- **`inverse_replay` é usável**, com a mesma forma estreita do grayhole no
-  recorte de 3 campos (uma feature só) e mais larga com 11.
+- **"In `random_replay`, only the high intensity affects timing"** was
+  true of the 3-field cut, not of the family. With `burst` active,
+  timing and sequence already move at `low`. The sentence can only be quoted
+  together with the cut.
+- **"The grayhole is squeezed from both sides"** still holds, and the wall on the
+  activity side got closer: `burstDropLen`, now effective, drops more, and
+  the attack class falls below the prevalence floor already at `medium`. The drift
+  remains in a single feature, `timestampDiff`, in every cut.
+- **`inverse_replay` is usable**, with the same narrow shape as the grayhole in the
+  3-field cut (a single feature) and wider with 11.
 
-Uma ressalva de medida: o piloto roda **sem seed**, como em 18/09, para medir o
-ruído do gerador. Uma variante perto do limiar pode trocar de veredito entre
-execuções (foi o que aconteceu com `low`/`medium` do grayhole com 11 campos).
-O veredito por família se repetiu; o de uma variante isolada não deve ser
-citado sozinho.
+A measurement caveat: the pilot runs **without a seed**, as on 2026-09-18, to measure the
+generator's noise. A variant near the threshold can change verdict between
+runs (which is what happened with `low`/`medium` of the grayhole with 11 fields).
+The per-family verdict repeated; that of an isolated variant should not be
+quoted on its own.
 
-## Orçamento medido
+## Measured budget
 
-**Geração:** ~4,9s por trace e ~45 MB por trace no JAR (18 gerações = 88s e
-891 MB). É o custo dominante em disco e o menor em dinheiro.
+**Generation:** ~4.9s per trace and ~45 MB per trace in the JAR (18 generations = 88s and
+891 MB). It is the dominant cost in disk and the lowest in money.
 
-**Estágio `intent`:** 6.657 tokens de entrada e 228–259 de saída por chamada,
-medidos em 18/09/2026 com `openai/gpt-oss-120b` sobre as três famílias
-(`--llm-probe-only`). Praticamente tudo é o prompt: o catálogo de capacidades
-injetado. Ou seja **~6,9k tokens por chamada contra um TPM de 8.000** — uma
-chamada por minuto é o teto da conta, e as três só passaram porque a sonda as
-espaça em 90s. É restrição de conta, não de código, e vale para qualquer
-campanha: uma rodada por minuto, no melhor caso.
+**`intent` stage:** 6,657 input tokens and 228–259 output tokens per call,
+measured on 2026-09-18 with `openai/gpt-oss-120b` over the three families
+(`--llm-probe-only`). Practically all of it is the prompt: the injected capability
+catalog. That is **~6.9k tokens per call against a TPM of 8,000** — one
+call per minute is the account's ceiling, and the three only went through because the probe spaces them
+90s apart. It is an account constraint, not a code constraint, and holds for any
+campaign: one round per minute, in the best case.
 
-A parcela do `Defender` ainda não foi medida — ela depende do `DetectionReport`
-da rodada e só aparece num ciclo completo, em `LoopRecord.total_tokens`.
+The `Defender`'s share has not been measured yet — it depends on the round's
+`DetectionReport` and only shows up in a full cycle, in `LoopRecord.total_tokens`.
 
-## Como ler o relatório
+## How to read the report
 
-Por família: `verdict`, `reasons` (vazio quando passou), `noise_floor`
-(`by_feature`, `unusable_features`, os pares de réplicas), `replicates` e
-`variants`. Cada variante traz o `diff` compilado (quais campos mudaram, de que
-valor para qual), o portão de volume, a assinatura e o bloco `drift` com
-`moved_features` — a lista que sustenta o veredito. `budget` fecha com gerações,
-tempo por trace, disco e, se `--llm-probe` rodou, o consumo do estágio intent.
+Per family: `verdict`, `reasons` (empty when it passed), `noise_floor`
+(`by_feature`, `unusable_features`, the replicate pairs), `replicates` and
+`variants`. Each variant carries the compiled `diff` (which fields changed, from what
+value to which), the volume gate, the signature and the `drift` block with
+`moved_features` — the list that supports the verdict. `budget` closes with generations,
+time per trace, disk and, if `--llm-probe` ran, the intent stage's consumption.
 
-Rodar em `--generator-mode cached` executa o script mas não pilota nada: todo
-trace é o mesmo arquivo, o ruído é zero por construção e nenhuma variante se
-distingue. O script avisa e segue.
+Running in `--generator-mode cached` executes the script but pilots nothing: every
+trace is the same file, the noise is zero by construction and no variant
+is distinguishable. The script warns and carries on.
 
-## Efeito colateral de qualquer execução com o JAR
+## Side effect of any run with the JAR
 
-O `GeneratorRunner` reescreve `generator_runtime/config/actions/` e
-`generator_runtime/config/attacks/` a cada geração, e esses arquivos são
-versionados. Depois de rodar o piloto, `git status` mostra a última variante
-compilada dentro deles — `git checkout generator_runtime/` antes de commitar.
-Não é específico do piloto: vale para qualquer execução em modo `jar`.
+`GeneratorRunner` rewrites `generator_runtime/config/actions/` and
+`generator_runtime/config/attacks/` at every generation, and those files are
+versioned. After running the pilot, `git status` shows the last compiled
+variant inside them — `git checkout generator_runtime/` before committing.
+It is not specific to the pilot: it holds for any run in `jar` mode.

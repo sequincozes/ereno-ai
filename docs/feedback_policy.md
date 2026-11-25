@@ -1,276 +1,276 @@
-# Política de feedback e campanhas multi-rodada (E10)
+# Feedback policy and multi-round campaigns (E10)
 
-## Objetivo
+## Goal
 
-O agente Defensor atua como o estágio DEFENDER do pipeline intent-driven; o
-estágio FEEDBACK vem logo depois e fecha o loop Red×Blue. Recebe o
-`DetectionReport` do estágio DETECTOR e o `DefensePlan` do estágio DEFENDER
-desta rodada e decide, deterministicamente: se a campanha continua e, se
-sim, qual é a próxima `IntentSpec`. Nenhuma LLM participa deste estágio —
-mesmo guardrail central do pipeline: o modelo só produz a intenção ou o
-plano de defesa, tudo a jusante é Python determinístico
+The Defender agent acts as the DEFENDER stage of the intent-driven pipeline; the
+FEEDBACK stage comes right after and closes the Red×Blue loop. It receives the
+`DetectionReport` from the DETECTOR stage and the `DefensePlan` from the DEFENDER
+stage of this round and decides, deterministically: whether the campaign continues and, if
+so, what the next `IntentSpec` is. No LLM takes part in this stage —
+same central guardrail of the pipeline: the model only produces the intent or the
+defense plan, everything downstream is deterministic Python
 (`core/feedback_policy.py::decide_feedback`).
 
-`IntentLoopOrchestrator.run(prompt)` continua resolvendo **uma** rodada.
-`IntentLoopOrchestrator.run_campaign(prompt, rounds=N)` encadeia até `N`
-rodadas: a partir da segunda, a `IntentSpec` não vem mais de uma nova
-interpretação do prompt — vem de `FeedbackDecision.next_intent` da rodada
-anterior.
+`IntentLoopOrchestrator.run(prompt)` still resolves **one** round.
+`IntentLoopOrchestrator.run_campaign(prompt, rounds=N)` chains up to `N`
+rounds: from the second on, the `IntentSpec` no longer comes from a new
+interpretation of the prompt — it comes from the previous round's
+`FeedbackDecision.next_intent`.
 
-## Contrato de saída
+## Output contract
 
 `domain/feedback_decision.py::FeedbackDecision` (`extra="forbid"`,
 `frozen=True`):
 
-- `should_continue` / `stop_reason` — sempre concordam entre si (validador).
-- `objective_metric` (`"f1"` ou `"recall"`, ou `None`) e `objective_value` —
-  o que foi medido nesta rodada.
-- `best_value_so_far` / `best_round` — o melhor valor da campanha até aqui.
-- `improvement` — `melhor_valor_anterior − valor_desta_rodada` (positivo =
-  melhorou).
-- `round` / `run_id` / `parent_run_id` — a linhagem desta decisão.
-- `defense_priority` — a prioridade do `DefensePlan` da rodada (vem do
-  plano, não recalculada: o portão do E5 já garante que ela concorda com
+- `should_continue` / `stop_reason` — always agree with each other (validator).
+- `objective_metric` (`"f1"` or `"recall"`, or `None`) and `objective_value` —
+  what was measured in this round.
+- `best_value_so_far` / `best_round` — the best value of the campaign so far.
+- `improvement` — `previous_best_value − this_round_value` (positive =
+  improved).
+- `round` / `run_id` / `parent_run_id` — the lineage of this decision.
+- `defense_priority` — the priority of the round's `DefensePlan` (it comes from the
+  plan, not recalculated: the E5 gate already guarantees it agrees with
   `priority_from_report`).
-- `next_intent` — presente se e somente se `should_continue`.
-- `rationale` — frase determinística com os números que justificam a
-  decisão.
+- `next_intent` — present if and only if `should_continue`.
+- `rationale` — deterministic sentence with the numbers that justify the
+  decision.
 
-Persistido como `feedback.json` no diretório da rodada, pelo mesmo
-`_stage(...)` que persiste os outros seis estágios — sem I/O especial.
+Persisted as `feedback.json` in the round's directory, by the same
+`_stage(...)` that persists the other six stages — no special I/O.
 
-## Métrica-objetivo por efeito
+## Objective metric per effect
 
-| `desired_effect` | métrica minimizada |
+| `desired_effect` | metric minimized |
 |---|---|
 | `lower_f1` | `f1` |
 | `lower_recall` | `recall` |
 | `mimic_normal_traffic` | `recall` |
-| `increase_attack_activity` | nenhuma |
-| `increase_resource_pressure` | nenhuma |
+| `increase_attack_activity` | none |
+| `increase_resource_pressure` | none |
 
-Os dois últimos efeitos não têm uma métrica de evasão no `DetectionReport`
-para minimizar — inventar uma seria fingir medição. A política para na
-primeira rodada com `no_objective_metric`.
+The last two effects have no evasion metric in the `DetectionReport`
+to minimize — inventing one would be pretending to measure. The policy stops in the
+first round with `no_objective_metric`.
 
-## Escada de escalonamento
+## Escalation ladder
 
-Só duas alavancas mudam de fato a variante compilada por
-`core/intent_compiler.py` (ver o módulo `feedback_policy.py` para a análise
-completa), então a escada usa exatamente elas, "aprofundar antes de
-alargar":
+Only two levers actually change the variant compiled by
+`core/intent_compiler.py` (see the `feedback_policy.py` module for the full
+analysis), so the ladder uses exactly those, "deepen before
+widening":
 
 1. `intensity`: `low` → `medium` → `high`.
-2. `restrictions.max_fields_changed`: `+1` por rodada, até o número de
-   campos candidatos do efeito **naquele ataque** — reaproveita
-   `resolve_candidate_paths` para calcular o teto, o mesmo portão que o
-   compilador e o `IntentAgent` usam. Varia por catálogo: 12 em
-   `masquerade_fault`/`lower_recall`, 15 em `random_replay`, só 2 em
-   `injection` (ver `docs/attack_capabilities.md`). O teto do contrato
-   (`domain.intent_spec.MAX_FIELDS_CHANGED_CEILING`, hoje 16) é só uma trava
-   de sanidade acima desse número — nunca o número em si.
+2. `restrictions.max_fields_changed`: `+1` per round, up to the number of
+   candidate fields of the effect **on that attack** — it reuses
+   `resolve_candidate_paths` to compute the ceiling, the same gate the compiler
+   and the `IntentAgent` use. It varies per catalog: 12 in
+   `masquerade_fault`/`lower_recall`, 15 in `random_replay`, only 2 in
+   `injection` (see `docs/attack_capabilities.md`). The contract's ceiling
+   (`domain.intent_spec.MAX_FIELDS_CHANGED_CEILING`, today 16) is only a
+   sanity lock above that number — never the number itself.
 
-Valores ditados (`restrictions.target_values`) ficam fora da escada de
-intensidade, mas consomem a cota: o compilador só dá à intensidade
-`max_fields_changed - len(target_values)` campos. Quando essa sobra é zero, o
-degrau 1 é pulado e a escada vai direto para o 2, porque subir a intensidade
-compilaria a mesma variante. Antes dessa regra, os exemplos intent 1a e 1b
-(03/11/2026, `docs/intent_examples.md`) mediam na rodada 2 o mesmo trace da
-rodada 1, byte a byte, e paravam em `no_improvement`. O LLM costuma pôr
-`max_fields_changed` igual ao número de campos ditados, então esse caso é o
-comum quando há valores ditados, não uma exceção.
+Dictated values (`restrictions.target_values`) stay outside the intensity
+ladder, but consume the quota: the compiler only gives the intensity
+`max_fields_changed - len(target_values)` fields. When that remainder is zero, step
+1 is skipped and the ladder goes straight to 2, because raising the intensity would
+compile the same variant. Before this rule, intent examples 1a and 1b
+(2026-11-03, `docs/intent_examples.md`) measured in round 2 the same trace as
+round 1, byte for byte, and stopped at `no_improvement`. The LLM tends to set
+`max_fields_changed` equal to the number of dictated fields, so that case is
+the common one when there are dictated values, not an exception.
 
-A `seed` não é alavanca: `intent_compiler._select_field_paths` embaralha os
-candidatos com `random.Random(intent.seed)` e corta em `[:limite]`, então
-manter a seed fixa faz de `limite+1` um superconjunto do conjunto anterior
-— a escalada fica monotônica ("os mesmos campos, mais um") e a campanha
-inteira reproduzível.
+The `seed` is not a lever: `intent_compiler._select_field_paths` shuffles the
+candidates with `random.Random(intent.seed)` and cuts at `[:limit]`, so
+keeping the seed fixed makes `limit+1` a superset of the previous set
+— the escalation stays monotonic ("the same fields, plus one") and the whole
+campaign reproducible.
 
-`desired_effect` também não é alavanca: `lower_f1`, `lower_recall` e
-`mimic_normal_traffic` compartilham os mesmos campos candidatos e a mesma
-direção no compilador — a política nunca reescreve `objective`,
-`base_attack` nem `desired_effect`.
+`desired_effect` is not a lever either: `lower_f1`, `lower_recall` and
+`mimic_normal_traffic` share the same candidate fields and the same
+direction in the compiler — the policy never rewrites `objective`,
+`base_attack` or `desired_effect`.
 
-Toda intenção derivada é revalidada com `IntentSpec.model_validate(...)`
-(não `model_copy(update=...)`, que no Pydantic v2 não re-roda validadores)
-e passa por `validate_intent_capability` antes de virar `next_intent` —
-defesa em profundidade: a política nunca devolve uma intenção que o
-compilador rejeitaria.
+Every derived intent is revalidated with `IntentSpec.model_validate(...)`
+(not `model_copy(update=...)`, which in Pydantic v2 does not re-run validators)
+and goes through `validate_intent_capability` before becoming `next_intent` —
+defense in depth: the policy never returns an intent that the
+compiler would reject.
 
-## Condições de parada
+## Stop conditions
 
-Primeira que casar, nesta ordem:
+First one that matches, in this order:
 
-1. `no_objective_metric` — efeito sem métrica de evasão.
-2. `objective_reached` — `target_metric` informado e atingido.
-3. `no_improvement` — platô: `ganho < min_delta` (comparado ao **melhor**
-   valor já medido na campanha, não ao da rodada imediatamente anterior,
-   porque cada compile reparte do baseline).
-4. `levers_exhausted` — motivo científico ("não há mais o que escalar")
-   vem antes do orçamento de rodadas.
-5. `max_rounds_reached` — teto de rodadas.
-6. `continue_campaign` — segue com `next_intent`.
+1. `no_objective_metric` — effect with no evasion metric.
+2. `objective_reached` — `target_metric` given and reached.
+3. `no_improvement` — plateau: `gain < min_delta` (compared to the **best**
+   value already measured in the campaign, not to that of the immediately preceding round,
+   because each compile starts from the baseline).
+4. `levers_exhausted` — scientific reason ("there is nothing left to scale")
+   comes before the round budget.
+5. `max_rounds_reached` — round ceiling.
+6. `continue_campaign` — proceeds with `next_intent`.
 
-## Linhagem da campanha
+## Campaign lineage
 
-`LoopRecord` ganhou dois campos aditivos (E10): `round` (default `1`) e
-`parent_run_id` (default `None`), com o invariante "só a rodada 1 não tem
-pai". `schema_version` continua `1`: os dois campos são aditivos com
-default, então um registro gravado antes do E10 carrega normalmente
+`LoopRecord` gained two additive fields (E10): `round` (default `1`) and
+`parent_run_id` (default `None`), with the invariant "only round 1 has no
+parent". `schema_version` stays `1`: both fields are additive with a
+default, so a record written before E10 loads normally
 (`tests/test_loop_record_store.py::test_records_persisted_before_the_e10_lineage_fields_still_load`)
-e o formato em disco (`{"loop_records": [...]}`) não muda. Uma campanha de
-N rodadas é N linhas em `outputs/loop_records.json`, encadeadas por
-`parent_run_id` — não um contrato novo de campanha.
+and the on-disk format (`{"loop_records": [...]}`) does not change. A campaign of
+N rounds is N rows in `outputs/loop_records.json`, chained by
+`parent_run_id` — not a new campaign contract.
 
-## Estágio INTENT nas rodadas 2+
+## INTENT stage in rounds 2+
 
-Quando `run_campaign` fornece `intent_override`, o estágio `intent` não
-chama o `IntentLike` — persiste a mesma `intent.json` e é registrado como
-**`skipped`**, nunca `succeeded`: o status precisa continuar dizendo a
-verdade sobre o que rodou. `succeeded` leria como "a LLM rodou de novo", o
-que apagaria exatamente a propriedade que o E10 entrega (o lado Red é
-Python determinístico da rodada 2 em diante).
+When `run_campaign` supplies `intent_override`, the `intent` stage does not
+call the `IntentLike` — it persists the same `intent.json` and is recorded as
+**`skipped`**, never `succeeded`: the status must keep telling the
+truth about what ran. `succeeded` would read as "the LLM ran again", which
+would erase exactly the property E10 delivers (the Red side is
+deterministic Python from round 2 on).
 
-## Segurança e escopo
+## Safety and scope
 
-- Nenhuma segunda chamada de LLM por rodada de campanha — o `IntentAgent`
-  só roda na rodada 1.
-- A política não aplica nada: `next_intent` é uma proposta que ainda passa
-  pelo compilador e pelos portões normais na rodada seguinte.
-- O `DefensePlan` continua sem campo de execução — o E10 não muda isso.
+- No second LLM call per campaign round — the `IntentAgent`
+  only runs in round 1.
+- The policy applies nothing: `next_intent` is a proposal that still goes
+  through the compiler and the normal gates in the next round.
+- The `DefensePlan` still has no execution field — E10 does not change that.
 
-## Falha do estágio
+## Stage failure
 
-Uma falha no FEEDBACK (ou em qualquer estágio anterior da rodada) marca o
-`LoopStage` correspondente como `failed` e interrompe **a rodada** —
-`run_campaign` então interrompe **a campanha**, sem levantar exceção: os
-registros já concluídos (cada um persistido individualmente) são
-devolvidos, e a causa fica no `LoopStage` que falhou.
+A failure in FEEDBACK (or in any earlier stage of the round) marks the
+corresponding `LoopStage` as `failed` and interrupts **the round** —
+`run_campaign` then interrupts **the campaign**, without raising an exception: the
+records already completed (each persisted individually) are
+returned, and the cause stays in the `LoopStage` that failed.
 
-## Retomada da campanha
+## Campaign resume
 
-Critério de aceite da camada Loop: *"retomada não duplica registros"*.
+Acceptance criterion of the Loop layer: *"resume does not duplicate records"*.
 
 ```bash
-uv run adversarial-ids --engine intent --resume <RUN_ID>             # qualquer rodada da campanha
-uv run adversarial-ids --engine intent --resume <RUN_ID> --rounds 5  # sobrescreve o teto gravado
+uv run adversarial-ids --engine intent --resume <RUN_ID>             # any round of the campaign
+uv run adversarial-ids --engine intent --resume <RUN_ID> --rounds 5  # overrides the recorded ceiling
 ```
 
-Uma campanha para sem ter acabado de três jeitos, e a retomada
-(`IntentLoopOrchestrator.resume_campaign`, resolvida por
-`agents/orchestrator/campaign_resume.py::plan_resume`) trata cada um a partir
-do ledger:
+A campaign stops without having finished in three ways, and the resume
+(`IntentLoopOrchestrator.resume_campaign`, resolved by
+`agents/orchestrator/campaign_resume.py::plan_resume`) handles each one from
+the ledger:
 
-| a ponta da campanha | ação | o que roda |
+| the campaign's tip | action | what runs |
 |---|---|---|
-| tem um estágio `failed` (limite de taxa, timeout do JAR, portão de volume) | `retry` | a mesma rodada de novo, com `run_id` novo e `retry_of` apontando a que falhou |
-| terminou e a política mandou continuar (orçamento de tokens, processo morto no meio da rodada seguinte) | `continue` | a rodada seguinte, com a `next_intent` do `feedback.json` |
-| terminou e a política encerrou (`should_continue` falso) | `done` | nada — devolve `()` e o ledger não muda |
+| has a `failed` stage (rate limit, JAR timeout, volume gate) | `retry` | the same round again, with a new `run_id` and `retry_of` pointing to the one that failed |
+| finished and the policy said continue (token budget, process died in the middle of the next round) | `continue` | the next round, with the `next_intent` from `feedback.json` |
+| finished and the policy ended it (`should_continue` false) | `done` | nothing — returns `()` and the ledger does not change |
 
-É o caso `done` que faz a retomada não duplicar: retomar uma campanha encerrada,
-ou retomar duas vezes a mesma, não grava nada. A retomada nunca desfaz um
-veredito da política, e `--rounds` também não desfaz: uma rodada que parou por
-`max_rounds_reached` não tem `next_intent`, então não há de onde continuar.
+It is the `done` case that makes the resume not duplicate: resuming a finished campaign,
+or resuming the same one twice, writes nothing. The resume never undoes a
+verdict of the policy, and `--rounds` does not undo it either: a round that stopped by
+`max_rounds_reached` has no `next_intent`, so there is nowhere to continue from.
 
-Algumas regras:
+Some rules:
 
-- **A ponta sai do ledger.** Qualquer `run_id` da campanha serve. Retomar a
-  partir de uma rodada que já tem filho criaria um segundo ramo da mesma
-  campanha, que é justamente a duplicata proibida. A campanha é o componente
-  conexo por `parent_run_id` e `retry_of`, e a ponta é a rodada de maior
-  `round`, com a mais recente no ledger desempatando.
-- **A rodada que falhou continua no ledger.** O ledger é append-only e ela é a
-  verdade sobre a primeira tentativa. A nova tentativa tem o mesmo `round` e o
-  mesmo pai, e é o `retry_of` que a distingue de uma duplicata.
-- **A intenção validada é reaproveitada.** Refazer uma rodada que caiu no
-  DEFENDER não chama o `IntentLike` de novo: a `intent.json` da rodada que falhou
-  é persistida e o estágio fica `skipped`, com a origem na mensagem. Só a rodada
-  1 que falhou no próprio INTENT chama o LLM outra vez. Com o TPM da conta
-  (~6,9k tokens por chamada contra 8k, ver `docs/pilot_e0.md`), isso decide se o
-  retry cabe no minuto.
-- **O `history` é reconstruído.** Os `objective_value` de cada rodada do caminho
-  são lidos dos `feedback.json`. Uma campanha interrompida e retomada toma as
-  mesmas decisões que a mesma campanha sem interrupção
+- **The tip comes from the ledger.** Any `run_id` of the campaign works. Resuming
+  from a round that already has a child would create a second branch of the same
+  campaign, which is precisely the forbidden duplicate. The campaign is the
+  connected component by `parent_run_id` and `retry_of`, and the tip is the round with the highest
+  `round`, with the most recent one in the ledger breaking ties.
+- **The round that failed stays in the ledger.** The ledger is append-only and it is
+  the truth about the first attempt. The new attempt has the same `round` and the
+  same parent, and it is `retry_of` that distinguishes it from a duplicate.
+- **The validated intent is reused.** Redoing a round that fell at the
+  DEFENDER does not call the `IntentLike` again: the `intent.json` of the round that failed
+  is persisted and the stage becomes `skipped`, with the origin in the message. Only
+  a round 1 that failed at INTENT itself calls the LLM again. With the account's TPM
+  (~6.9k tokens per call against 8k, see `docs/pilot_e0.md`), that decides whether the
+  retry fits in the minute.
+- **The `history` is rebuilt.** The `objective_value` of each round on the path
+  are read from the `feedback.json` files. A campaign interrupted and resumed makes the
+  same decisions as the same campaign without interruption
   (`test_a_resumed_campaign_decides_exactly_like_an_uninterrupted_one`).
-- **O orçamento conta só a chamada de retomada.** Retomar uma campanha cortada
-  pelo teto é a decisão explícita de gastar mais. Somar o gasto anterior a
-  cortaria de novo logo depois da primeira rodada.
-- **O detector é o da campanha.** Sem `--detector`, a CLI usa o do
-  `detector_manifest.json` mais recente da campanha. Um detector diferente é
-  recusado (`CampaignResumeError`), porque juntaria dois experimentos no mesmo
-  ledger. O `generator_mode` não fica gravado em lugar nenhum, então essa
-  checagem não o cobre: retome com o mesmo modo.
-- **Erros do chamador levantam, falhas de estágio não.** `run_id` desconhecido,
-  orquestrador sem ledger, artefato apagado (`outputs/` limpo por
-  `scripts/init_state.py`) ou registro anterior a `max_rounds` sem `--rounds`
-  explícito geram `CampaignResumeError`, e a CLI sai com código 2. Depois de
-  retomada, a campanha segue as regras de `run_campaign`.
-- **Ponto de retomada antes dos agentes.** A CLI resolve o ponto de retomada
-  antes de montar os agentes, então descobrir que não há nada a retomar não
-  exige `GROQ_API_KEY`.
+- **The budget counts only the resume call.** Resuming a campaign cut off by the
+  ceiling is the explicit decision to spend more. Adding the previous spend to it
+  would cut it off again right after the first round.
+- **The detector is the campaign's.** Without `--detector`, the CLI uses the one in the
+  campaign's most recent `detector_manifest.json`. A different detector is
+  refused (`CampaignResumeError`), because it would join two experiments in the same
+  ledger. The `generator_mode` is not recorded anywhere, so that
+  check does not cover it: resume with the same mode.
+- **Caller errors raise, stage failures do not.** Unknown `run_id`,
+  orchestrator without a ledger, deleted artifact (`outputs/` cleaned by
+  `scripts/init_state.py`) or a record that predates `max_rounds` without an explicit `--rounds`
+  raise `CampaignResumeError`, and the CLI exits with code 2. After
+  resuming, the campaign follows the rules of `run_campaign`.
+- **Resume point before the agents.** The CLI resolves the resume point
+  before building the agents, so discovering that there is nothing to resume does not
+  require `GROQ_API_KEY`.
 
-O ledger ganhou dois campos aditivos com default, `max_rounds` e `retry_of`, no
-mesmo padrão de `round`/`parent_run_id`; `schema_version` continua `1`. Além
-disso, `append_loop_record` passou a recusar um `run_id` que já está no ledger.
-Uma rodada que o processo perdeu no meio deixa um diretório em
-`outputs/intent_loop/<run_id>/` (com `events.jsonl`) sem linha no ledger. Esse
-diretório é órfão e a retomada o ignora.
+The ledger gained two additive fields with a default, `max_rounds` and `retry_of`, in the
+same pattern as `round`/`parent_run_id`; `schema_version` stays `1`. In addition,
+`append_loop_record` now refuses a `run_id` that is already in the ledger.
+A round that the process lost midway leaves a directory in
+`outputs/intent_loop/<run_id>/` (with `events.jsonl`) with no row in the ledger. That
+directory is an orphan and the resume ignores it.
 
-## Limitação do modo cacheado
+## Cached mode limitation
 
-Em `generator_mode="cached"` o dataset do baseline e o do candidato
-compilado são o mesmo arquivo — a métrica-objetivo não se move entre
-rodadas, então uma campanha cacheada para na rodada 2 com
-`no_improvement` (a menos que `feedback_min_delta=0.0`, usado nos testes
-para exercitar mais rodadas sem depender de medição real). Use
-`generator_mode="jar"` para uma campanha fisicamente mensurável.
+In `generator_mode="cached"` the baseline dataset and the compiled candidate's
+are the same file — the objective metric does not move between
+rounds, so a cached campaign stops at round 2 with
+`no_improvement` (unless `feedback_min_delta=0.0`, used in tests
+to exercise more rounds without depending on real measurement). Use
+`generator_mode="jar"` for a physically measurable campaign.
 
-## Fora de escopo e trabalho futuro
+## Out of scope and future work
 
-- **Alavanca dirigida por feature**: mapear `DetectionReport.top_features`
-  para `allowed_fields`/`forbidden_fields` deixaria a escalada mirar (ou
-  evitar) os campos ligados às features que mais pesam na decisão do
-  detector. Não existe hoje um mapeamento feature-do-dataset → campo de
-  config no repositório; adicioná-lo é a extensão natural deste épico.
-- `LoopStage.error` segue como o único campo de texto livre, carregando
-  tanto mensagens de falha quanto a mensagem "intenção herdada" — renomear
-  para algo como `detail` é uma quebra de contrato sem ganho funcional por
-  si só.
-- **Métrica de pressão de recurso**: `increase_resource_pressure` não tem
-  entrada em `_OBJECTIVE_METRIC_BY_EFFECT` e nenhum `AttackCapability` o
-  anuncia (ver `docs/attack_capabilities.md`) — `DetectionReport` não carrega
-  nada que meça pressão de recurso sem inventar uma medição arbitrária
-  (`latency_ms` mede o processo Python local, não o barramento GOOSE). Uma
-  métrica honesta viria de `DatasetBundle` (volume/taxa de linhas de ataque),
-  não de `DetectionReport` — exigiria uma segunda fonte na assinatura de
-  `decide_feedback`, mudança de contrato fora do escopo deste épico.
+- **Feature-driven lever**: mapping `DetectionReport.top_features`
+  to `allowed_fields`/`forbidden_fields` would let the escalation aim at (or
+  avoid) the fields tied to the features that weigh most in the
+  detector's decision. There is today no dataset-feature → config-field
+  mapping in the repository; adding it is the natural extension of this epic.
+- `LoopStage.error` remains the only free-text field, carrying
+  both failure messages and the "inherited intent" message — renaming
+  it to something like `detail` is a contract break with no functional gain by
+  itself.
+- **Resource pressure metric**: `increase_resource_pressure` has no
+  entry in `_OBJECTIVE_METRIC_BY_EFFECT` and no `AttackCapability` announces it
+  (see `docs/attack_capabilities.md`) — `DetectionReport` carries
+  nothing that measures resource pressure without inventing an arbitrary measurement
+  (`latency_ms` measures the local Python process, not the GOOSE bus). An honest
+  metric would come from `DatasetBundle` (volume/rate of attack rows),
+  not from `DetectionReport` — it would require a second source in the signature of
+  `decide_feedback`, a contract change outside the scope of this epic.
 
-## Testes
+## Tests
 
-- `tests/test_new_contracts.py` — `FeedbackDecision` (versionamento,
-  congelamento, round-trip JSON, validadores de consistência) e a
-  linhagem do `LoopRecord` (`round`/`parent_run_id`), junto dos demais
-  contratos congelados.
-- `tests/test_feedback_policy.py` — métrica-objetivo por efeito; escada
-  intensity→largura; teto pela allowlist de campos candidatos;
-  determinismo (mesma entrada → mesma decisão); a intenção escalada ainda
-  compila; precedência dos cinco motivos de parada, incluindo os casos em
-  que dois motivos valem ao mesmo tempo.
-- `tests/test_intent_loop_orchestrator.py` — os sete estágios completos
-  numa rodada avulsa; `feedback.json` persistido; `run_campaign` parando no
-  platô em modo cacheado; rodando até o teto quando o epsilon é zero;
-  chamando o `IntentLike` uma única vez por campanha; abortando quando um
-  estágio falha; escalando a intensidade da rodada 2; falha do próprio
-  estágio FEEDBACK.
-- `tests/test_cli_intent_engine.py` — `--rounds` encaminhado, rejeição de
-  `--rounds` não positivo, `--iterations` (do loop legado) ignorado no
-  motor intent, resumo por rodada, saída não-zero quando qualquer rodada
-  falha.
-- `tests/test_campaign_resume.py` — retomada: retry de rodada que falhou no
-  DEFENDER (sem nova chamada de LLM) e no INTENT (com), retry de rodada do
-  meio, continuação depois do teto de tokens e de um processo morto, decisões
-  idênticas às da campanha sem interrupção, e os casos que não gravam nada
-  (campanha encerrada, retomar do meio, retomar duas vezes); erros do chamador
-  e a flag `--resume` da CLI.
-- `tests/test_loop_record_store.py` — um `LoopRecord` gravado antes do E10
-  (sem `round`/`parent_run_id`) continua carregando com os defaults.
+- `tests/test_new_contracts.py` — `FeedbackDecision` (versioning,
+  freezing, JSON round-trip, consistency validators) and the
+  `LoopRecord` lineage (`round`/`parent_run_id`), alongside the other
+  frozen contracts.
+- `tests/test_feedback_policy.py` — objective metric per effect; intensity→width
+  ladder; ceiling from the candidate-field allowlist;
+  determinism (same input → same decision); the escalated intent still
+  compiles; precedence of the five stop reasons, including the cases in
+  which two reasons hold at the same time.
+- `tests/test_intent_loop_orchestrator.py` — the seven full stages
+  in a single round; `feedback.json` persisted; `run_campaign` stopping at the
+  plateau in cached mode; running up to the ceiling when epsilon is zero;
+  calling the `IntentLike` only once per campaign; aborting when a
+  stage fails; escalating the intensity of round 2; failure of the
+  FEEDBACK stage itself.
+- `tests/test_cli_intent_engine.py` — `--rounds` forwarded, rejection of
+  non-positive `--rounds`, `--iterations` (from the legacy loop) ignored in the
+  intent engine, per-round summary, non-zero exit when any round
+  fails.
+- `tests/test_campaign_resume.py` — resume: retry of a round that failed at
+  DEFENDER (without a new LLM call) and at INTENT (with one), retry of a middle round,
+  continuation after the token ceiling and after a dead process, decisions
+  identical to those of the campaign without interruption, and the cases that write nothing
+  (finished campaign, resuming from the middle, resuming twice); caller errors
+  and the CLI's `--resume` flag.
+- `tests/test_loop_record_store.py` — a `LoopRecord` written before E10
+  (without `round`/`parent_run_id`) still loads with the defaults.

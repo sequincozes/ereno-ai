@@ -1,275 +1,274 @@
-# Validação da saída do agente Defensor (E5)
+# Validation of the Defender agent output (E5)
 
-## Objetivo
+## Goal
 
-O agente Defensor atua como o estágio DEFENDER do pipeline intent-driven.
-Ele recebe o `DetectionReport` produzido pelo estágio DETECTOR e propõe um
-`DefensePlan`: ações de detecção, contenção e hardening, cada uma amarrada
-a evidência real do relatório e a um método de verificação.
+The Defender agent acts as the DEFENDER stage of the intent-driven pipeline.
+It receives the `DetectionReport` produced by the DETECTOR stage and proposes a
+`DefensePlan`: detection, containment and hardening actions, each tied to
+real evidence from the report and to a verification method.
 
-A resposta da LLM não é aceita diretamente. Toda saída passa por validação
-tipada e por regras determinísticas antes de ser persistida no
-`LoopRecord` — a DoD do épico E5: "toda ação referencia métrica/feature e
-método de verificação".
+The LLM response is not accepted directly. Every output goes through typed
+validation and deterministic rules before it is persisted in the
+`LoopRecord` — the DoD of epic E5: "every action references a metric/feature
+and a verification method".
 
-## Contrato de saída (`schema_version: 2`)
+## Output contract (`schema_version: 2`)
 
-A resposta deve respeitar o modelo `DefensePlan`, composto por:
+The response must respect the `DefensePlan` model, composed of:
 
-- prioridade (`low`, `medium`, `high` ou `critical`);
-- uma referência opcional ao `DetectionReport` de origem
-  (`detection_report_ref`), no topo do plano;
-- listas de ações de detecção, contenção e hardening (ao menos uma no
+- priority (`low`, `medium`, `high` or `critical`);
+- an optional reference to the source `DetectionReport`
+  (`detection_report_ref`), at the top of the plan;
+- lists of detection, containment and hardening actions (at least one in
   total).
 
-Cada ação (`DefenseAction`) contém:
+Each action (`DefenseAction`) contains:
 
-- descrição;
-- uma **técnica defensiva** nomeada (`technique`);
-- ao menos uma evidência;
-- um **teste de validação** (`validation_test`).
+- description;
+- a named **defensive technique** (`technique`);
+- at least one piece of evidence;
+- a **validation test** (`validation_test`).
 
-Cada evidência (`Evidence`) contém:
+Each piece of evidence (`Evidence`) contains:
 
-- a métrica ou feature citada;
-- o valor citado;
-- uma referência opcional ao `DetectionReport` de origem.
+- the cited metric or feature;
+- the cited value;
+- an optional reference to the source `DetectionReport`.
 
-### A v1 e por que ela mudou
+### v1 and why it changed
 
-Até a janela D36-46 o contrato estava na v1, e a ação carregava um
-`validation_method: str` de texto livre: qualquer string não vazia passava,
-inclusive `"revalidar"`. O gate de saída do D47-54 é "100% das recomendações
-ligadas a evidência **e teste de validação**", e metade dele não era
-verificável por tipo nenhum. A v2 troca aquele campo por `ValidationTest`.
-A prosa não se perdeu — virou `ValidationTest.procedure`.
+Until the D36-46 window the contract was at v1, and the action carried a
+free-text `validation_method: str`: any non-empty string passed,
+including `"revalidar"` ("revalidate"). The exit gate of D47-54 is "100% of recommendations
+tied to evidence **and a validation test**", and half of it was not
+verifiable by any type. v2 replaces that field with `ValidationTest`.
+The prose was not lost — it became `ValidationTest.procedure`.
 
-### Técnicas e baldes
+### Techniques and buckets
 
-`DefenseTechnique` é o vocabulário fechado de técnicas defensivas, e vive em
-`domain/defense_plan.py` (assim como `DetectorKey` vive em
-`domain/detector_manifest.py`): o catálogo feature→técnica em `config/` se
-declara em sincronia com ele, nunca o contrário.
+`DefenseTechnique` is the closed vocabulary of defensive techniques, and lives in
+`domain/defense_plan.py` (just as `DetectorKey` lives in
+`domain/detector_manifest.py`): the feature→technique catalog in `config/`
+declares itself in sync with it, never the other way around.
 
-Cada técnica é legal em um ou mais baldes. Várias são de duplo uso — uma
-allowlist de publisher bloqueia o intruso *e* é controle estrutural —, então
-forçar um balde único rejeitaria plano correto. O que o mapa impede é o erro
-que a LLM de fato comete: propor `network_segmentation` como ação de
-*detecção*, onde ela não mede nada.
+Each technique is legal in one or more buckets. Several are dual-use — a
+publisher allowlist blocks the intruder *and* is a structural control —, so
+forcing a single bucket would reject a correct plan. What the map prevents is the
+mistake the LLM actually makes: proposing `network_segmentation` as a
+*detection* action, where it measures nothing.
 
-O prompt recebe a lista por balde em `legal_techniques`, montada por
-`agents/defender/tools.py::legal_techniques_by_bucket` a partir do mesmo mapa
-que o contrato consulta para recusar — o que é oferecido e o que é aceito não
-têm como divergir.
+The prompt receives the list per bucket in `legal_techniques`, built by
+`agents/defender/tools.py::legal_techniques_by_bucket` from the same map
+the contract consults to reject — what is offered and what is accepted
+cannot diverge.
 
-### O teste de validação
+### The validation test
 
-`ValidationTest` responde "como saberemos se isto funcionou?" em termos
-remedíveis:
+`ValidationTest` answers "how will we know whether this worked?" in terms
+that can be remediated:
 
-| campo | significado |
+| field | meaning |
 |---|---|
-| `metric` | a métrica a medir de novo; só valores de `ValidationMetric` |
-| `direction` | `increase`/`decrease` cobram mudança; `at_least`/`at_most` são piso/teto |
-| `target` | o número a alcançar; finito, não negativo, e em [0, 1] para taxas |
-| `split` | opcional; `null` significa o mesmo split do relatório |
-| `procedure` | como a medição será feita, em uma frase |
+| `metric` | the metric to measure again; only values of `ValidationMetric` |
+| `direction` | `increase`/`decrease` demand a change; `at_least`/`at_most` are a floor/ceiling |
+| `target` | the number to reach; finite, non-negative, and in [0, 1] for rates |
+| `split` | optional; `null` means the same split as the report |
+| `procedure` | how the measurement will be made, in one sentence |
 
-`ValidationMetric` é um subconjunto estrito da allowlist de evidência:
-`model_name` e `split` são texto (não há "aumentar o split"), e importância de
-feature ficou de fora porque **não é resultado defensivo** — provar que uma
-feature ficou mais importante não prova que o ataque passou a ser detectado.
+`ValidationMetric` is a strict subset of the evidence allowlist:
+`model_name` and `split` are text (there is no "increase the split"), and feature
+importance was left out because it **is not a defensive result** — proving that a
+feature became more important does not prove that the attack is now detected.
 
-## Validação por schema
+## Schema validation
 
-O modelo Pydantic `DefensePlan` (`extra="forbid"`, `frozen=True`) rejeita:
+The Pydantic model `DefensePlan` (`extra="forbid"`, `frozen=True`) rejects:
 
-- campos extras — inclusive o `validation_method` da v1;
-- prioridade fora dos quatro valores permitidos;
-- ação sem nenhuma evidência, sem técnica ou sem teste de validação;
-- plano sem nenhuma ação nos três baldes;
-- técnica fora do vocabulário, ou legítima mas no balde errado;
-- métrica de validação que não seja um escalar remedível do relatório;
-- alvo NaN, infinito, negativo, ou acima de 1.0 numa métrica de taxa;
-- descrição, procedimento ou evidência vazios;
-- evidência que referencia uma execução diferente da declarada pelo plano.
+- extra fields — including the v1 `validation_method`;
+- a priority outside the four allowed values;
+- an action with no evidence, no technique or no validation test;
+- a plan with no action in the three buckets;
+- a technique outside the vocabulary, or legitimate but in the wrong bucket;
+- a validation metric that is not a remediable scalar of the report;
+- a target that is NaN, infinite, negative, or above 1.0 on a rate metric;
+- an empty description, procedure or evidence;
+- evidence that references a different run from the one declared by the plan.
 
-## Validação contra o DetectionReport
+## Validation against the DetectionReport
 
-A função `agents/defender/tools.py::validate_plan_against_report` verifica
-se a resposta está sustentada pelos dados reais da execução. A allowlist de
-evidências citáveis é montada por `select_evidence_candidates`: os campos
-escalares do relatório (`model_name`, `split`, `accuracy`, `precision`,
-`recall`, `f1`, `latency_ms`), os quatro campos da matriz de confusão sob
-`confusion_matrix.<campo>`, e o nome de cada feature em `top_features`
-mapeado para sua importância.
+The function `agents/defender/tools.py::validate_plan_against_report` checks
+whether the response is backed by the real data of the run. The allowlist of
+citable evidence is built by `select_evidence_candidates`: the report's
+scalar fields (`model_name`, `split`, `accuracy`, `precision`,
+`recall`, `f1`, `latency_ms`), the four confusion-matrix fields under
+`confusion_matrix.<field>`, and the name of each feature in `top_features`
+mapped to its importance.
 
-São rejeitados:
+The following are rejected:
 
-1. evidência (métrica ou feature) que não aparece na allowlist;
-2. valor de evidência alterado (comparação numérica tolerante a
-   arredondamento de JSON, com guarda explícita para não confundir `bool`
-   com `int`);
-3. evidência duplicada dentro da mesma ação, em qualquer um dos três
-   baldes;
-4. teste de validação cujo alvo não cobra melhora: "subir o recall para
-   0.50" quando o recall já é 0.60 é uma regressão vendida como correção, e
-   passaria em qualquer checagem de tipo. Só `increase`/`decrease` são
-   comparados contra o valor medido — `at_least`/`at_most` são guardas
-   contra regressão, legitimamente já satisfeitas quando a ação existe para
-   *proteger* uma métrica que está boa enquanto outra é atacada;
-5. prioridade incompatível com `priority_from_report`;
-6. `detection_report_ref` presente e diferente do relatório desta
-   execução — fecha a lacuna de o Defensor citar uma evidência real mas
-   apontar para um relatório inventado;
-7. ação cuja técnica não responde a nenhuma evidência que ela própria cita —
-   a avaliação por regras, descrita na seção seguinte.
+1. evidence (metric or feature) that does not appear in the allowlist;
+2. an altered evidence value (numeric comparison tolerant of
+   JSON rounding, with an explicit guard so as not to confuse `bool`
+   with `int`);
+3. duplicate evidence within the same action, in any of the three
+   buckets;
+4. a validation test whose target does not demand improvement: "raise the recall to
+   0.50" when the recall is already 0.60 is a regression sold as a fix, and
+   would pass any type check. Only `increase`/`decrease` are
+   compared against the measured value — `at_least`/`at_most` are guards
+   against regression, legitimately already satisfied when the action exists to
+   *protect* a metric that is good while another is attacked;
+5. a priority incompatible with `priority_from_report`;
+6. a `detection_report_ref` that is present and different from this run's
+   report — closes the gap of the Defender citing real evidence but
+   pointing to an invented report;
+7. an action whose technique answers none of the evidence it itself cites —
+   the rule evaluation, described in the next section.
 
-A divisão entre contrato e portão segue a mesma linha do resto do repo: o
-contrato recusa o que é verificável sozinho (vocabulário, tipo, domínio
-numérico, coerência interna do plano), e o portão recusa o que só se sabe com
-o `DetectionReport` na mão (a evidência é real? o alvo significa alguma
-coisa?).
+The split between contract and gate follows the same line as the rest of the repo: the
+contract refuses what is verifiable on its own (vocabulary, type, numeric
+domain, internal coherence of the plan), and the gate refuses what is only known with
+the `DetectionReport` in hand (is the evidence real? does the target mean anything?).
 
-Um guard adicional em `select_evidence_candidates` rejeita a construção da
-própria allowlist se o nome de uma feature colidir com uma chave de
-métrica reservada (por exemplo, uma feature chamada `f1`) — nunca ocorre
-com dados reais do ERENO (features são CamelCase, como `TrapAreaSum`), mas
-mantém a allowlist sem ambiguidade quando ocorre.
+An additional guard in `select_evidence_candidates` rejects the construction of the
+allowlist itself if a feature name collides with a reserved metric
+key (for example, a feature called `f1`) — it never occurs
+with real ERENO data (features are CamelCase, like `TrapAreaSum`), but
+it keeps the allowlist unambiguous when it does.
 
-## Avaliação por regras (`core/defense_rules.py`)
+## Rule evaluation (`core/defense_rules.py`)
 
-Os seis itens acima provam que o plano **não mente**: a métrica existe, o valor
-bate, o alvo cobra melhora. Nenhum deles prova que a recomendação **responde** ao
-problema. Um plano que cita `recall` e propõe `goose_authentication` passava
-inteiro — o balde é legal, a evidência é real, o teste é remedível —, e
-autenticar publisher simplesmente não é o que um recall baixo pede.
+The six items above prove that the plan **does not lie**: the metric exists, the value
+matches, the target demands improvement. None of them proves that the recommendation **answers** the
+problem. A plan that cites `recall` and proposes `goose_authentication` used to pass
+entirely — the bucket is legal, the evidence is real, the test is remediable —, and
+authenticating the publisher is simply not what a low recall calls for.
 
-`core/defense_rules.py::evaluate_plan_rules` fecha isso consultando o catálogo
-feature→técnica (`config/defense_techniques.py`, ver a seção "Técnicas e
-baldes"). Uma ação está **sustentada** quando sua `technique` aparece no
-catálogo para pelo menos uma das evidências que ela cita — pelo menos uma, e não
-todas: um plano sério cita a métrica que dói *e* a feature que a explica, e
-exigir que a técnica respondesse às duas rejeitaria justamente a ação mais bem
-fundamentada.
+`core/defense_rules.py::evaluate_plan_rules` closes this by consulting the
+feature→technique catalog (`config/defense_techniques.py`, see the section "Techniques and
+buckets"). An action is **grounded** when its `technique` appears
+in the catalog for at least one of the evidence items it cites — at least one, not
+all: a serious plan cites the metric that hurts *and* the feature that explains it, and
+requiring the technique to answer both would reject precisely the best-grounded
+action.
 
-A avaliação é determinística e pura (nenhuma LLM, mesma disciplina do E10), e
-nunca levanta exceção por conteúdo: ela devolve um `DefenseRuleReport`, e quem
-recusa é o portão. Um plano ruim precisa ser legível antes de ser recusado.
+The evaluation is deterministic and pure (no LLM, same discipline as E10), and
+never raises an exception because of content: it returns a `DefenseRuleReport`, and the one
+that refuses is the gate. A bad plan must be readable before being refused.
 
-### As cinco regras
+### The five rules
 
-| regra | severidade | o que ela vê |
+| rule | severity | what it sees |
 |---|---|---|
-| `technique_not_grounded` | **blocking** | a técnica não é resposta catalogada a nenhuma evidência citada |
-| `evidence_not_actionable` | advisory | a ação cita `model_name`/`split`: identificam a execução, mas não há o que remediar neles |
-| `uncatalogued_feature` | advisory | a evidência é uma feature real que o catálogo ainda não cobre — lacuna do catálogo, não defeito do plano |
-| `playbook_technique_missing` | advisory | o playbook IEC-61850 daquela família prescreve técnicas que o plano não propõe |
-| `playbook_signature_ignored` | advisory | o relatório destacou uma feature-assinatura do playbook e nenhuma ação a citou |
+| `technique_not_grounded` | **blocking** | the technique is not a catalogued answer to any cited evidence |
+| `evidence_not_actionable` | advisory | the action cites `model_name`/`split`: they identify the run, but there is nothing to remediate in them |
+| `uncatalogued_feature` | advisory | the evidence is a real feature that the catalog does not cover yet — a catalog gap, not a defect of the plan |
+| `playbook_technique_missing` | advisory | the IEC-61850 playbook for that family prescribes techniques that the plan does not propose |
+| `playbook_signature_ignored` | advisory | the report highlighted a signature feature of the playbook and no action cited it |
 
-Só a primeira recusa. As duas do playbook falam do **cenário**, não desta
-rodada: um playbook de replay pede validação de sequência mesmo sob um
-`PROTOCOL_FEATURES_MODE` em que nenhum delta chega ao relatório (ver
-`docs/preprocessing.md`). Bloquear por elas transformaria a resposta certa para
-*esta* execução em erro; silenciá-las jogaria fora a única leitura que o
-catálogo tem do cenário.
+Only the first one refuses. The two playbook rules speak of the **scenario**, not of this
+round: a replay playbook asks for sequence validation even under a
+`PROTOCOL_FEATURES_MODE` in which no delta reaches the report (see
+`docs/preprocessing.md`). Blocking on them would turn the right answer for
+*this* run into an error; silencing them would throw away the only reading the
+catalog has of the scenario.
 
-O eixo do playbook só liga quando o chamador informa `attack_key` — o
-orquestrador passa `IntentSpec.base_attack`, o mesmo ataque que a intenção
-compilada usou. Sem ele o relatório sai com `playbook_key=None`, dizendo que
-aquele eixo não foi avaliado em vez de deixar a ausência de achados parecer
-aprovação. `playbook_signature_ignored` só cobra features que o relatório
-**de fato** destacou em `top_features`: cobrar uma ausente seria cobrar do plano
-algo que o relatório não tinha como mostrar.
+The playbook axis only turns on when the caller provides `attack_key` — the
+orchestrator passes `IntentSpec.base_attack`, the same attack the compiled
+intent used. Without it the report comes out with `playbook_key=None`, saying that
+that axis was not evaluated instead of letting the absence of findings look like
+approval. `playbook_signature_ignored` only charges features that the report
+**actually** highlighted in `top_features`: charging an absent one would be charging the plan
+for something the report had no way to show.
 
-### O prompt e o portão leem o mesmo mapa
+### The prompt and the gate read the same map
 
-`techniques_by_evidence` chega no contexto do Defensor com as técnicas
-catalogadas para cada chave de `citable_evidence`, sob o mesmo `top_n`. Os dois
-lados consultam `config/defense_techniques.py::techniques_for_evidence`, então o
-que o prompt oferece é literalmente o que o portão exige — mesma disciplina de
-`select_evidence_candidates` para evidência e de `legal_techniques_by_bucket`
-para balde. Sem isso, a LLM escolheria a técnica às cegas e descobriria a regra
-só na recusa. `model_name` e `split` ficam de fora do mapa: mostrá-los com lista
-vazia convidaria a citá-los sozinhos.
+`techniques_by_evidence` arrives in the Defender's context with the techniques
+catalogued for each key of `citable_evidence`, under the same `top_n`. Both
+sides consult `config/defense_techniques.py::techniques_for_evidence`, so what
+the prompt offers is literally what the gate requires — the same discipline as
+`select_evidence_candidates` for evidence and `legal_techniques_by_bucket`
+for buckets. Without it, the LLM would choose the technique blindly and would discover the rule
+only at the refusal. `model_name` and `split` are left out of the map: showing them with an empty
+list would invite citing them alone.
 
-### O artefato `defense_rules.json`
+### The `defense_rules.json` artifact
 
-O estágio DEFENDER persiste o `DefenseRuleReport` ao lado do plano
-(`IntentLoopOrchestrator._run_defender`). `grounded_actions`/`total_actions` é,
-literalmente, a fração de recomendações ligadas a evidência que o gate de saída
-da janela D47-54 cobra — e os achados advisory ficam registrados por execução,
-que é o que permite ver ao longo de uma campanha qual playbook o Defensor
-sistematicamente ignora.
+The DEFENDER stage persists the `DefenseRuleReport` next to the plan
+(`IntentLoopOrchestrator._run_defender`). `grounded_actions`/`total_actions` is,
+literally, the fraction of recommendations tied to evidence that the exit gate
+of the D47-54 window demands — and the advisory findings are recorded per run,
+which is what makes it possible to see over a campaign which playbook the Defender
+systematically ignores.
 
-## Regra de prioridade
+## Priority rule
 
-A prioridade é calculada deterministicamente a partir do F1 e do recall do
+The priority is computed deterministically from the F1 and the recall of the
 `DetectionReport` (`agents/defender/tools.py::priority_from_report`):
 
-- nível-base pelo F1: `high` se F1 menor que 0.50; `medium` se F1 maior ou
-  igual a 0.50 e menor que 0.80; `low` se F1 maior ou igual a 0.80;
-- em seguida, se o recall for menor que 0.50, o nível sobe um degrau na
-  ordem `low` → `medium` → `high` → `critical`.
+- base level by F1: `high` if F1 is less than 0.50; `medium` if F1 is greater than or
+  equal to 0.50 and less than 0.80; `low` if F1 is greater than or equal to 0.80;
+- then, if the recall is less than 0.50, the level goes up one step in the
+  order `low` → `medium` → `high` → `critical`.
 
-A LLM recebe a prioridade esperada no campo `required_priority`, mas a
-resposta ainda é validada novamente pelo código.
+The LLM receives the expected priority in the `required_priority` field, but the
+response is still validated again by the code.
 
-## Segurança e escopo
+## Safety and scope
 
-O agente:
+The agent:
 
-- analisa somente dados sintéticos;
-- não acessa sistemas reais;
-- não produz código ofensivo;
-- não inventa métrica, feature, valor ou referência ao relatório;
-- não afirma causalidade sem evidência;
-- produz somente recomendações defensivas — o `DefensePlan` não tem campo
-  de execução, e nunca é aplicado automaticamente.
+- analyzes only synthetic data;
+- does not access real systems;
+- does not produce offensive code;
+- does not invent a metric, feature, value or reference to the report;
+- does not claim causality without evidence;
+- produces only defensive recommendations — the `DefensePlan` has no execution
+  field, and is never applied automatically.
 
-## Falha do estágio
+## Stage failure
 
-Diferente do Analista legado (que degrada para uma análise ausente em caso
-de falha, sem interromper o loop — `AdversarialWorkflow._safe_analyze`), no
-pipeline intent-driven uma falha do Defensor — erro de chamada ou plano
-rejeitado pelo portão — marca o `LoopStage` `defender` como `failed` com a
-causa e interrompe o pipeline naquele ponto
-(`IntentLoopOrchestrator.run`). O `LoopRecord` parcial ainda é persistido:
-a causa nunca se perde.
+Unlike the legacy Analyst (which degrades to an absent analysis on
+failure, without interrupting the loop — `AdversarialWorkflow._safe_analyze`), in the
+intent-driven pipeline a Defender failure — a call error or a plan
+rejected by the gate — marks the `defender` `LoopStage` as `failed` with the
+cause and interrupts the pipeline at that point
+(`IntentLoopOrchestrator.run`). The partial `LoopRecord` is still persisted:
+the cause is never lost.
 
-## Testes
+## Tests
 
-Os testes automatizados cobrem:
+The automated tests cover:
 
-- contrato `DefensePlan` v2 — vocabulário de técnicas, técnica no balde
-  errado, domínio do alvo, NaN/infinito, rastreabilidade e os invariantes
-  herdados da v1 (`tests/test_defense_plan_contract.py`), além do
-  versionamento/congelamento/round-trip comum a todos os contratos
+- the `DefensePlan` v2 contract — technique vocabulary, technique in the wrong
+  bucket, target domain, NaN/infinity, traceability and the invariants
+  inherited from v1 (`tests/test_defense_plan_contract.py`), plus the
+  versioning/freezing/round-trip common to all contracts
   (`tests/test_new_contracts.py`);
-- `priority_from_report` nos quatro níveis e nas fronteiras 0.50/0.80/recall
+- `priority_from_report` at the four levels and at the boundaries 0.50/0.80/recall
   0.50;
-- montagem da allowlist, truncamento por `top_n` e o guard de colisão de
-  nomes;
-- a costura entre `ValidationMetric` e a allowlist: toda métrica de validação
-  precisa existir num `DetectionReport` real, e o que sobra da allowlist é
-  texto ou importância de feature;
-- detecção de evidência inventada, valor alterado, evidência duplicada,
-  alvo que não cobra melhora e prioridade incompatível;
-- o exemplo JSON do prompt, parseado através do `DefensePlan` — um exemplo
-  inválido ensinaria o modelo a produzir exatamente o que o portão recusa;
-- detecção de `detection_report_ref` divergente;
-- conversão de dict, JSON (com e sem cerca ```` ``` ````) e modelo
-  Pydantic;
-- execução sem chamadas externas usando agente falso
+- allowlist construction, truncation by `top_n` and the name-collision
+  guard;
+- the seam between `ValidationMetric` and the allowlist: every validation metric
+  must exist in a real `DetectionReport`, and what is left of the allowlist is
+  text or feature importance;
+- detection of invented evidence, altered value, duplicate evidence,
+  a target that does not demand improvement and an incompatible priority;
+- the JSON example in the prompt, parsed through the `DefensePlan` — an
+  invalid example would teach the model to produce exactly what the gate refuses;
+- detection of a divergent `detection_report_ref`;
+- conversion from dict, JSON (with and without the ```` ``` ```` fence) and
+  Pydantic model;
+- execution without external calls using a fake agent
   (`tests/test_defender_agent.py`);
-- a avaliação por regras: lastro por ação e por balde, a técnica alheia à
-  evidência, as duas evidências que não sustentam nada (descritiva e fora do
-  catálogo), os dois achados de playbook e os invariantes do próprio
-  `DefenseRuleReport` — contagem que contradiz os achados, severidade
-  rebaixada, achado de ação sem localização (`tests/test_defense_rules.py`);
-- a recusa do portão pela regra de lastro e a fração citada na mensagem, mais
-  `techniques_by_evidence` contra a mesma consulta que o portão usa
+- the rule evaluation: grounding per action and per bucket, the technique foreign to the
+  evidence, the two evidence items that support nothing (descriptive and outside the
+  catalog), the two playbook findings and the invariants of the
+  `DefenseRuleReport` itself — a count that contradicts the findings, a downgraded
+  severity, a finding for an action with no location (`tests/test_defense_rules.py`);
+- the gate's refusal by the grounding rule and the fraction cited in the message, plus
+  `techniques_by_evidence` against the same query the gate uses
   (`tests/test_defender_tools.py`);
-- o estágio DEFENDER de ponta a ponta no orquestrador, incluindo o caminho
-  de falha e o `defense_rules.json` persistido
+- the DEFENDER stage end to end in the orchestrator, including the failure
+  path and the persisted `defense_rules.json`
   (`tests/test_intent_loop_orchestrator.py`).

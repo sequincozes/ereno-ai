@@ -1,352 +1,352 @@
-# E1 — Busca e feedback (RQ1–RQ2): protocolo
+# E1 — Search and feedback (RQ1–RQ2): protocol
 
-Fixado em 14/10/2026, **antes** das execuções. Mudar qualquer item abaixo depois
-de ver um resultado de teste invalida a comparação; mudanças feitas após o
-piloto (que não entra nos resultados) ficam registradas na seção "Piloto".
+Fixed on 2026-10-14, **before** the runs. Changing any item below after
+seeing a test result invalidates the comparison; changes made after the
+pilot (which does not enter the results) are recorded in the "Pilot" section.
 
-## Pergunta
+## Question
 
-- **RQ1:** com o mesmo orçamento de propostas, um injetor adaptativo (LLM) acha
-  evasão válida maior que a configuração de referência, a busca aleatória e a
-  política determinística?
-- **RQ2:** dar ao injetor o plano do Defensor, além das métricas, melhora a busca?
+- **RQ1:** with the same proposal budget, does an adaptive injector (LLM) find
+  a larger valid evasion than the reference configuration, random search and
+  the deterministic policy?
+- **RQ2:** does giving the injector the Defender's plan, in addition to the
+  metrics, improve the search?
 
-## Condições
+## Conditions
 
-| Id | Estratégia | Quem propõe o próximo candidato | LLM |
-|----|-----------|--------------------------------|-----|
-| B0 | Referência | ninguém — a baseline da família, sem busca | não |
-| B1 | Busca aleatória | sorteio uniforme na caixa de busca (abaixo) | não |
-| B2 | Controle determinístico em malha aberta | a escada de `core/feedback_policy.py` (intensidade low→medium→high, depois +1 campo), sem a regra de platô | não |
-| B3 | Atacante com métricas | LLM vê catálogo da família, caixa, histórico de candidatos e métricas de busca | sim |
-| B4 | Atacante com feedback completo | B3 + o último `DefensePlan` validado do Defensor | sim (2 chamadas/rodada) |
+| Id | Strategy | Who proposes the next candidate | LLM |
+|----|----------|---------------------------------|-----|
+| B0 | Reference | nobody — the family baseline, no search | no |
+| B1 | Random search | uniform draw in the search box (below) | no |
+| B2 | Open-loop deterministic control | the ladder of `core/feedback_policy.py` (intensity low→medium→high, then +1 field), without the plateau rule | no |
+| B3 | Attacker with metrics | LLM sees the family catalog, the box, the candidate history and the search metrics | yes |
+| B4 | Attacker with full feedback | B3 + the Defender's last validated `DefensePlan` | yes (2 calls/round) |
 
-B0 é o ponto de partida, não um competidor com o mesmo número de consultas.
-Sem a regra de platô o B2 **não olha métrica nenhuma**: é um cronograma fixo
-de alavancas, e o artigo o descreve assim — controle determinístico em malha
-aberta, não "política com feedback". B2 roda **sem** a regra de platô da política (`no_improvement`): ela economiza
-rodadas no loop de produção, mas aqui cortaria o orçamento do B2 e a comparação
-deixaria de ser a orçamento igual. A escada esgotada encerra a campanha mais
-cedo (o que é registrado); a comparação usa o melhor resultado até cada
-orçamento consumido.
+B0 is the starting point, not a competitor with the same number of queries.
+Without the plateau rule B2 **looks at no metric at all**: it is a fixed
+schedule of levers — open-loop deterministic control, not a "policy with
+feedback". B2 runs **without** the policy's plateau rule (`no_improvement`): it saves
+rounds in the production loop, but here it would cut B2's budget and the
+comparison would stop being at equal budget. An exhausted ladder ends the
+campaign earlier (which is recorded); the comparison uses the best result up
+to each budget consumed.
 
-B3 e B4 usam o **mesmo** modelo, temperatura, prompt-base, ferramenta
-(`submit_intent_spec`) e portões; a única diferença é o bloco do plano de defesa.
-Temperatura: **0,7** para os dois (é ela que dá variação entre repetições).
-O LLM continua produzindo só a intenção — compilação, caixa e validade são
-determinísticas, como no pipeline.
+B3 and B4 use the **same** model, temperature, base prompt, tool
+(`submit_intent_spec`) and gates; the only difference is the defense-plan block.
+Temperature: **0.7** for both (it is what gives variation between repetitions).
+The LLM still produces only the intent — compilation, box and validity are
+deterministic, as in the pipeline.
 
-## Fixos
+## Fixed
 
-- **Famílias:** `masquerade_fault`, `random_replay`, `inverse_replay`,
-  `high_stnum` (catálogos `.v2` pós-E0). `injection` saiu em 15/10, depois das
-  referências e antes de qualquer campanha: teto de evasão (ver
-  "Referências"). Se o piloto mostrar que a cota da Groq não comporta as
-  quatro, corta-se para três famílias —
-  nunca para menos de 5 repetições, que é o mínimo para o bootstrap por
-  campanha dizer alguma coisa. `grayhole` fica fora
-  do E1 (caso-limite, paper próprio).
-- **Detector:** Random Forest, `protocol_features="deltas"`, preprocessamento E6,
-  sem seleção nem undersampling. Treinado uma vez por família nas seeds de
-  treino com a config de referência e **congelado** (`experiments/protocol.py::FrozenIds`).
-- **Seeds:** treino 101–103, calibração 201–202, busca 301–303, teste 401–405
-  (`SeedPlan`). Três seeds de busca, não duas: o objetivo de busca é uma média
-  por seed, e com duas o ruído entre seeds compete com a diferença entre
-  candidatos. Nenhuma estratégia vê um número de teste.
-- **Orçamentos de alarme:** 1, 10 e 100 alarmes falsos por 10 mil mensagens
-  normais, calibrados no normal das seeds de calibração. **Ponto primário: 10.**
-- **Orçamento de busca:** 10 propostas por campanha. Uma proposta inválida
-  (não compila, sai da caixa, falha na geração, piso de volume, ataque
-  indetectável pelo oráculo) **conta** no orçamento.
-- **Repetições:** 5 por (família, estratégia). Repetição `r` usa `seed=r` no
-  sorteio do B1 e na `IntentSpec` do B2 (que embaralha a ordem dos campos); no
-  B3/B4 a variação vem da amostragem do LLM.
+- **Families:** `masquerade_fault`, `random_replay`, `inverse_replay`,
+  `high_stnum` (post-E0 `.v2` catalogs). `injection` was dropped on 2026-10-15,
+  after the references and before any campaign: evasion ceiling (see
+  "References"). If the pilot shows that the Groq quota cannot hold all
+  four, we cut to three families —
+  never to fewer than 5 repetitions, which is the minimum for the per-campaign
+  bootstrap to say anything. `grayhole` stays out
+  of E1 (borderline case).
+- **Detector:** Random Forest, `protocol_features="deltas"`, E6 preprocessing,
+  no selection or undersampling. Trained once per family on the training
+  seeds with the reference config and **frozen** (`experiments/protocol.py::FrozenIds`).
+- **Seeds:** training 101–103, calibration 201–202, search 301–303, test 401–405
+  (`SeedPlan`). Three search seeds, not two: the search objective is a mean
+  per seed, and with two the noise between seeds competes with the difference
+  between candidates. No strategy sees a test number.
+- **Alarm budgets:** 1, 10 and 100 false alarms per 10 thousand normal
+  messages, calibrated on the normal traffic of the calibration seeds. **Primary point: 10.**
+- **Search budget:** 10 proposals per campaign. An invalid proposal
+  (does not compile, leaves the box, generation fails, volume floor, attack
+  undetectable by the oracle) **counts** against the budget.
+- **Repetitions:** 5 per (family, strategy). Repetition `r` uses `seed=r` in
+  B1's draw and in B2's `IntentSpec` (which shuffles the field order); in
+  B3/B4 the variation comes from the LLM sampling.
 
-## Caixa de busca
+## Search box
 
-O mesmo espaço para todas as estratégias:
+The same space for all strategies:
 
-- os campos editáveis do catálogo da família (todos, não só os de evasão);
-- os limites do catálogo; um lado sem limite no catálogo é limitado a
-  um **limite físico** (aprovado em 15/10; escalas medidas no benigno das
-  seeds de treino 101–103, `scripts/run_e1.py::PHYSICAL_BOUNDS`). Só afeta
+- the editable fields of the family catalog (all of them, not just the evasion ones);
+- the catalog bounds; a side with no bound in the catalog is limited to
+  a **physical bound** (approved on 2026-10-15; scales measured on the benign
+  traffic of training seeds 101–103, `scripts/run_e1.py::PHYSICAL_BOUNDS`). It only affects
   `masquerade_fault`:
-  - `fault.durationMs` ≤ **1000 ms**. No gerador o campo não é a duração da
-    falha: é um atraso somado ao timestamp da cópia. O heartbeat do
-    publicador chega a 1,031 s; um atraso maior faria a cópia cruzar a
-    próxima mensagem legítima (reordenação, outro ataque);
-  - `analog.deltaAbs` ≤ **10**: a maior |corrente| do benigno (10,31), das
-    faltas reais simuladas. O gerador aplica o mesmo desvio a corrente e a
-    tensão (|v| ≤ 0,14), acoplamento que a caixa não separa — limitação;
-  - `trapArea.multiplier` ≤ **2,5**, o máximo da referência. Faltas reais
-    movem as somas de trapézio 0,71–1,41× a mediana; a referência já
-    excede isso, e a caixa não estica além dela.
+  - `fault.durationMs` ≤ **1000 ms**. In the generator the field is not the
+    fault duration: it is a delay added to the copy's timestamp. The publisher's
+    heartbeat reaches 1.031 s; a larger delay would make the copy cross the
+    next legitimate message (reordering, another attack);
+  - `analog.deltaAbs` ≤ **10**: the largest |current| in the benign traffic (10.31), from the
+    simulated real faults. The generator applies the same deviation to current
+    and voltage (|v| ≤ 0.14), a coupling the box does not separate — a limitation;
+  - `trapArea.multiplier` ≤ **2.5**, the reference maximum. Real faults
+    move the trapezoid sums 0.71–1.41× the median; the reference already
+    exceeds that, and the box does not stretch beyond it.
 
-  Sem limite físico, um lado aberto seria 4 × a referência (do `max` do par);
-- no máximo **4** campos alterados por candidato;
-- pares `{min,max}` com `min < max` estrito (o ERENO recusa `min == max`).
+  Without a physical bound, an open side would be 4 × the reference (of the pair's `max`);
+- at most **4** fields changed per candidate;
+- `{min,max}` pairs with strict `min < max` (ERENO refuses `min == max`).
 
-Uma proposta fora da caixa é inválida (`out_of_box`).
+A proposal outside the box is invalid (`out_of_box`).
 
-## Validade de um candidato
+## Validity of a candidate
 
-Em ordem; a primeira falha dá o motivo:
+In order; the first failure gives the reason:
 
-1. compila (`compile_attack_candidate`) e cabe na caixa;
-2. gera nas seeds de busca;
-3. piso de volume: ≥ 50 linhas de ataque e prevalência ≥ 1% em cada seed
-   (o mesmo piso do E4);
-4. **o ataque continua detectável por um oráculo**: um RF com o mesmo
-   preprocessamento, treinado no trace do próprio candidato na seed 301 e
-   avaliado na 302, precisa de `AP ≥ p + λ·(1 − p)`, com `p` a prevalência
-   do ataque na 302. **λ = 0,5**, fixado em 15/10 a partir das referências
-   (as quatro famílias do E1 têm λ observado ≥ 0,9998; ver "Referências").
-   Se alguma referência não separar do normal nem com o
-   oráculo, o problema é do critério, não da família — e o critério é revisto
-   antes de qualquer execução.
+1. it compiles (`compile_attack_candidate`) and fits in the box;
+2. it generates on the search seeds;
+3. volume floor: ≥ 50 attack rows and prevalence ≥ 1% on each seed
+   (the same floor as E4);
+4. **the attack remains detectable by an oracle**: an RF with the same
+   preprocessing, trained on the candidate's own trace on seed 301 and
+   evaluated on 302, needs `AP ≥ p + λ·(1 − p)`, with `p` the attack
+   prevalence on 302. **λ = 0.5**, fixed on 2026-10-15 from the references
+   (the four E1 families have observed λ ≥ 0.9998; see "References").
+   If any reference does not separate from normal even with the
+   oracle, the problem is the criterion, not the family — and the criterion is revised
+   before any run.
 
-O item 4 é a defesa contra "evasão por desaparecimento": uma config que apaga o
-ataque (ex.: `fault.prob = 0`) evade qualquer detector sem expor ponto cego
-nenhum. Evasão do detector congelado só conta se um detector que **viu** a
-variante ainda a separa do normal. A referência de cada família é checada pelo
-mesmo critério; se a referência falhar, a família sai do E1 com o motivo.
+Item 4 is the defense against "evasion by disappearance": a config that erases the
+attack (e.g. `fault.prob = 0`) evades any detector without exposing any
+blind spot. Evasion of the frozen detector only counts if a detector that **saw**
+the variant still separates it from normal. Each family's reference is checked by the
+same criterion; if the reference fails, the family leaves E1 with the reason.
 
-## Medidas
+## Measures
 
-- **Objetivo de busca** (o que B2–B4 veem e o que seleciona): **evasão
-  suave** = 1 − score médio do detector congelado nas mensagens de ataque,
-  média das três seeds de busca. Desempate: menor AP médio, depois a proposta
-  mais antiga. *Mudado em 15/10, depois do piloto e antes de qualquer execução
-  principal* (ver "Piloto"); até então era a evasão no orçamento de 10.
-- **Seleção e teste:** ao fim da campanha, o melhor candidato válido é
-  regenerado nas 5 seeds de teste e medido contra o detector congelado. Campanha
-  sem candidato válido registra teste ausente (e entra na taxa de validade).
-- **Por campanha (unidade de análise):** evasão suave de teste (métrica
-  primária) e evasão de teste nos três orçamentos (média das 5 seeds), AP,
-  alarmes falsos por 10k, validade (fração das propostas feitas — uma escada
-  esgotada não propôs nada inválido), tokens, chamadas de LLM, tempo.
-- **Curva:** melhor evasão suave de busca até a consulta *k*, por estratégia e
-  família.
-- **Comparações pré-definidas** (pareadas por família × repetição, bootstrap
-  de 1000 reamostragens de campanhas, IC 95% percentil; "separa" só se o IC
-  exclui zero): B3−B1, B3−B2, **B4−B3** (RQ2), B1−B0 e B2−B0 como contexto.
-  O bootstrap do agregado é **estratificado por família** (reamostra
-  repetições dentro de cada família): as famílias têm espaços de busca muito
-  diferentes (`injection` tem 2 campos, `masquerade_fault` 11), e uma
-  reamostragem livre deixaria o agregado depender de quantas vezes cada
-  família foi sorteada. Cada família é reportada ao lado do agregado.
+- **Search objective** (what B2–B4 see and what selects): **soft
+  evasion** = 1 − mean score of the frozen detector on the attack messages,
+  averaged over the three search seeds. Tie-break: lower mean AP, then the oldest
+  proposal. *Changed on 2026-10-15, after the pilot and before any main
+  run* (see "Pilot"); until then it was evasion at the budget of 10.
+- **Selection and test:** at the end of the campaign, the best valid candidate is
+  regenerated on the 5 test seeds and measured against the frozen detector. A campaign
+  with no valid candidate records an absent test (and enters the validity rate).
+- **Per campaign (unit of analysis):** test soft evasion (primary metric)
+  and test evasion at the three budgets (mean of the 5 seeds), AP, false
+  alarms per 10k, validity (fraction of the proposals made — an exhausted
+  ladder did not propose anything invalid), tokens, LLM calls, time.
+- **Curve:** best soft search evasion up to query *k*, per strategy and
+  family.
+- **Pre-defined comparisons** (paired by family × repetition, bootstrap
+  of 1000 resamples of campaigns, 95% percentile CI; "separates" only if the CI
+  excludes zero): B3−B1, B3−B2, **B4−B3** (RQ2), B1−B0 and B2−B0 as context.
+  The aggregate bootstrap is **stratified by family** (it resamples
+  repetitions within each family): the families have very different search spaces
+  (`injection` has 2 fields, `masquerade_fault` 11), and a free
+  resample would make the aggregate depend on how many times each
+  family was drawn. Each family is reported next to the aggregate.
 
-## O que o LLM vê
+## What the LLM sees
 
-- **B3:** catálogo da família (mesma renderização do `IntentAgent`, só a
-  família), a caixa de busca, e o histórico das propostas anteriores da
-  campanha: campos/valores alterados, validade (e motivo) e as métricas de
-  busca (evasão nos três orçamentos, AP).
-- **B4:** tudo do B3 + o último `DefensePlan` que passou pelo portão do E5,
-  produzido pelo `DefenderAgent` sobre um `DetectionReport` do último candidato
-  válido. Plano recusado pelo portão = rodada sem plano, registrada.
+- **B3:** the family catalog (same rendering as the `IntentAgent`, only the
+  family), the search box, and the history of the campaign's previous proposals:
+  fields/values changed, validity (and reason) and the search metrics
+  (evasion at the three budgets, AP).
+- **B4:** everything in B3 + the last `DefensePlan` that passed the E5 gate,
+  produced by the `DefenderAgent` over a `DetectionReport` of the last valid
+  candidate. A plan refused by the gate = a round without a plan, recorded.
 
-### A evidência do Defensor muda com o candidato
+### The Defender's evidence changes with the candidate
 
-O `DetectionReport` do B4 traz as contagens no ponto primário, somadas nas
-seeds de busca, e como `top_features` o **SHAP médio absoluto da classe de
-ataque calculado só sobre as mensagens de ataque que o detector deixou passar**
-(falsos negativos no ponto primário) — "o que fez o detector chamar estas
-mensagens de normais". Quando o candidato não tem falso negativo, o SHAP é
-calculado sobre todas as mensagens de ataque dele. O campo `split` do
-relatório diz qual das duas populações foi usada.
+B4's `DetectionReport` carries the counts at the primary point, summed over the
+search seeds, and as `top_features` the **mean absolute SHAP of the attack class
+computed only over the attack messages the detector let through**
+(false negatives at the primary point) — "what made the detector call these
+messages normal". When the candidate has no false negative, SHAP is
+computed over all of its attack messages. The report's `split` field says which
+of the two populations was used.
 
-Por que não as importâncias Gini do RF congelado: o detector não muda durante
-a campanha, então elas seriam **as mesmas em toda rodada**. O Defensor
-receberia a mesma evidência a cada candidato, o plano tenderia a se repetir, e
-um "B4 = B3" mediria o desenho do experimento, não o valor do feedback
-defensivo. O SHAP sobre os falsos negativos muda com o candidato porque as
-mensagens que evadem mudam com ele.
+Why not the Gini importances of the frozen RF: the detector does not change during
+the campaign, so they would be **the same in every round**. The Defender
+would receive the same evidence for each candidate, the plan would tend to repeat, and
+a "B4 = B3" would measure the experiment design, not the value of defensive
+feedback. SHAP over the false negatives changes with the candidate because the
+messages that evade change with it.
 
-## Custo e cota
+## Cost and quota
 
-Groq gratuito: 8000 TPM, 1000 RPD, e TPD por modelo (não exposto nos headers).
-O executor espaça as chamadas, contabiliza tokens por chamada e, em erro de
-cota diária, salva o ledger e retoma depois — a campanha é retomável e nunca
-repete uma proposta já registrada.
+Free Groq tier: 8000 TPM, 1000 RPD, and TPD per model (not exposed in the headers).
+The runner spaces out the calls, accounts for tokens per call and, on a
+daily-quota error, saves the ledger and resumes later — the campaign is resumable and never
+repeats a proposal already recorded.
 
-Regra: **uma falha do provedor nunca é um ponto de dado.** Cota (diária ou por
-minuto), prompt grande demais e, desde 21/10/2026, erro de rede ou de servidor
-(`Connection error`, 5xx, timeout) são lidos antes de qualquer conclusão: o
-executor repete e, se persistir, para sem registrar a proposta. Até 21/10 o
-erro de rede passava como "o LLM não chamou a ferramenta" e contava como
-proposta inválida — aconteceu uma vez, no B3 de `high_stnum` rep5, proposta 6.
-Pela regra (aplicada pela causa, não pelo resultado), o ledger dessa campanha
-foi cortado antes dela e as propostas 6–10 refeitas, porque as seguintes viram
-a falha no histórico. O original ficou ao lado, em `rep5.jsonl.bak-20261021`
-(e `results/…/rep5.json.bak-20261021`). Nenhum outro ledger do E1 tem o erro.
+Rule: **a provider failure is never a data point.** Quota (daily or per
+minute), a prompt that is too large and, since 2026-10-21, network or server errors
+(`Connection error`, 5xx, timeout) are read before any conclusion: the
+runner retries and, if it persists, stops without recording the proposal. Until 10-21 the
+network error passed as "the LLM did not call the tool" and counted as an invalid
+proposal — it happened once, in B3 of `high_stnum` rep5, proposal 6.
+By the rule (applied by cause, not by outcome), that campaign's ledger
+was cut before it and proposals 6–10 redone, because the following ones saw
+the failure in the history. The original was kept alongside, as `rep5.jsonl.bak-20261021`
+(and `results/…/rep5.json.bak-20261021`). No other E1 ledger has the error.
 
-**JSON do Defensor recusado pela Groq (22/10/2026).** No primeiro B4 de
-verdade (`masquerade_fault` rep1), 3 das 7 chamadas ao Defensor no
-`gpt-oss-20b` voltaram como `400 json_validate_failed` com `failed_generation`
-vazio: o provedor recusou a geração antes de existir um plano para o portão
-julgar. No piloto, ainda no 120b, foram 8 de 8 aceitos. Deixar isso como
-"plano recusado" tiraria o plano de ~40% das rodadas do B4 por um defeito do
-modo JSON, não por uma decisão do Defensor, e diluiria justamente o que o
-B4−B3 mede. Regra desde então: essa recusa é repetida até 2 vezes
-(temperatura 0,2), e só então a rodada fica sem plano; as repetições ficam
-registradas (`provider_retries`) e contam nas chamadas. Para as 20 campanhas
-do B4 seguirem uma regra só, o rep1 foi arquivado
-(`ledger/…/B4/rep1.jsonl.bak-20261022`, `results/…/rep1.json.bak-20261022`) e
-é refeito. Na mesma mudança, o texto de uma resposta normal deixou de ser lido
-como erro do provedor: um plano com 0,9502 não pode passar por um 502.
+**Defender JSON refused by Groq (2026-10-22).** In the first real B4
+(`masquerade_fault` rep1), 3 of the 7 Defender calls on
+`gpt-oss-20b` came back as `400 json_validate_failed` with an empty
+`failed_generation`: the provider refused the generation before a plan existed for the
+gate to judge. In the pilot, still on the 120b, 8 of 8 were accepted. Leaving this
+as a "refused plan" would remove the plan from ~40% of B4's rounds because of a flaw in the
+JSON mode, not because of a Defender decision, and would dilute exactly what
+B4−B3 measures. Rule since then: this refusal is retried up to 2 times
+(temperature 0.2), and only then does the round go without a plan; the retries are
+recorded (`provider_retries`) and count toward the calls. So that the 20 B4
+campaigns follow a single rule, rep1 was archived
+(`ledger/…/B4/rep1.jsonl.bak-20261022`, `results/…/rep1.json.bak-20261022`) and
+is redone. In the same change, the text of a normal response stopped being read
+as a provider error: a plan containing 0.9502 cannot pass as a 502.
 
-**B4 recortado a 2 famílias (22/10/2026).** As 20 campanhas do B4 custam ~6
-dias de cota do 120b, e o prazo do artigo não comporta isso. O B4 roda só em
-`masquerade_fault` e `high_stnum` × 5 reps (10 campanhas, ~3 dias): as duas
-famílias que o E3 já tinha fixado pelo B1 do E1 (maior evasão suave e maior
-evasão@10), escolhidas antes de qualquer B4 e sem olhar o B3. O B4−B3 é
-pareado e estratificado só nessas duas; o `report` já faz isso, porque cada
-comparação usa apenas as famílias em que os dois lados existem. No artigo, o
-B4−B3 é lido como resultado em subconjunto, não como agregado das quatro.
+**B4 cut to 2 families (2026-10-22).** The 20 B4 campaigns cost ~6
+days of 120b quota, and the schedule cannot accommodate that. B4 runs only on
+`masquerade_fault` and `high_stnum` × 5 reps (10 campaigns, ~3 days): the two
+families that E3 had already fixed from E1's B1 (largest soft evasion and largest
+evasion@10), chosen before any B4 and without looking at B3. B4−B3 is
+paired and stratified only on those two; `report` already does this, because each
+comparison uses only the families where both sides exist.
 
-## Saídas
+## Outputs
 
 `outputs/experiments/e1/`:
-- `ledger/<família>/<estratégia>/rep<r>.jsonl` — uma linha por proposta;
-- `ids/<família>.json` — treino e limiares do detector congelado;
-- `results.json` — teste do selecionado por campanha + B0.
+- `ledger/<family>/<strategy>/rep<r>.jsonl` — one line per proposal;
+- `ids/<family>.json` — training and thresholds of the frozen detector;
+- `results.json` — test of the selected candidate per campaign + B0.
 
-## Piloto
+## Pilot
 
-O piloto (1 família, 1 repetição por estratégia) serve para medir tempo e
-tokens e fixar o modelo do LLM e a escala. Não entra nos resultados.
+The pilot (1 family, 1 repetition per strategy) serves to measure time and
+tokens and to fix the LLM model and the scale. It does not enter the results.
 
-Decide, nesta ordem, com os tokens medidos por chamada:
+It decides, in this order, with the tokens measured per call:
 
-1. as cinco famílias cabem na cota diária em prazo aceitável? Se sim, ficam;
-2. se não, o Defensor passa para outro modelo (`openai/gpt-oss-20b`), que tem
-   cota diária própria — o atacante continua o mesmo no B3 e no B4, que é o
-   que a comparação B4−B3 exige;
-3. se ainda não couber, três famílias, mantendo 5 repetições.
+1. do the five families fit in the daily quota in an acceptable time? If so, they stay;
+2. if not, the Defender moves to another model (`openai/gpt-oss-20b`), which has its own
+   daily quota — the attacker stays the same in B3 and B4, which is
+   what the B4−B3 comparison requires;
+3. if it still does not fit, three families, keeping 5 repetitions.
 
-**Decisão (15/10):** passo 2. Projeção do piloto para 4 famílias × 5
-repetições: ~1,85M tokens, ~9 dias num modelo só no teto diário estimado
-(200k/modelo, não confirmado). O Defensor vai para `openai/gpt-oss-20b`
-(default de `--defender-model-id`); o atacante segue em `openai/gpt-oss-120b`
-nas duas condições. As quatro famílias ficam (~6 dias).
+**Decision (10-15):** step 2. Pilot projection for 4 families × 5
+repetitions: ~1.85M tokens, ~9 days on a single model at the estimated daily ceiling
+(200k/model, not confirmed). The Defender goes to `openai/gpt-oss-20b`
+(default of `--defender-model-id`); the attacker stays on `openai/gpt-oss-120b`
+in both conditions. The four families stay (~6 days).
 
-### O que o piloto mostrou (15/10/2026, `masquerade_fault`, rep 1)
+### What the pilot showed (2026-10-15, `masquerade_fault`, rep 1)
 
-| | propostas | válidas | chamadas | tokens | evasão@10 |
+| | proposals | valid | calls | tokens | evasion@10 |
 |---|---|---|---|---|---|
-| B1 | 10 | 10 | 0 | 0 | 0,000 |
-| B2 | 6 (escada esgotada) | 6 | 0 | 0 | 0,000 |
-| B3 | 10 | 9 | 10 | 27k | 0,000 |
-| B4 | 10 | 8 | 17 | 65k | 0,000 |
+| B1 | 10 | 10 | 0 | 0 | 0.000 |
+| B2 | 6 (ladder exhausted) | 6 | 0 | 0 | 0.000 |
+| B3 | 10 | 9 | 10 | 27k | 0.000 |
+| B4 | 10 | 8 | 17 | 65k | 0.000 |
 
-- **Evasão por orçamento presa em zero.** As 34 propostas válidas tiveram
-  evasão 0 nos três orçamentos e oráculo AP 1,0. A causa é o detector, não a
-  busca: o RF dá score exatamente 0 a praticamente todo o tráfego normal, então
-  os limiares de 10 e 100 alarmes calibram em 0,0 (o de 1 alarme, em 0,02) e
-  qualquer voto de árvore em "ataque" dispara. Com esse objetivo, toda
-  comparação B×B daria zero por construção.
-- **O score médio do ataque se move.** Recalculado sobre as mesmas propostas
-  (traces em cache): 1,00 na referência, até 0,44 nas variantes com
-  `incrementStNumOnFault=False` ou `sqnumMode=normal`, ~0,83 numa linha que o
-  B3 achou (desvio analógico mínimo, multiplicador ~1). Daí a troca do
-  objetivo para a evasão suave. A evasão por orçamento continua reportada: é
-  ela que diz se alguma mensagem de fato passa.
-- **Custo medido:** ~35–80 s por proposta (3 gerações + oráculo); B3 ≈ 2,7k
-  tokens por chamada, B4 ≈ 3,8k (17 chamadas: 10 do atacante, 7 do Defensor;
-  o reuso do plano poupou 2). Portões funcionando: o LLM ditou 5 campos uma
-  vez (`no_intent`) e inverteu um par outra (`compile_failed`); Defensor com
-  8/8 planos aceitos.
+- **Per-budget evasion stuck at zero.** The 34 valid proposals had
+  evasion 0 at the three budgets and oracle AP 1.0. The cause is the detector, not the
+  search: the RF gives a score of exactly 0 to practically all normal traffic, so
+  the 10 and 100 alarm thresholds calibrate at 0.0 (the 1-alarm one, at 0.02) and
+  any tree vote for "attack" fires. With this objective, every B×B
+  comparison would give zero by construction.
+- **The mean attack score moves.** Recomputed over the same proposals
+  (cached traces): 1.00 on the reference, down to 0.44 on the variants with
+  `incrementStNumOnFault=False` or `sqnumMode=normal`, ~0.83 on a line that
+  B3 found (minimal analog deviation, multiplier ~1). Hence the switch of the
+  objective to soft evasion. Per-budget evasion is still reported: it is
+  what says whether any message actually gets through.
+- **Measured cost:** ~35–80 s per proposal (3 generations + oracle); B3 ≈ 2.7k
+  tokens per call, B4 ≈ 3.8k (17 calls: 10 from the attacker, 7 from the Defender;
+  plan reuse saved 2). Gates working: the LLM dictated 5 fields
+  once (`no_intent`) and inverted a pair another time (`compile_failed`); Defender
+  with 8/8 plans accepted.
 
-## Implementação
+## Implementation
 
-- `experiments/search.py` — caixa (`SearchBox`), cadeia de validade
+- `experiments/search.py` — box (`SearchBox`), validity chain
   (`CandidateEvaluator`, `Oracle`), B1 (`RandomSearch`), B2 (`OpenLoopLadder`,
-  sobre `core/feedback_policy.py::escalate_intent`), ledger e campanha
-  retomável, seleção e teste. Sem LLM.
-- `agents/attacker/` — B3/B4 (`LlmAttacker`), prompt em `prompts/attacker.md`.
-  Toda estratégia propõe uma `IntentSpec` (o B1 como `target_values`), então
-  compilador, caixa e validade são o mesmo código para as quatro.
-- `scripts/run_e1.py` — `references` (IDS congelado, B0, AP do oráculo nas
-  referências → λ), `campaign` (com `--pilot` para o piloto) e `report`.
-- Erros do provedor são lidos antes de contar a proposta: limite por minuto
-  espera e repete (não conta); cota diária ou prompt grande demais param a
-  campanha sem registrar a proposta em curso. Uma resposta sem chamada da
-  ferramenta, ou recusada pelos portões, **conta** como proposta inválida
+  over `core/feedback_policy.py::escalate_intent`), ledger and resumable
+  campaign, selection and test. No LLM.
+- `agents/attacker/` — B3/B4 (`LlmAttacker`), prompt in `prompts/attacker.md`.
+  Every strategy proposes an `IntentSpec` (B1 as `target_values`), so
+  compiler, box and validity are the same code for all four.
+- `scripts/run_e1.py` — `references` (frozen IDS, B0, oracle AP on the
+  references → λ), `campaign` (with `--pilot` for the pilot) and `report`.
+- Provider errors are read before the proposal is counted: a per-minute limit
+  waits and retries (does not count); a daily quota or a prompt that is too large stop
+  the campaign without recording the proposal in progress. A response with no tool
+  call, or refused by the gates, **counts** as an invalid proposal
   (`no_intent`).
-- O B4 reusa o plano quando o último candidato válido não mudou desde a
-  consulta anterior ao Defensor: mesma evidência, nenhuma chamada a mais.
-- O B2 tem no máximo 6 degraus (4 em `injection`) até a largura da caixa; a
-  curva repete o melhor valor depois do esgotamento.
+- B4 reuses the plan when the last valid candidate has not changed since
+  the previous query to the Defender: same evidence, no extra call.
+- B2 has at most 6 rungs (4 in `injection`) up to the box width; the
+  curve repeats the best value after exhaustion.
 
-## Referências (15/10/2026)
+## References (2026-10-15)
 
-`scripts/run_e1.py references`, detector congelado de verdade (seeds de
-treino 101–103, limiares calibrados em 201–202):
+`scripts/run_e1.py references`, truly frozen detector (training
+seeds 101–103, thresholds calibrated on 201–202):
 
-| Família | evasão@10 busca | evasão@10 teste | AP teste | AP oráculo | p | λ observado |
+| Family | search evasion@10 | test evasion@10 | test AP | oracle AP | p | observed λ |
 |---|---|---|---|---|---|---|
-| masquerade_fault | 0,000 | 0,000 | 1,000 | 1,000 | 0,375 | 1,000 |
-| random_replay | 0,000 | 0,000 | 1,000 | 1,000 | 0,500 | 1,000 |
-| inverse_replay | 0,000 | 0,000 | 1,000 | 1,000 | 0,500 | 1,000 |
-| high_stnum | 0,008 | 0,007 | 1,000 | 1,000 | 0,500 | 1,000 |
-| injection | 0,981 | 0,980 | 0,346 | 0,363 | 0,048 | 0,331 |
+| masquerade_fault | 0.000 | 0.000 | 1.000 | 1.000 | 0.375 | 1.000 |
+| random_replay | 0.000 | 0.000 | 1.000 | 1.000 | 0.500 | 1.000 |
+| inverse_replay | 0.000 | 0.000 | 1.000 | 1.000 | 0.500 | 1.000 |
+| high_stnum | 0.008 | 0.007 | 1.000 | 1.000 | 0.500 | 1.000 |
+| injection | 0.981 | 0.980 | 0.346 | 0.363 | 0.048 | 0.331 |
 
-- Evasão suave de teste (o objetivo adotado depois do piloto) na referência:
-  masquerade 0,000, random_replay 0,002, inverse_replay 0,001, high_stnum
-  0,007 (injection 0,656).
-- As quatro famílias do E1 partem de detecção perfeita: B0 está no piso, e
-  toda evasão que uma estratégia achar é mensurável.
-- `injection` evade 98% **sem busca nenhuma**: nenhuma estratégia pode
-  melhorar sobre o B0, e a comparação entre elas mediria ruído. Ela também era
-  o único caso que puxaria λ para baixo — nem um RF treinado nela passa de
-  AP 0,36, coerente com um ataque que clona mensagens legítimas. Sai do E1
-  como achado próprio (ponto cego do detector na referência), não como falha.
+- Test soft evasion (the objective adopted after the pilot) on the reference:
+  masquerade 0.000, random_replay 0.002, inverse_replay 0.001, high_stnum
+  0.007 (injection 0.656).
+- The four E1 families start from perfect detection: B0 is at the floor, and
+  any evasion a strategy finds is measurable.
+- `injection` evades 98% **with no search at all**: no strategy can
+  improve on B0, and the comparison between them would measure noise. It was also the
+  only case that would pull λ down — not even an RF trained on it exceeds
+  AP 0.36, consistent with an attack that clones legitimate messages. It leaves E1
+  as a finding in its own right (detector blind spot on the reference), not as a failure.
 
-## Resultados (30/10/2026)
+## Results (2026-10-30)
 
-Todas as campanhas fechadas: B0–B3 nas 4 famílias × 5 reps, B4 no recorte
-(masquerade_fault e high_stnum × 5 reps; ver "Custo e cota").
+All campaigns closed: B0–B3 on the 4 families × 5 reps, B4 on the cut
+(masquerade_fault and high_stnum × 5 reps; see "Cost and quota").
 `scripts/run_e1.py report` → `outputs/experiments/e1/results.json`.
 
-Evasão suave no teste (média das campanhas):
+Test soft evasion (mean of the campaigns):
 
-| Família | B0 | B1 | B2 | B3 | B4 |
+| Family | B0 | B1 | B2 | B3 | B4 |
 |---|---|---|---|---|---|
-| high_stnum | 0,007 | 0,166 | 0,102 | 0,231 | 0,223 |
-| inverse_replay | 0,001 | 0,180 | 0,027 | 0,191 | — |
-| masquerade_fault | 0,000 | 0,515 | 0,514 | 0,537 | 0,539 |
-| random_replay | 0,002 | 0,092 | 0,062 | 0,189 | — |
+| high_stnum | 0.007 | 0.166 | 0.102 | 0.231 | 0.223 |
+| inverse_replay | 0.001 | 0.180 | 0.027 | 0.191 | — |
+| masquerade_fault | 0.000 | 0.515 | 0.514 | 0.537 | 0.539 |
+| random_replay | 0.002 | 0.092 | 0.062 | 0.189 | — |
 
-Diferenças pareadas (bootstrap estratificado por família, IC 95%):
+Paired differences (family-stratified bootstrap, 95% CI):
 
-| | evasão suave | evasão@10 |
+| | soft evasion | evasion@10 |
 |---|---|---|
-| B1 − B0 | +0,236 [+0,216, +0,257] | +0,061 [+0,050, +0,072] |
-| B2 − B0 | +0,174 [+0,157, +0,191] | +0,017 [+0,012, +0,023] |
-| B3 − B1 | **+0,049 [+0,011, +0,088]** | +0,030 [+0,018, +0,042] |
-| B3 − B2 | **+0,111 [+0,067, +0,160]** | +0,074 [+0,064, +0,084] |
-| B4 − B3 | −0,003 [−0,036, +0,033] (não separa) | −0,008 [−0,023, +0,008] (não separa) |
+| B1 − B0 | +0.236 [+0.216, +0.257] | +0.061 [+0.050, +0.072] |
+| B2 − B0 | +0.174 [+0.157, +0.191] | +0.017 [+0.012, +0.023] |
+| B3 − B1 | **+0.049 [+0.011, +0.088]** | +0.030 [+0.018, +0.042] |
+| B3 − B2 | **+0.111 [+0.067, +0.160]** | +0.074 [+0.064, +0.084] |
+| B4 − B3 | −0.003 [−0.036, +0.033] (does not separate) | −0.008 [−0.023, +0.008] (does not separate) |
 
-- O atacante LLM (B3) supera a busca aleatória e a escada aberta. Ver o plano
-  do Defensor (B4) não acrescenta nada.
-- Evasão@10 só sai de 0 em high_stnum (B3 0,290, B4 0,274) e inverse_replay
-  (B3 0,082). Em masquerade e random_replay ela fica em 0 em todas as
-  estratégias: a evasão suave existe, mas não cruza o limiar de 10/10k.
-- **Por que B4 ≈ B3.** O portão aceitou 87 de 90 planos do B4 (as propostas 0
-  não têm candidato e não contam; as 3 recusas foram `validation_test`
-  ausente). Os planos são quase todos o mesmo: 81 de 94 ações são
-  `detector_threshold_tuning` para reduzir falso positivo, e 78 de 87 têm
-  prioridade `low`. O plano diz pouco ao atacante sobre o que o detector olha.
-- Os retries de `json_validate_failed` do 20b (`c1e8fca3`) recuperaram todos os
-  planos que falharam no provedor, incluindo um caso novo, "max completion
+- The LLM attacker (B3) beats random search and the open ladder. Seeing the
+  Defender's plan (B4) adds nothing.
+- Evasion@10 only leaves 0 in high_stnum (B3 0.290, B4 0.274) and inverse_replay
+  (B3 0.082). In masquerade and random_replay it stays at 0 in all
+  strategies: soft evasion exists, but it does not cross the 10/10k threshold.
+- **Why B4 ≈ B3.** The gate accepted 87 of 90 B4 plans (proposals 0
+  have no candidate and do not count; the 3 refusals were a missing
+  `validation_test`). The plans are almost all the same: 81 of 94 actions are
+  `detector_threshold_tuning` to reduce false positives, and 78 of 87 have
+  priority `low`. The plan tells the attacker little about what the detector looks at.
+- The `json_validate_failed` retries of the 20b (`d4ec71ce`) recovered all the
+  plans that failed at the provider, including a new case, "max completion
   tokens reached".
-- As 5 reps do B2 não são independentes (seeds fixas, escada converge): o B2 é
-  determinístico por família.
-- Pela regra de 20/10 do E3, B4 − B3 sem separação escolheria B3 para o braço
-  LLM. O recorte de 22/10 (`docs/experiments_e3.md`), fixado antes deste
-  resultado, já tinha escolhido B3.
+- B2's 5 reps are not independent (fixed seeds, the ladder converges): B2 is
+  deterministic per family.
+- By E3's 10-20 rule, B4 − B3 without separation would pick B3 for the LLM
+  arm. The 10-22 cut (`docs/experiments_e3.md`), fixed before this
+  result, had already picked B3.
 
-## Pendências antes das execuções principais
+## Open items before the main runs
 
-- piloto de tokens e a decisão de escala acima.
+- token pilot and the scale decision above.

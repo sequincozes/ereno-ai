@@ -1,30 +1,30 @@
-# Arquitetura — os cinco agentes do pipeline intent-driven
+# Architecture — the five agents of the intent-driven pipeline
 
-Esta é a arquitetura alvo do ERENO-AI e o que o código implementa hoje. Ela
-corrige uma ausência do diagrama que circulava até 01/10/2026: o **Defender** é
-a quinta caixa, entre o Detector e a realimentação — não um detalhe do bloco de
-feedback.
+This is the target architecture of ERENO-AI and what the code implements today. It
+fixes an omission in the diagram that circulated until 2026-10-01: the **Defender** is
+the fifth box, between the Detector and the feedback — not a detail of the
+feedback block.
 
-## O desenho
+## The design
 
-![Arquitetura de cinco agentes do ERENO-AI](figures/architecture.svg)
+![ERENO-AI five-agent architecture](figures/architecture.svg)
 
-A fonte é `docs/figures/architecture.svg` — versionada, editável como texto e
-exportável para PNG/PDF. As pontas de seta são polígonos explícitos em vez de
-`marker-end`: nem todo renderizador (svglib, parte dos pipelines de
-LaTeX/Inkscape) desenha markers, e uma figura de artigo precisa sobreviver ao
-renderizador de quem a abrir. A caixa `Mininet` aparece tracejada e em cinza
-porque está **registrada como ausente** — é backend previsto, não implementado.
+The source is `docs/figures/architecture.svg` — versioned, editable as text and
+exportable to PNG/PDF. The arrowheads are explicit polygons instead of
+`marker-end`: not every renderer (svglib, some LaTeX/Inkscape pipelines)
+draws markers, and a figure meant for publication has to survive the
+renderer of whoever opens it. The `Mininet` box appears dashed and in gray
+because it is **registered as absent** — it is a planned backend, not an implemented one.
 
-O mesmo desenho em Mermaid, para quem prefere editar texto:
+The same drawing in Mermaid, for those who prefer to edit text:
 
 ```mermaid
 flowchart LR
     I[Injector Agent<br/>intent-driven · model-driven · data-driven]
     G[Generator Agent<br/>cached · ereno · …]
-    P[Pre-Processor Agent<br/>undersamplers · feature selectors · …<br/>escolha: config ou política declarada]
+    P[Pre-Processor Agent<br/>undersamplers · feature selectors · …<br/>choice: config or declared policy]
     D[Detector Agent<br/>random forest · decision tree · SVM · …]
-    B[Defender Agent<br/>validação por evidência · playbooks IEC-61850]
+    B[Defender Agent<br/>evidence validation · IEC-61850 playbooks]
     F[(output · performance · feedback)]
 
     I -- Attack Pattern --> G
@@ -35,146 +35,146 @@ flowchart LR
     F -- FeedbackDecision --> I
 ```
 
-## Por que o Defender é uma caixa, e não parte do feedback
+## Why the Defender is a box, and not part of the feedback
 
-O bloco de feedback é **determinístico**: `core/feedback_policy.py` lê o
-`DetectionReport` e o `DefensePlan` da rodada e deriva a intenção da próxima
-sem chamar LLM nenhuma (epic E10). O Defender é outra coisa — é um **agente**,
-com modelo, prompt e validador próprios, que produz um artefato que ninguém
-mais produz:
+The feedback block is **deterministic**: `core/feedback_policy.py` reads the
+`DetectionReport` and the `DefensePlan` of the round and derives the next round's
+intent without calling any LLM (epic E10). The Defender is something else — it is an **agent**,
+with its own model, prompt and validator, which produces an artifact that nobody
+else produces:
 
-- `agents/defender/` gera um `DefensePlan` a partir do `DetectionReport`;
-- `agents/defender/tools.py::validate_plan_against_report` recusa o plano que
-  invente chave de métrica ou de feature, altere um valor, aponte para outro
-  relatório, ou declare uma prioridade que o relatório não sustenta;
-- `core/defense_rules.py`, sobre o catálogo de `config/defense_techniques.py`,
-  pergunta a pergunta seguinte: cada técnica recomendada **responde** à
-  evidência que ela mesma cita? O resultado é persistido como
+- `agents/defender/` generates a `DefensePlan` from the `DetectionReport`;
+- `agents/defender/tools.py::validate_plan_against_report` rejects a plan that
+  invents a metric or feature key, alters a value, points to another
+  report, or declares a priority that the report does not support;
+- `core/defense_rules.py`, over the catalog in `config/defense_techniques.py`,
+  asks the next question: does each recommended technique **answer** the
+  evidence that it itself cites? The result is persisted as
   `DefenseRuleReport`/`defense_rules.json`.
 
-Colapsar isso em "(output, performance, feedback)" apagaria o único estágio do
-pipeline em que uma saída de LLM é confrontada com a realidade medida **e** com
-um catálogo de contramedidas — e é metade do argumento Red×Blue do projeto. Ver
+Collapsing this into "(output, performance, feedback)" would erase the only stage of the
+pipeline in which an LLM output is confronted with the measured reality **and** with
+a catalog of countermeasures — and that is half of the project's Red×Blue argument. See
 `docs/defender_validation.md`.
 
-## Os estágios, e o que cada um produz
+## The stages, and what each one produces
 
-| estágio | produz | determinístico? |
+| stage | produces | deterministic? |
 |---|---|---|
-| `intent` | `IntentSpec` | não — é o LLM, atrás de dois portões |
-| `compiler` | `AttackCandidate` (o *Attack Pattern*) | sim |
-| `generator` | o trace (CSV) | sim, dado o backend e a seed |
-| `preprocess` | `DatasetBundle` | sim |
-| `detector` | `DetectionReport` | sim |
-| `defender` | `DefensePlan` + `DefenseRuleReport` | não — é o LLM, atrás do validador |
-| `feedback` | `FeedbackDecision` | sim |
+| `intent` | `IntentSpec` | no — it is the LLM, behind two gates |
+| `compiler` | `AttackCandidate` (the *Attack Pattern*) | yes |
+| `generator` | the trace (CSV) | yes, given the backend and the seed |
+| `preprocess` | `DatasetBundle` | yes |
+| `detector` | `DetectionReport` | yes |
+| `defender` | `DefensePlan` + `DefenseRuleReport` | no — it is the LLM, behind the validator |
+| `feedback` | `FeedbackDecision` | yes |
 
-Só **dois** estágios chamam uma LLM, e os dois têm um portão determinístico
-logo atrás. É o guardrail central do projeto: o modelo produz a intenção ou o
-plano de defesa; todo o resto é Python que decide se aquilo é executável.
+Only **two** stages call an LLM, and both have a deterministic gate
+right behind them. This is the project's central guardrail: the model produces the intent or the
+defense plan; everything else is Python that decides whether that is executable.
 
-### Nota sobre os nomes (`schema_version` 2)
+### Note on the names (`schema_version` 2)
 
-Até a v1 do `LoopRecord`, `generator` nomeava a etapa de **compilação** e
-`ereno` a de geração — um estágio com o nome de um backend dentro de uma
-arquitetura de backends plugáveis. Na v2 são `compiler` e `generator`. Ledgers
-da v1 são recusados com a razão; eles vivem em `outputs/`, que é descartável.
+Up to v1 of the `LoopRecord`, `generator` named the **compilation** step and
+`ereno` the generation one — a stage named after a backend inside an
+architecture of pluggable backends. In v2 they are `compiler` and `generator`. v1
+ledgers are refused with the reason; they live in `outputs/`, which is disposable.
 
-## O que é plugável hoje, e o que não é
+## What is pluggable today, and what is not
 
-| caixa | estratégias registradas | como se escolhe |
+| box | registered strategies | how it is chosen |
 |---|---|---|
-| Injector | `intent`, `model`, `data` | `--injector`, registro em `agents/injector/registry.py` |
-| Generator | `cached`, `jar` | `--generator-mode`, registro em `core/generators.py` |
-| Pre-Processor | seletor `none`/`mutual_info`/`rfe`; undersampler `none`/`random`/`ratio` | env var **ou** política declarada; **desligados** por default |
-| Detector | `random_forest`, `decision_tree`, `svm_linear`, `svm_rbf` | `--detector`, registro em `core/detectors.py` |
-| Defender | um | — |
+| Injector | `intent`, `model`, `data` | `--injector`, registry in `agents/injector/registry.py` |
+| Generator | `cached`, `jar` | `--generator-mode`, registry in `core/generators.py` |
+| Pre-Processor | selector `none`/`mutual_info`/`rfe`; undersampler `none`/`random`/`ratio` | env var **or** declared policy; **off** by default |
+| Detector | `random_forest`, `decision_tree`, `svm_linear`, `svm_rbf` | `--detector`, registry in `core/detectors.py` |
+| Defender | one | — |
 
-Duas observações honestas sobre esta tabela:
+Two honest remarks about this table:
 
-**O Injector é um registro dentro do pipeline intent-driven** (desde 13/10).
-As três estratégias produzem a mesma `IntentSpec` e passam pelos mesmos
-portões; o que as separa é o contexto que o LLM lê — o catálogo (`intent`), o
-creator Java de um ataque (`model`) ou o perfil de um trace (`data`). `model` e
-`data` só propõem ataques novos na DSL do `programmable`, nunca código: ver
-`docs/injectors.md`. O `--engine` continua escolhendo o **pipeline** (`demo` é
-replay do golden, `live` é o loop legado Strategist↔Analyst, que segue
-gravando `IterationRecord`); o `--injector` escolhe a estratégia dentro do
+**The Injector is a registry inside the intent-driven pipeline** (since 2026-10-13).
+The three strategies produce the same `IntentSpec` and go through the same
+gates; what separates them is the context the LLM reads — the catalog (`intent`), the
+Java creator of an attack (`model`) or the profile of a trace (`data`). `model` and
+`data` only propose new attacks in the `programmable` DSL, never code: see
+`docs/injectors.md`. `--engine` still chooses the **pipeline** (`demo` is
+golden replay, `live` is the legacy Strategist↔Analyst loop, which keeps
+writing `IterationRecord`); `--injector` chooses the strategy inside
 `intent`.
 
-**O Pre-Processor decide metade.** O undersampler tem um decisor de verdade
-desde 01/10: `UNDERSAMPLING_MODE=policy` entrega a escolha a uma regra
-declarada (`core/undersampling_policy.py`) que resolve a estratégia a partir do
-desequilíbrio da partição de treino, e grava quem decidiu, sobre que medida e
-por quê no `SelectionManifest`. O seletor de features continua sendo só
-`FEATURE_SELECTION_MODE`, uma chave de ambiente.
+**The Pre-Processor decides half.** The undersampler has a real decider
+since 2026-10-01: `UNDERSAMPLING_MODE=policy` hands the choice to a declared
+rule (`core/undersampling_policy.py`) that resolves the strategy from the
+imbalance of the train split, and records who decided, over what measure and
+why in the `SelectionManifest`. The feature selector is still only
+`FEATURE_SELECTION_MODE`, an environment key.
 
-A condição que a ressalva impunha foi cumprida à letra — a decisão é auditável
-e fica **fora** do que o laço otimiza, e isso é estrutural, não documental:
-`decide_undersampling(*, class_counts, mode, policy)` não tem por onde receber
-um `DetectionReport`, uma `Metrics` ou um `IntentSpec`, e um teste verifica a
-assinatura. Não existe decisor `feedback` nem `intent`, e não é adiamento: um
-laço que ajusta o próprio pré-processamento até a métrica melhorar deixa de
-medir o que o detector enfrenta, e deixar a intenção do atacante configurar o
-treino do defensor é enfraquecer o detector por um caminho que não é o ataque.
+The condition the caveat imposed was met to the letter — the decision is auditable
+and stays **outside** what the loop optimizes, and that is structural, not documentary:
+`decide_undersampling(*, class_counts, mode, policy)` has no way to receive
+a `DetectionReport`, a `Metrics` or an `IntentSpec`, and a test checks the
+signature. There is no `feedback` or `intent` decider, and that is not a postponement: a
+loop that tunes its own preprocessing until the metric improves stops
+measuring what the detector faces, and letting the attacker's intent configure the
+defender's training is weakening the detector by a path that is not the attack.
 
-## Proveniência de uma rodada
+## Provenance of a round
 
-Quatro manifests gravados lado a lado no diretório da execução respondem, dos
-artefatos e sem reexecutar nada, de onde cada número veio:
+Four manifests written side by side in the execution directory answer, from the
+artifacts and without re-running anything, where each number came from:
 
-| arquivo | responde |
+| file | answers |
 |---|---|
-| `generator_manifest.json` | de onde o trace veio, com que seed, se ele **varia com a config** |
-| `feature_manifest.json` (E6) | como as features foram preparadas, sobre quais linhas |
-| `selection_manifest.json` (E7) | quais sobreviveram, antes e depois do undersampling |
-| `detector_manifest.json` (E8) | qual modelo aprendeu, com quais hiperparâmetros e qual escala |
+| `generator_manifest.json` | where the trace came from, with what seed, whether it **varies with the config** |
+| `feature_manifest.json` (E6) | how the features were prepared, over which rows |
+| `selection_manifest.json` (E7) | which ones survived, before and after undersampling |
+| `detector_manifest.json` (E8) | which model learned, with which hyperparameters and which scaling |
 
-Ao lado deles, `dataset_bundle.json` diz *o que está* no trace e
-`detection_report.json` *quão bem* o detector foi. A divisão é proposital: os
-manifests descrevem o processo, os relatórios descrevem o resultado, e só os
-dois juntos tornam uma diferença entre execuções atribuível a alguma coisa.
+Alongside them, `dataset_bundle.json` says *what is* in the trace and
+`detection_report.json` says *how well* the detector did. The split is deliberate: the
+manifests describe the process, the reports describe the result, and only the
+two together make a difference between executions attributable to something.
 
-## Princípios
+## Principles
 
-- separação entre domínio, núcleo, agentes e interfaces;
-- modelos Pydantic como contratos entre as camadas;
-- interfaces dependem de uma porta (`ExperimentRunner`), não de detalhes do Agno;
-- modo cacheado para reprodutibilidade sem Java;
-- fixtures e stubs identificados explicitamente como recursos de teste;
-- segredos mantidos fora do versionamento.
+- separation between domain, core, agents and interfaces;
+- Pydantic models as contracts between the layers;
+- interfaces depend on a port (`ExperimentRunner`), not on Agno details;
+- cached mode for reproducibility without Java;
+- fixtures and stubs explicitly identified as test resources;
+- secrets kept out of version control.
 
-## Modos de execução
+## Execution modes
 
-| modo | como se chama | dependências |
+| mode | how it is invoked | dependencies |
 |---|---|---|
-| Golden cacheado | `--engine demo` (default) | nenhuma além do Python |
-| Loop legado Strategist↔Analyst | `--engine live` | Agno, Groq |
-| Loop legado sem time Agno | `--engine live --orchestration direct` | Agno, Groq |
-| Pipeline intent-driven | `--engine intent --prompt "..."` | Agno, Groq |
-| Geração física | `--generator-mode jar` | Java + o JAR do ERENO |
+| Cached golden | `--engine demo` (default) | nothing beyond Python |
+| Legacy Strategist↔Analyst loop | `--engine live` | Agno, Groq |
+| Legacy loop without an Agno team | `--engine live --orchestration direct` | Agno, Groq |
+| Intent-driven pipeline | `--engine intent --prompt "..."` | Agno, Groq |
+| Physical generation | `--generator-mode jar` | Java + the ERENO JAR |
 
-Os três primeiros produzem `IterationRecord`; o intent-driven produz
-`LoopRecord`, que é outro contrato e não passa pelo `ExperimentRunner`.
+The first three produce `IterationRecord`; the intent-driven one produces
+`LoopRecord`, which is a different contract and does not go through the `ExperimentRunner`.
 
-## Dependências externas
+## External dependencies
 
-| dependência | uso |
+| dependency | use |
 |---|---|
-| Agno | abstração dos agentes e do time |
-| Groq | inferência dos agentes reais |
-| pandas | datasets e tabelas |
-| scikit-learn | detectores, preprocessamento e métricas |
-| Pydantic | contratos do domínio |
+| Agno | abstraction of the agents and the team |
+| Groq | inference for the real agents |
+| pandas | datasets and tables |
+| scikit-learn | detectors, preprocessing and metrics |
+| Pydantic | domain contracts |
 | Streamlit (`--extra dashboard`) | dashboards |
-| SHAP (`--extra shap`) | explicações opcionais, só para detectores de árvore |
-| Java + JAR do ERENO | geração fora do modo cacheado |
+| SHAP (`--extra shap`) | optional explanations, for tree detectors only |
+| Java + ERENO JAR | generation outside cached mode |
 
-## Decisões arquiteturais
+## Architectural decisions
 
-- layout `src/` evita imports acidentais da raiz;
-- `ExperimentRunner` desacopla as interfaces do workflow;
-- o golden permite demonstrar e testar sem Groq nem Java;
-- código de apresentação não treina modelos nem executa agentes;
-- cada estratégia plugável (gerador, detector) é um registro por chave com
-  manifesto por execução, e não uma cadeia de `if`.
+- the `src/` layout avoids accidental imports from the root;
+- `ExperimentRunner` decouples the interfaces from the workflow;
+- the golden allows demonstrating and testing without Groq or Java;
+- presentation code does not train models or execute agents;
+- each pluggable strategy (generator, detector) is a registry by key with a
+  per-execution manifest, and not a chain of `if`s.

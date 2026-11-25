@@ -1,130 +1,132 @@
-# Exemplos qualitativos do `--engine intent` (TCC/TSG)
+# Qualitative examples of `--engine intent`
 
-Dois exemplos do pipeline dirigido por intenção, para ilustrar o caminho
-prompt → `IntentSpec` → compilador → JAR → detector → Defensor → feedback.
-Todos rodaram com `--generator-mode jar` e `PROTOCOL_FEATURES_MODE=deltas`.
-Os artefatos ficam em `outputs/intent_loop/<run_id>/`, e o registro da
-campanha em `outputs/loop_records.json`.
+Two examples of the intent-driven pipeline, to illustrate the path
+prompt → `IntentSpec` → compiler → JAR → detector → Defender → feedback.
+All of them ran with `--generator-mode jar` and `PROTOCOL_FEATURES_MODE=deltas`.
+The artifacts live in `outputs/intent_loop/<run_id>/`, and the campaign
+record in `outputs/loop_records.json`.
 
-## Exemplo 1a: high_stnum com todos os campos ditados (03/11/2026)
+## Example 1a: high_stnum with every field dictated (2026-11-03)
 
 ```bash
 uv run adversarial-ids --engine intent --generator-mode jar --rounds 3 --prompt \
   "evada o IDS com o ataque high_stnum usando salto de stNum entre 2 e 5 e probabilidade de reinício do sqNum igual a 0"
+# "evade the IDS with the high_stnum attack using an stNum jump between 2 and 5 and an sqNum reset probability equal to 0"
 ```
 
-Rodadas `994bb292…` (1) e `0fcbbfc0…` (2). Log em
-`outputs/experiments/intent_ex1_high_stnum.log`. Saída 0, 16,4k tokens no total.
+Rounds `994bb292…` (1) and `0fcbbfc0…` (2). Log in
+`outputs/experiments/intent_ex1_high_stnum.log`. Exit 0, 16.4k tokens in total.
 
-- **Os valores ditados chegaram intactos.** O LLM extraiu três `target_values`
-  (`jump.min = 2`, `jump.max = 5`, `sqnumResetProb = 0`), e o compilador os
-  aplicou sem mexer, fora da escada de intensidade. Não houve clamp.
-- **Não evade.** Treino interno: recall 0,997. Variante contra o baseline:
-  recall 0,990 e F1 0,994, com `stDiff` dominando a importância (0,68). Um
-  salto de 2 a 5 no stNum ainda é um salto que `stDiff` enxerga.
-- **A escalada não teve onde agir.** O feedback subiu a intensidade de medium
-  para high, mas os três campos que o compilador muda (`max_fields_changed = 3`)
-  já estavam todos fixados no pedido. A config da rodada 2 é idêntica à da
-  rodada 1, e o trace também, byte a byte (mesmo seed 42). Por isso a
-  campanha parou em `no_improvement` (ganho 0,0000) na rodada 2 de 3, antes de
-  alargar `max_fields_changed`. Isso está correto pelas regras (um valor ditado
-  nunca é sobrescrito), mas mostra uma limitação da política: ela gasta uma
-  rodada numa escalada que já se sabe vazia antes de gerar o trace.
-- **Os planos do Defensor saíram genéricos e de prioridade low:**
-  `network_segmentation` na rodada 1, e `detector_retraining` mais
-  `network_segmentation` na rodada 2. Nenhum cita feature, o mesmo padrão
-  dos planos do E1 e do E3-LLM.
+- **The dictated values arrived intact.** The LLM extracted three `target_values`
+  (`jump.min = 2`, `jump.max = 5`, `sqnumResetProb = 0`), and the compiler
+  applied them untouched, outside the intensity ladder. There was no clamp.
+- **It does not evade.** Internal training: recall 0.997. Variant against the baseline:
+  recall 0.990 and F1 0.994, with `stDiff` dominating the importance (0.68). An
+  stNum jump of 2 to 5 is still a jump that `stDiff` sees.
+- **The escalation had nowhere to act.** The feedback raised the intensity from medium
+  to high, but the three fields the compiler changes (`max_fields_changed = 3`)
+  were already all fixed in the request. The round 2 config is identical to that of
+  round 1, and so is the trace, byte for byte (same seed 42). That is why the
+  campaign stopped at `no_improvement` (gain 0.0000) in round 2 of 3, before
+  widening `max_fields_changed`. This is correct under the rules (a dictated value
+  is never overwritten), but it shows a limitation of the policy: it spends
+  a round on an escalation that is already known to be empty before generating the trace.
+- **The Defender's plans came out generic and with priority low:**
+  `network_segmentation` in round 1, and `detector_retraining` plus
+  `network_segmentation` in round 2. None cites a feature, the same pattern
+  as the E1 and E3-LLM plans.
 
-## Exemplo 1b: high_stnum com só o salto ditado (03/11/2026)
+## Example 1b: high_stnum with only the jump dictated (2026-11-03)
 
 ```bash
 uv run adversarial-ids --engine intent --generator-mode jar --rounds 3 --prompt \
   "evada o IDS com o ataque high_stnum usando salto de stNum entre 2 e 5"
+# "evade the IDS with the high_stnum attack using an stNum jump between 2 and 5"
 ```
 
-Rodadas `9b20557c…` (1) e `f032ffd7…` (2). Log em
-`outputs/experiments/intent_ex1b_high_stnum.log`. Saída 0, 16,0k tokens.
+Rounds `9b20557c…` (1) and `f032ffd7…` (2). Log in
+`outputs/experiments/intent_ex1b_high_stnum.log`. Exit 0, 16.0k tokens.
 
-Repetiu o defeito do 1a. O LLM pôs `max_fields_changed = 2`, o mesmo número de
-campos ditados, então a intensidade de novo não tinha campo livre. O trace da
-rodada 2 saiu idêntico ao da 1, e a campanha parou em `no_improvement`. A
-variante evade ainda menos que a do 1a: recall 0,996 e F1 0,997. Sem fixar
-`sqnumResetProb = 0`, vale o 0,4 da baseline, e os reinícios de sqNum provavelmente também
-denunciam o ataque.
+It repeated the defect of 1a. The LLM set `max_fields_changed = 2`, the same number of
+dictated fields, so the intensity again had no free field. The trace of
+round 2 came out identical to that of round 1, and the campaign stopped at `no_improvement`. The
+variant evades even less than that of 1a: recall 0.996 and F1 0.997. Without fixing
+`sqnumResetProb = 0`, the baseline's 0.4 applies, and the sqNum resets probably also
+give the attack away.
 
-Com dois casos seguidos ficou claro que o problema é estrutural, não do
-prompt. A política passou a pular o degrau de intensidade quando toda a cota
-está nos valores ditados, e vai direto para alargar `max_fields_changed`
-(`core/feedback_policy.py::_escalate`, ver `docs/feedback_policy.md`).
+With two cases in a row it became clear that the problem is structural, not one of the
+prompt. The policy now skips the intensity step when the whole quota
+is in the dictated values, and goes straight to widening `max_fields_changed`
+(`core/feedback_policy.py::_escalate`, see `docs/feedback_policy.md`).
 
-## Exemplo 1c: o prompt do 1a, com a correção (03/11/2026)
+## Example 1c: the 1a prompt, with the fix (2026-11-03)
 
-Mesmo prompt do 1a, depois do commit `ae300678`. Rodadas `9afdc23e…` (1) e
-`ae8d609b…` (2). Log em `outputs/experiments/intent_ex1c_high_stnum.log`.
-Saída 0, 17,3k tokens.
+Same prompt as 1a, after commit `ee6d6b84`. Rounds `9afdc23e…` (1) and
+`ae8d609b…` (2). Log in `outputs/experiments/intent_ex1c_high_stnum.log`.
+Exit 0, 17.3k tokens.
 
-| rodada | intensidade | campos | diff compilado | recall | F1 |
+| round | intensity | fields | compiled diff | recall | F1 |
 |---|---|---|---|---|---|
-| 1 | medium | 3 | jump 20–50 → 2–5 (ditado), sqnumResetProb 0,4 → 0 (ditado) | 0,9899 | 0,9944 |
-| 2 | medium | 4 | os mesmos, mais `sqNumDelta.max` 5 → 2 (escada) | 0,9772 | 0,9877 |
+| 1 | medium | 3 | jump 20–50 → 2–5 (dictated), sqnumResetProb 0.4 → 0 (dictated) | 0.9899 | 0.9944 |
+| 2 | medium | 4 | the same, plus `sqNumDelta.max` 5 → 2 (ladder) | 0.9772 | 0.9877 |
 
-- **A escada agora anda.** A rodada 1 é byte a byte a mesma do 1a (mesma
-  intenção, mesmo seed). Na rodada 2 a política alargou os campos de 3 para 4
-  (teto 5) sem tocar na intensidade. O campo novo saiu da escada, com os
-  valores ditados intactos.
-- **A campanha parou em `no_improvement`, e agora com motivo.** A queda do F1
-  (0,0066) ficou abaixo do mínimo de 0,01 (`FEEDBACK_MIN_DELTA`). Desta vez a
-  variante mudou de fato; ela só não melhorou o bastante para justificar a
-  rodada 3.
-- **A evasão continua pequena,** porque `stDiff` segue enxergando qualquer
-  salto de stNum. Os falsos negativos subiram de 503 para 1139 em 50k.
-- **Os planos do Defensor continuam genéricos e com prioridade low.** Na
-  rodada 1: `detector_threshold_tuning` (falsos positivos) e
-  `network_segmentation` (latência). Na rodada 2: `detector_retraining`
-  (recall) e `traffic_rate_limiting` (latência).
+- **The ladder now moves.** Round 1 is byte for byte the same as in 1a (same
+  intent, same seed). In round 2 the policy widened the fields from 3 to 4
+  (cap 5) without touching the intensity. The new field came from the ladder, with the
+  dictated values intact.
+- **The campaign stopped at `no_improvement`, and now with a reason.** The F1 drop
+  (0.0066) was below the minimum of 0.01 (`FEEDBACK_MIN_DELTA`). This time the
+  variant did change; it just did not improve enough to justify
+  round 3.
+- **The evasion remains small,** because `stDiff` still sees any stNum
+  jump. The false negatives went from 503 to 1139 in 50k.
+- **The Defender's plans remain generic and with priority low.** In
+  round 1: `detector_threshold_tuning` (false positives) and
+  `network_segmentation` (latency). In round 2: `detector_retraining`
+  (recall) and `traffic_rate_limiting` (latency).
 
-Este é o exemplo 1 que vai para o artigo. O 1a e o 1b ficam como registro
-do defeito que ele expôs.
+Examples 1a and 1b remain as a record of the defect that 1c exposed.
 
-## Exemplo 2: programmable, atraso seletivo (03/11/2026)
+## Example 2: programmable, selective delay (2026-11-03)
 
 ```bash
 uv run adversarial-ids --engine intent --generator-mode jar --rounds 3 --prompt \
   "Atrase em 20 ms só as mensagens com o disjuntor fechado."
+# "Delay by 20 ms only the messages with the circuit breaker closed."
 ```
 
-Rodadas `10247d66…` (1), `3b82f168…` (2) e `d0ac8093…` (3). Log em
-`outputs/experiments/intent_ex2_programmable.log`. Saída 0, 23,5k tokens.
+Rounds `10247d66…` (1), `3b82f168…` (2) and `d0ac8093…` (3). Log in
+`outputs/experiments/intent_ex2_programmable.log`. Exit 0, 23.5k tokens.
 
-**O LLM autorou a regra certa na primeira tentativa.** Foram 7 `target_values`
-em `rules.r0`: `when cbStatus eq 1`, `op = add`, `field = t`, `value = 0.02`,
-`fraction = 1`. O compilador os aplicou literalmente.
+**The LLM authored the right rule on the first attempt.** There were 7 `target_values`
+in `rules.r0`: `when cbStatus eq 1`, `op = add`, `field = t`, `value = 0.02`,
+`fraction = 1`. The compiler applied them literally.
 
-| rodada | intensidade | campos | o que a escada mudou | recall | F1 |
+| round | intensity | fields | what the ladder changed | recall | F1 |
 |---|---|---|---|---|---|
-| 1 | medium | 7 | nada (todos os 7 ditados) | 0,637 | 0,702 |
-| 2 | medium | 8 | `rules.r1.fraction` 0,5 → 0,275 | 0,560 | 0,628 |
-| 3 | high | 8 | `rules.r1.fraction` 0,5 → 0,1175 | 0,504 | 0,572 |
+| 1 | medium | 7 | nothing (all 7 dictated) | 0.637 | 0.702 |
+| 2 | medium | 8 | `rules.r1.fraction` 0.5 → 0.275 | 0.560 | 0.628 |
+| 3 | high | 8 | `rules.r1.fraction` 0.5 → 0.1175 | 0.504 | 0.572 |
 
-- **A escada completa apareceu, e já com a correção do `ae300678`.** Com os
-  7 campos todos ditados, a rodada 2 alargou de 7 para 8 sem passar pela
-  intensidade (antes da correção, ela teria repetido o trace). A rodada 3
-  subiu medium → high. A campanha parou em `levers_exhausted`, com o teto de
-  8 campos atingido.
-- **Ressalva: o ataque não é só o atraso.** A baseline do `uc11_programmable`
-  traz uma segunda regra, `r1` (soma 1 ao stNum em 50% das mensagens), que o
-  prompt não mencionou e que continuou ativa. O campo que a escada mexeu foi
-  justamente a fração dela. A queda do F1 vem de diluir o salto de stNum que
-  o detector reconhece, não de o atraso de 20 ms ter ficado mais furtivo.
-- **Ressalva: o detector foi treinado na baseline do `uc11`.** Essa baseline é
-  outro ataque (`set cbStatus = 1` mais stNum + 1), com recall interno de
-  apenas 0,775. A variante, portanto, é avaliada fora da distribuição de
-  treino.
-- **Pela primeira vez, um plano cita feature.** O `device_quarantine` das
-  rodadas 1 e 2 cita `stDiff` (a de maior importância, 0,27). A prioridade
-  ficou medium nas três rodadas. O resto continua genérico: ajuste de
-  limiar, enriquecimento do dataset e segmentação de rede.
+- **The full ladder showed up, already with the `ee6d6b84` fix.** With all
+  7 fields dictated, round 2 widened from 7 to 8 without going through
+  the intensity (before the fix, it would have repeated the trace). Round 3
+  raised medium → high. The campaign stopped at `levers_exhausted`, with the cap of
+  8 fields reached.
+- **Caveat: the attack is not only the delay.** The `uc11_programmable` baseline
+  carries a second rule, `r1` (adds 1 to stNum in 50% of the messages), which the
+  prompt did not mention and which stayed active. The field the ladder touched was
+  precisely its fraction. The F1 drop comes from diluting the stNum jump that
+  the detector recognizes, not from the 20 ms delay having become stealthier.
+- **Caveat: the detector was trained on the `uc11` baseline.** That baseline is
+  a different attack (`set cbStatus = 1` plus stNum + 1), with an internal recall of
+  only 0.775. The variant is therefore evaluated outside the training
+  distribution.
+- **For the first time, a plan cites a feature.** The `device_quarantine` of
+  rounds 1 and 2 cites `stDiff` (the one with the highest importance, 0.27). The priority
+  was medium in all three rounds. The rest remains generic: threshold
+  tuning, dataset enrichment and network segmentation.
 
-Para o artigo, o exemplo 2 mostra que a DSL e o LLM produzem o comportamento
-pedido e que a escada percorre os dois degraus. Ele **não** serve como
-evidência de que o atraso evade, por causa da regra `r1` que sobrou.
+Example 2 shows that the DSL and the LLM produce the requested behavior
+and that the ladder walks through both steps. It does **not** serve as
+evidence that the delay evades, because of the leftover `r1` rule.

@@ -1,110 +1,110 @@
-# Preprocessador de features (E6)
+# Feature preprocessor (E6)
 
-## Objetivo
+## Goal
 
-O épico E6 do plano de 60 dias pede um "preprocessador modular" com critério
-de pronto "fit/transform sem leakage; manifest reproduzível". Antes do E6, o
-preparo de features (colunas descartadas, imputação, encoding categórico)
-vivia embutido e privado em `core/ids_evaluator.py::IdsEvaluator`, com um
-leakage real: `train_baseline` ajustava essas decisões sobre o dataset
-**inteiro** antes de fazer o `train_test_split` — a detecção de coluna
-constante e o vocabulário categórico viam as linhas de teste.
+Epic E6 of the 60-day plan asks for a "modular preprocessor" with the done
+criterion "fit/transform without leakage; reproducible manifest". Before E6, the
+feature preparation (dropped columns, imputation, categorical encoding)
+lived embedded and private in `core/ids_evaluator.py::IdsEvaluator`, with a
+real leakage: `train_baseline` fitted those decisions on the **whole**
+dataset before doing the `train_test_split` — the constant-column detection
+and the categorical vocabulary saw the test rows.
 
-O E6 extrai esse preparo para `core/preprocessor.py::FeaturePreprocessor`, um
-componente independente com contrato `fit`/`transform`, reaproveitável por
-qualquer detector sob o mesmo protocolo (consumido pelo E8 — RF/DT/SVM, ver
-`docs/detectors.md`). O
-`IdsEvaluator` agora faz o `train_test_split` sobre o X **cru** e só então
-chama `fit` — exclusivamente na partição de treino.
+E6 extracts this preparation into `core/preprocessor.py::FeaturePreprocessor`, an
+independent component with a `fit`/`transform` contract, reusable by
+any detector under the same protocol (consumed by E8 — RF/DT/SVM, see
+`docs/detectors.md`). The
+`IdsEvaluator` now does the `train_test_split` on the **raw** X and only then
+calls `fit` — exclusively on the train partition.
 
-Undersampling e seleção de features por mutual information (o resto da janela
-D25-35 do plano) são o **épico E7**, que consome `FeatureManifest.feature_columns`
-como ponto de partida — não fazem parte deste componente.
+Undersampling and feature selection by mutual information (the rest of the
+D25-35 window of the plan) are **epic E7**, which consumes `FeatureManifest.feature_columns`
+as its starting point — they are not part of this component.
 
-## Contrato de saída
+## Output contract
 
 `domain/feature_manifest.py::FeatureManifest` (`extra="forbid"`,
-`frozen=True`) é o retrato do que um `fit` produziu — reconstruível sozinho
-via `FeaturePreprocessor.from_manifest`, sem pickle:
+`frozen=True`) is the snapshot of what a `fit` produced — reconstructible on its own
+via `FeaturePreprocessor.from_manifest`, without pickle:
 
-- `label_column`, `feature_columns` (ordem final ajustada);
-- `dropped_columns`: cada coluna descartada e o motivo (`always_drop`,
-  `constant` ou `cb_status`);
-- `numeric_features` / `categorical_features`, partição exaustiva de
+- `label_column`, `feature_columns` (final fitted order);
+- `dropped_columns`: each dropped column and the reason (`always_drop`,
+  `constant` or `cb_status`);
+- `numeric_features` / `categorical_features`, an exhaustive partition of
   `feature_columns`;
-- `numeric_imputation` (`zero` ou `median`) + `numeric_fill_values`, um valor
-  por feature numérica;
-- `categorical_codes`, um dicionário `{valor: código}` por feature
-  categórica;
-- `scaler` (`none` ou `standard`) + `scaler_stats` (média/desvio por
-  numérica, exigido para todas quando `scaler="standard"`);
-- `fitted_rows`: quantas linhas de **treino** alimentaram o ajuste — nunca o
-  total do dataset;
-- `fitted_content_hash`: sha256 do conteúdo exato que foi ajustado (mesma
-  convenção de `DatasetBundle.content_hash`).
+- `numeric_imputation` (`zero` or `median`) + `numeric_fill_values`, one value
+  per numeric feature;
+- `categorical_codes`, one `{value: code}` dictionary per categorical
+  feature;
+- `scaler` (`none` or `standard`) + `scaler_stats` (mean/deviation per
+  numeric feature, required for all of them when `scaler="standard"`);
+- `fitted_rows`: how many **train** rows fed the fit — never the
+  dataset total;
+- `fitted_content_hash`: sha256 of the exact content that was fitted (same
+  convention as `DatasetBundle.content_hash`).
 
-Validadores (`@model_validator(mode="after")`) impõem: `numeric_features` e
-`categorical_features` particionam `feature_columns` sem sobra nem
-sobreposição; `dropped_columns` não repete nome e não colide com
-`feature_columns`; `numeric_fill_values` e `categorical_codes` cobrem
-**exatamente** as features do seu tipo (não um subconjunto); `scaler_stats`
-cobre todas as `numeric_features` quando `scaler="standard"`; nenhum valor
-ajustado (`numeric_fill_values`, `scaler_stats`) pode ser NaN/Infinity.
+Validators (`@model_validator(mode="after")`) enforce: `numeric_features` and
+`categorical_features` partition `feature_columns` with no remainder and no
+overlap; `dropped_columns` does not repeat a name and does not collide with
+`feature_columns`; `numeric_fill_values` and `categorical_codes` cover
+**exactly** the features of their type (not a subset); `scaler_stats`
+covers all the `numeric_features` when `scaler="standard"`; no fitted value
+(`numeric_fill_values`, `scaler_stats`) may be NaN/Infinity.
 
 ## Anti-leakage
 
-`FeaturePreprocessor.fit` só enxerga o dataframe que recebe — o chamador é
-responsável por já ter separado treino e teste antes de chamar `fit`.
-`transform` nunca recalcula nada a partir dos dados que recebe; só aplica o
-que `fit` já decidiu (categoria nunca vista → `unseen_category_code` (-1),
-coluna ausente no dataframe de entrada → `missing_column_fill` (0.0), depois
-imputada/escalada como qualquer outro valor). `FeatureManifest.fitted_rows` é
-a prova, no próprio artefato, de que o ajuste viu só a partição de treino —
-`tests/test_intent_loop_orchestrator.py` verifica esse número diretamente
-(14 de 20 linhas do seed cacheado, `test_size=0.3` padrão).
+`FeaturePreprocessor.fit` only sees the dataframe it receives — the caller is
+responsible for having already separated train and test before calling `fit`.
+`transform` never recomputes anything from the data it receives; it only applies
+what `fit` already decided (a never-seen category → `unseen_category_code` (-1),
+a column missing from the input dataframe → `missing_column_fill` (0.0), then
+imputed/scaled like any other value). `FeatureManifest.fitted_rows` is
+the proof, in the artifact itself, that the fit saw only the train partition —
+`tests/test_intent_loop_orchestrator.py` checks this number directly
+(14 of 20 rows of the cached seed, default `test_size=0.3`).
 
-Uma coluna pode se qualificar para mais de um motivo de descarte ao mesmo
-tempo (no dataset real do ERENO, 21 das 33 colunas descartadas são
-simultaneamente `always_drop` e `constant`) — o motivo registrado segue
-sempre `always_drop` > `cb_status` > `constant`, nunca uma combinação.
+A column may qualify for more than one drop reason at the same
+time (in the real ERENO dataset, 21 of the 33 dropped columns are
+simultaneously `always_drop` and `constant`) — the recorded reason always follows
+`always_drop` > `cb_status` > `constant`, never a combination.
 
-Limitação conhecida, não é leakage mas é honesto documentar: o tipo
-numérico-vs-categórico de cada coluna vem do dtype que `pandas.read_csv`
-infere sobre o arquivo inteiro, antes de qualquer split — uma coluna não
-pode trocar de tipo entre `fit` e `transform`, mas essa decisão específica
-não é exclusiva da partição de treino.
+Known limitation, not leakage but honest to document: the
+numeric-vs-categorical type of each column comes from the dtype that `pandas.read_csv`
+infers over the whole file, before any split — a column cannot
+change type between `fit` and `transform`, but that specific decision
+is not exclusive to the train partition.
 
-## `PREPROCESSOR_MODE` — comparação antes/depois
+## `PREPROCESSOR_MODE` — before/after comparison
 
-`config.settings.PREPROCESSOR_MODE` (env var, default `"modular"`) e o
-parâmetro homônimo de `IdsEvaluator.__init__` selecionam **quando** o `fit`
-acontece em relação ao split — não uma lógica de preprocessamento diferente,
-as duas variantes chamam o mesmo `FeaturePreprocessor`:
+`config.settings.PREPROCESSOR_MODE` (env var, default `"modular"`) and the
+homonymous parameter of `IdsEvaluator.__init__` select **when** the `fit`
+happens relative to the split — not a different preprocessing logic,
+both variants call the same `FeaturePreprocessor`:
 
-- `"modular"` (default): split sobre o X cru, `fit` só depois, na partição
-  de treino. Sem leakage.
-- `"legacy"`: `fit` sobre o dataset inteiro antes do split — reproduz de
-  propósito o comportamento anterior ao E6, só para comparar métricas.
+- `"modular"` (default): split on the raw X, `fit` only afterwards, on the train
+  partition. No leakage.
+- `"legacy"`: `fit` on the whole dataset before the split — deliberately reproduces
+  the pre-E6 behavior, only to compare metrics.
 
-Nos dados reais do ERENO (`data/baseline_dataset.csv`) as duas variantes
-produzem exatamente as mesmas métricas: todas as 11 colunas categóricas do
-protocolo já são descartadas por `always_drop`, então não sobra vocabulário
-categórico para vazar, e nenhuma das 20 features numéricas sobreviventes é
-constante só no dataset inteiro mas não no treino — `git diff` de
-`data/iteration_history.json` após regenerar o golden confirma isso: zero
-diferença fora do caminho absoluto do dataset. A correção importa para
-datasets onde essa coincidência não se sustenta.
+On the real ERENO data (`data/baseline_dataset.csv`) the two variants
+produce exactly the same metrics: all 11 categorical columns of the
+protocol are already dropped by `always_drop`, so there is no categorical vocabulary
+left to leak, and none of the 20 surviving numeric features is
+constant only in the whole dataset but not in the train — `git diff` of
+`data/iteration_history.json` after regenerating the golden confirms this: zero
+difference outside the dataset's absolute path. The fix matters for
+datasets where this coincidence does not hold.
 
-## `PROTOCOL_FEATURES_MODE` — identidade não é o mesmo que semântica
+## `PROTOCOL_FEATURES_MODE` — identity is not the same as semantics
 
-A lista de sempre-descartar veio inteira do commit inicial do framework e
-tratava dois grupos muito diferentes sob a mesma justificativa
-("temporais/sequência, derivados fortes"). Medindo cada coluna descartada
-contra a classe em `data/baseline_dataset.csv` — 21 das 33 são constantes e a
-medição só faz sentido para as outras 12, com teto **H(classe) = 0.6611 nats**
-— a separação é inequívoca:
+The always-drop list came whole from the framework's initial commit and
+treated two very different groups under the same justification
+("temporal/sequence, strong derived features"). Measuring each dropped column
+against the class in `data/baseline_dataset.csv` — 21 of the 33 are constant and the
+measurement only makes sense for the other 12, with a ceiling of **H(class) = 0.6611 nats**
+— the separation is unambiguous:
 
-| coluna | MI | % do teto | grupo |
+| column | MI | % of ceiling | group |
 |---|---|---|---|
 | `sqDiff` | 0.5367 | 81% | delta |
 | `tDiff` | 0.5335 | 81% | delta |
@@ -112,95 +112,95 @@ medição só faz sentido para as outras 12, com teto **H(classe) = 0.6611 nats*
 | `timeFromLastChange` | 0.4343 | 66% | delta |
 | `timestampDiff` | 0.2251 | 34% | delta |
 | `stDiff` | 0.1958 | 30% | delta |
-| `Time` | 0.0000 | 0% | identidade |
-| `StNum` | 0.0002 | 0,03% | identidade |
-| `t`, `GooseTimestamp`, `receivedTimestamp`, `delay` | ~0.0001 | ~0% | identidade |
+| `Time` | 0.0000 | 0% | identity |
+| `StNum` | 0.0002 | 0.03% | identity |
+| `t`, `GooseTimestamp`, `receivedTimestamp`, `delay` | ~0.0001 | ~0% | identity |
 
-Identificadores e valores absolutos não carregam sinal — e o que eles
-carregariam num gerador sintético seria o bloco de geração, não o ataque.
-Descartá-los está certo. Os deltas são o oposto: são a semântica de sequência
-e temporização do GOOSE, e replay, flooding e grayhole **são** anomalias de
-`sqDiff`/`tDiff`. Sem eles, o detector não tem como enxergar nada além da
-falta forjada.
+Identifiers and absolute values carry no signal — and what they would
+carry in a synthetic generator would be the generation block, not the attack.
+Dropping them is right. The deltas are the opposite: they are the sequence and
+timing semantics of GOOSE, and replay, flooding and grayhole **are** anomalies of
+`sqDiff`/`tDiff`. Without them, the detector has no way to see anything beyond the
+forged fault.
 
-`config.settings.PROTOCOL_FEATURES_MODE` (env var) e o parâmetro homônimo de
-`IdsEvaluator`/`FeaturePreprocessor` escolhem entre os dois regimes:
+`config.settings.PROTOCOL_FEATURES_MODE` (env var) and the homonymous parameter of
+`IdsEvaluator`/`FeaturePreprocessor` choose between the two regimes:
 
-- `"drop"` (**default**): descarta os dois grupos, 33 colunas. Reproduz
-  exatamente o comportamento herdado — `data/iteration_history.json` continua
-  byte-estável. Sobram 20 features, 18 delas grandezas elétricas.
-- `"deltas"`: descarta só as 24 de identidade. Sobram 29; as 9 a mais são
+- `"drop"` (**default**): drops both groups, 33 columns. Reproduces
+  exactly the inherited behavior — `data/iteration_history.json` remains
+  byte-stable. 20 features remain, 18 of them electrical quantities.
+- `"deltas"`: drops only the 24 identity ones. 29 remain; the 9 additional ones are
   `stDiff`, `sqDiff`, `SqNum`, `tDiff`, `timestampDiff`, `timeFromLastChange`,
   `gooseLengthDiff`, `apduSizeDiff`, `frameLengthDiff`.
 
-`SqNum` bruto entra no grupo de deltas, e não no de identidade, porque em
-GOOSE ele zera quando o `stNum` incrementa — carrega estado, não índice. É o
-caso menos claro do grupo, e a assimetria com `StNum` (0,03% de MI) é
-deliberada.
+The raw `SqNum` goes into the deltas group, and not the identity one, because in
+GOOSE it resets when `stNum` increments — it carries state, not an index. It is the
+least clear case of the group, and the asymmetry with `StNum` (0.03% of MI) is
+deliberate.
 
-### Ablação
+### Ablation
 
-Sobre 8 000 linhas balanceadas do dataset de referência, Random Forest:
+On 8 000 balanced rows of the reference dataset, Random Forest:
 
-| modo | features | F1 | top-4 por importância |
+| mode | features | F1 | top-4 by importance |
 |---|---|---|---|
 | `drop` | 20 | 1.0000 | `vsbBTrapAreaSum` .168, `vsbCTrapAreaSum` .162, `vsbATrapAreaSum` .160, `cbStatus` .130 |
 | `deltas` | 26 | 1.0000 | `SqNum` .253, `timeFromLastChange` .117, `sqDiff` .114, `tDiff` .102 |
 
-A métrica não se move: `masquerade_fault` já era perfeitamente separável só
-pela assinatura analógica, e é o único ataque fisicamente mensurável em
-`--generator-mode cached`. **O que muda é em que o detector se apoia** — e
-isso corta nos dois sentidos. `SqNum` virar a feature dominante para detectar
-uma forma de onda forjada é plausível (o masquerade injeta quadros e perturba
-a cadência), mas é também exatamente com o que um artefato do gerador se
-pareceria. É por isso que o modo é medível por ablação em vez de estar ligado:
-o ganho real está nos ataques que precisam do jar, e a decisão é do
-experimento.
+The metric does not move: `masquerade_fault` was already perfectly separable by the
+analog signature alone, and it is the only physically measurable attack in
+`--generator-mode cached`. **What changes is what the detector relies on** — and
+this cuts both ways. `SqNum` becoming the dominant feature for detecting
+a forged waveform is plausible (the masquerade injects frames and disturbs
+the cadence), but it is also exactly what a generator artifact would
+look like. That is why the mode is measured by ablation instead of being turned on:
+the real gain is in the attacks that need the jar, and the decision belongs to the
+experiment.
 
-## Falha do estágio
+## Stage failure
 
-`FeaturePreprocessor.fit` levanta `PreprocessorError` (mensagem acionável)
-quando o dataframe recebido está vazio, quando nenhuma feature sobrevive ao
-descarte, ou quando uma categórica excede o teto de cardinalidade (1000
-valores distintos — defensivo contra uma coluna de alta cardinalidade, como
-um ID ou timestamp em texto, virar um manifest de megabytes). `transform`
-levanta antes de qualquer `fit`. No pipeline intent-driven, qualquer uma
-dessas falhas marca o `LoopStage` `detector` como `failed` com a causa —
-mesmo mecanismo genérico de `IntentLoopOrchestrator._stage` que os demais
-estágios usam.
+`FeaturePreprocessor.fit` raises `PreprocessorError` (actionable message)
+when the received dataframe is empty, when no feature survives the
+drop, or when a categorical exceeds the cardinality ceiling (1000
+distinct values — defensive against a high-cardinality column, such as
+an ID or a text timestamp, turning into a megabyte-sized manifest). `transform`
+raises before any `fit`. In the intent-driven pipeline, any one of
+these failures marks the `detector` `LoopStage` as `failed` with the cause —
+the same generic mechanism of `IntentLoopOrchestrator._stage` that the other
+stages use.
 
-`feature_manifest.json` é persistido **antes** do gate de matriz binária do
-`DetectionReport` (`core/detection_reporter.py::build_detection_report`), não
-depois — se a avaliação falhar ali, o manifest do que foi ajustado no
-baseline já está em disco para diagnóstico.
+`feature_manifest.json` is persisted **before** the binary-matrix gate of the
+`DetectionReport` (`core/detection_reporter.py::build_detection_report`), not
+after — if the evaluation fails there, the manifest of what was fitted on the
+baseline is already on disk for diagnosis.
 
-## Fora de escopo e trabalho futuro
+## Out of scope and future work
 
-- **Undersampling e seleção de features (E7)**: consomem
-  `FeatureManifest.feature_columns` como ponto de partida; não implementados
-  aqui — ver `core/feature_selector.py`, `core/undersamplers.py` e
+- **Undersampling and feature selection (E7)**: they consume
+  `FeatureManifest.feature_columns` as their starting point; not implemented
+  here — see `core/feature_selector.py`, `core/undersamplers.py` and
   `docs/feature_selection.md`.
-- **Detector interface RF/DT/SVM (E8)**: ~~fora de escopo~~ — **entregue**.
-  `scaler="standard"` deixou de ser só uma preparação para o futuro: os dois
-  SVMs registrados em `core/detectors.py` o pedem, e `IdsEvaluator` resolve a
-  escala a partir do detector escolhido. Ver `docs/detectors.md`.
-- **Mapeamento feature → técnica defensiva**: mencionado como extensão
-  natural em `docs/feedback_policy.md`; não é este épico.
+- **RF/DT/SVM detector interface (E8)**: ~~out of scope~~ — **delivered**.
+  `scaler="standard"` stopped being just a preparation for the future: the two
+  SVMs registered in `core/detectors.py` ask for it, and `IdsEvaluator` resolves the
+  scaling from the chosen detector. See `docs/detectors.md`.
+- **Feature → defensive technique mapping**: mentioned as a natural extension
+  in `docs/feedback_policy.md`; it is not this epic.
 
-## Testes
+## Tests
 
-- `tests/test_preprocessor.py`: fit/transform básico (imputação, encoding,
-  ordem de colunas), anti-leakage (coluna constante só no treino, categoria
-  não vista, `fitted_rows`, escala com estatísticas só do treino, salvaguarda
-  de desvio zero), erros (`fit` vazio, sem features sobreviventes, teto de
-  cardinalidade, `transform`/`manifest` antes de `fit`), determinismo do
-  manifest e round-trip via `from_manifest`/JSON.
-- `tests/test_new_contracts.py`: `FeatureManifest` versionado/congelado, e
-  cada validador de consistência interna.
+- `tests/test_preprocessor.py`: basic fit/transform (imputation, encoding,
+  column order), anti-leakage (a column constant only in the train, a category
+  not seen, `fitted_rows`, scaling with statistics from the train only, a
+  zero-deviation safeguard), errors (empty `fit`, no surviving features, cardinality
+  ceiling, `transform`/`manifest` before `fit`), manifest determinism
+  and round-trip via `from_manifest`/JSON.
+- `tests/test_new_contracts.py`: `FeatureManifest` versioned/frozen, and
+  each internal-consistency validator.
 - `tests/test_intent_loop_orchestrator.py`: `feature_manifest.json`
-  persistido no estágio DETECTOR, validado como `FeatureManifest`, com
-  `fitted_rows` conferido contra o tamanho real da partição de treino.
+  persisted in the DETECTOR stage, validated as `FeatureManifest`, with
+  `fitted_rows` checked against the real size of the train partition.
 - `tests/test_detection_reporter.py`, `tests/test_orchestrator_workflow.py`,
-  `tests/test_feature_importances.py`: `IdsEvaluator` treinado de verdade
-  (este último sobre o dataset real de ~80k linhas) continuam passando sem
-  alteração de valores esperados.
+  `tests/test_feature_importances.py`: an `IdsEvaluator` actually trained
+  (the latter on the real dataset of ~80k rows) keep passing with no
+  change to the expected values.

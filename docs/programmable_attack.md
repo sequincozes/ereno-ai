@@ -1,87 +1,87 @@
-# Ataque programável (uc11) — comportamentos fora do catálogo
+# Programmable attack (uc11) — behaviors outside the catalog
 
-Os dez ataques catalogados são famílias fixas (replay, flooding, grayhole, …).
-O **ataque programável** é a via para um comportamento que não é nenhum deles: o
-usuário descreve em linguagem natural o que quer, e isso vira uma **lista de
-regras** aplicadas às mensagens GOOSE. Um comportamento novo é **dado
-validado**, não uma classe Java nova.
+The ten catalogued attacks are fixed families (replay, flooding, grayhole, …).
+The **programmable attack** is the route to a behavior that is none of them: the
+user describes in natural language what they want, and that becomes a **list of
+rules** applied to the GOOSE messages. A new behavior is **validated
+data**, not a new Java class.
 
-O guardrail é o mesmo das fases anteriores, um degrau acima: na Fase 1 o LLM
-propunha um *valor*; aqui ele autora uma *regra*; em ambos, Python determinístico
-e um schema Java decidem se é executável. Nenhum Java é escrito pelo LLM.
+The guardrail is the same as in the earlier phases, one step up: in Phase 1 the LLM
+proposed a *value*; here it authors a *rule*; in both, deterministic Python
+and a Java schema decide whether it is executable. No Java is written by the LLM.
 
-## A regra
+## The rule
 
-Cada regra é `{op, field, value, fraction, when}`:
+Each rule is `{op, field, value, fraction, when}`:
 
-| campo | significado |
+| field | meaning |
 |---|---|
-| `op` | `set`/`add`/`scale` (muta o campo), `drop` (descarta a mensagem), `duplicate` (repete a mensagem) |
-| `field` | o campo que a mutação toca (`drop`/`duplicate` o ignoram) |
-| `value` | o operando da mutação, ou o número de cópias **extras** do `duplicate` (1 a 10) |
-| `fraction` | probabilidade em [0,1] de a regra disparar nas mensagens que ela mira |
-| `when` | a **seleção**: `{field, cmp, value}`; `cmp="always"` mira toda mensagem |
+| `op` | `set`/`add`/`scale` (mutates the field), `drop` (discards the message), `duplicate` (repeats the message) |
+| `field` | the field the mutation touches (`drop`/`duplicate` ignore it) |
+| `value` | the operand of the mutation, or the number of **extra** copies of `duplicate` (1 to 10) |
+| `fraction` | probability in [0,1] that the rule fires on the messages it targets |
+| `when` | the **selection**: `{field, cmp, value}`; `cmp="always"` targets every message |
 
-Campos disponíveis: os inteiros `cbStatus`, `stNum`, `sqNum`,
-`gooseTimeAllowedtoLive`, `confRev`, e os de tempo `t` e `timestamp` (em
-**segundos**).
+Available fields: the integers `cbStatus`, `stNum`, `sqNum`,
+`gooseTimeAllowedtoLive`, `confRev`, and the time fields `t` and `timestamp` (in
+**seconds**).
 
-As regras vivem sob `rules` como um **objeto** de slots (`{"r0": {...}, "r1":
-{...}}`), não um array. O modelo de caminhos do repo é dict pontilhado
-(`rules.r0.when.cmp`) e não tem suporte a índice de array; um dict de slots
-mantém as duas pontas — o compilador Python e o `ProgrammableCreatorC` Java —
-sobre o mesmo modelo de caminho. O Java aplica os slots em ordem de chave.
+The rules live under `rules` as an **object** of slots (`{"r0": {...}, "r1":
+{...}}`), not an array. The repo's path model is a dotted dict
+(`rules.r0.when.cmp`) and has no support for array indices; a dict of slots
+keeps both ends — the Python compiler and the Java `ProgrammableCreatorC` —
+on the same path model. Java applies the slots in key order.
 
-### Três eixos, uma gramática só
+### Three axes, a single grammar
 
-- **Mutação** — `set`/`add`/`scale` sobre um campo do quadro.
-- **Seleção** (`when`) — a regra só age nas mensagens em que a condição vale.
-  A condição é lida da mensagem **original**, antes de qualquer mutação: qual
-  mensagem uma regra mira não pode depender do que o slot anterior já mudou, ou
-  a ordem dos slots viraria parte do comportamento. As mutações, essas sim,
-  encadeiam em ordem de slot.
-- **Temporização** — `add` nos campos de tempo, com sinal.
+- **Mutation** — `set`/`add`/`scale` over a frame field.
+- **Selection** (`when`) — the rule only acts on the messages where the condition holds.
+  The condition is read from the **original** message, before any mutation: which
+  message a rule targets cannot depend on what the previous slot already changed, or
+  the order of the slots would become part of the behavior. The mutations, those do
+  chain in slot order.
+- **Timing** — `add` on the time fields, with a sign.
 
-## Por que não existe uma op `delay` nem uma op `reorder`
+## Why there is no `delay` op and no `reorder` op
 
-Não é economia de gramática: é que não poderia funcionar. O fluxo escrito pelo
-ERENO **não** está na ordem em que o creator emite — as mensagens saem por um
-`PriorityQueue<EthernetFrame>` cujo `compareTo` ordena por `timestamp`, e as
-features de delta (`timestampDiff`, `tDiff`, `delay`) são calculadas entre
-mensagens consecutivas *nessa* ordem. Bufferizar ou trocar mensagens de lugar no
-creator seria apagado pela fila.
+It is not a grammar economy: it simply could not work. The stream written by
+ERENO is **not** in the order in which the creator emits it — the messages leave through a
+`PriorityQueue<EthernetFrame>` whose `compareTo` orders by `timestamp`, and the
+delta features (`timestampDiff`, `tDiff`, `delay`) are computed between
+consecutive messages in *that* order. Buffering or swapping messages in the
+creator would be erased by the queue.
 
-Então o relógio **é** a ordem:
+So the clock **is** the order:
 
-| o pedido | a regra |
+| the request | the rule |
 |---|---|
-| "atrase 20 ms" | `op=add`, `field=timestamp`, `value=0.02` |
-| "tire de ordem / antecipe" | `op=add`, `field=timestamp`, `value=-0.02` |
-| "descarte 40%" | `op=drop`, `fraction=0.4` |
-| "duplique cada mensagem" | `op=duplicate`, `value=1` |
+| "delay by 20 ms" | `op=add`, `field=timestamp`, `value=0.02` |
+| "take out of order / advance" | `op=add`, `field=timestamp`, `value=-0.02` |
+| "drop 40%" | `op=drop`, `fraction=0.4` |
+| "duplicate each message" | `op=duplicate`, `value=1` |
 
-`set` e `scale` são **recusados** nos campos de tempo: eles são relógios
-absolutos, e setar ou escalar um realoca a mensagem para um ponto arbitrário da
-captura em vez de deslocá-la. Só `add` tem significado ali. A regra é do schema
-(`domain/attack_configs/programmable.py`), não da allowlist — é uma coerência
-*entre* dois campos da mesma regra, que nenhuma allowlist campo-a-campo
-consegue expressar: o portão aprova `op=scale` e `field=timestamp`
-separadamente, e é o schema que recusa a combinação, no compilador.
+`set` and `scale` are **refused** on the time fields: they are absolute clocks,
+and setting or scaling one relocates the message to an arbitrary point of the
+capture instead of shifting it. Only `add` has meaning there. The rule belongs to the schema
+(`domain/attack_configs/programmable.py`), not to the allowlist — it is a coherence
+*between* two fields of the same rule, which no field-by-field allowlist
+can express: the gate approves `op=scale` and `field=timestamp`
+separately, and it is the schema that refuses the combination, in the compiler.
 
-## Como uma intenção vira regras
+## How an intent becomes rules
 
-O ponto de desenho: a capacidade separa dois tipos de campo por slot.
+The design point: the capability separates two kinds of field per slot.
 
-- **`fraction` carrega efeito.** É a única alavanca que a heurística do
-  compilador varre por intensidade — porque é a única que mapeia limpo para
-  evasão (menos mutação → mais parecido com o benigno) e atividade (mais
-  mutação). Baseline 0.5 para ter folga nas duas direções; piso 0.05.
-- **`op`/`field`/`value`/`when.*` têm efeito vazio.** São o *comportamento* em
-  si, e a heurística nunca os toca. O LLM os **autora** via `target_values`
-  (Fase 1), que aplica um valor ditado sem depender de efeito e nunca o clampa.
+- **`fraction` carries effect.** It is the only lever that the compiler's
+  heuristic sweeps by intensity — because it is the only one that maps cleanly to
+  evasion (less mutation → more similar to benign) and activity (more
+  mutation). Baseline 0.5 to leave headroom in both directions; floor 0.05.
+- **`op`/`field`/`value`/`when.*` have an empty effect.** They are the *behavior*
+  itself, and the heuristic never touches them. The LLM **authors** them via `target_values`
+  (Phase 1), which applies a dictated value without depending on an effect and never clamps it.
 
-Assim, "atrase em 20 ms as mensagens com o disjuntor fechado" vira, sem um
-compilador novo:
+So, "delay by 20 ms the messages with the circuit breaker closed" becomes, without a new
+compiler:
 
 ```json
 "target_values": {
@@ -92,128 +92,129 @@ compilador novo:
 }
 ```
 
-A gramática (quais ops/campos/comparadores/faixas são legais) está na
-capacidade; o LLM preenche os slots. Um `field` fora da allowlist do creator, um
-`fraction` fora de [0,1] ou um comparador inventado é recusado no portão
-determinístico — não corrigido em silêncio.
+The grammar (which ops/fields/comparators/ranges are legal) lives in the
+capability; the LLM fills in the slots. A `field` outside the creator's allowlist, a
+`fraction` outside [0,1] or an invented comparator is refused at the
+deterministic gate — not silently corrected.
 
-## Uso
+## Usage
 
 ```bash
 uv run adversarial-ids --engine intent --generator-mode jar \
   --prompt "Atrase em 20 ms só as mensagens com o disjuntor fechado."
+# "Delay by 20 ms only the messages with the circuit breaker closed."
 ```
 
-Só é fisicamente mensurável em `--generator-mode jar` (em cached todo trace é o
-mesmo arquivo). O ataque produz a classe `programmable` no dataset.
+It is only physically measurable in `--generator-mode jar` (in cached mode every trace is the
+same file). The attack produces the `programmable` class in the dataset.
 
-## O baseline traz dois slots com regra default
+## The baseline ships two slots with a default rule
 
-`inputs/attacks/uc11_programmable.json` ship com `r0` (set cbStatus=1) e `r1`
-(add stNum+1), ambos fraction 0.5 e `when.cmp="always"` — um ataque programável
-válido e detectável por padrão.
+`inputs/attacks/uc11_programmable.json` ships with `r0` (set cbStatus=1) and `r1`
+(add stNum+1), both fraction 0.5 and `when.cmp="always"` — a valid programmable
+attack, detectable by default.
 
-O `when` **precisa** estar no baseline, e precisa ser inerte: `target_values`
-aplica um valor a um caminho existente, não cria chave que falta, então um
-`when` opcional nunca seria autorável; e um `when` com default não-neutro
-mudaria o ataque default. `cmp="always"` resolve os dois — ignora
-`when.field`/`when.value` e reproduz exatamente o comportamento anterior à
-seleção.
+The `when` **must** be in the baseline, and must be inert: `target_values`
+applies a value to an existing path, it does not create a missing key, so an optional
+`when` could never be authored; and a `when` with a non-neutral default
+would change the default attack. `cmp="always"` solves both — it ignores
+`when.field`/`when.value` and reproduces exactly the pre-selection
+behavior.
 
-Uma intenção que autora só `r0` **mantém `r1` no default**: o trace resultante
-aplica a regra autorada mais a `r1` do baseline. Para um comportamento "do zero",
-zere a fração do slot que não quer (`rules.r1.fraction: 0`) ou diga isso no
-prompt. Dois slots é o que permite autorar comportamentos de duas regras; o
-custo é carregar dois defaults.
+An intent that authors only `r0` **keeps `r1` at the default**: the resulting trace
+applies the authored rule plus the baseline's `r1`. For a behavior "from scratch",
+zero out the fraction of the slot you do not want (`rules.r1.fraction: 0`) or say so in the
+prompt. Two slots is what allows authoring two-rule behaviors; the
+cost is carrying two defaults.
 
-## `drop` e o gate de prevalência do E4
+## `drop` and the E4 prevalence gate
 
-`drop` reduz o volume da classe de ataque: o creator emite uma mensagem a menos
-por disparo. Com `fraction` alto isso derruba a prevalência da classe
-`programmable` e pode esbarrar no piso de 1% do gate E4
-(`INTENT_LOOP_MIN_ATTACK_PREVALENCE`) — o que é o gate fazendo o trabalho dele,
-não um bug: um ataque raro demais não produz métrica que signifique alguma
-coisa. Medido: `fraction=0.4` deixa 30001 linhas de ataque das 50000 (60%), bem
-acima do piso. Já `duplicate` vai na direção oposta e multiplica o trace — daí
-o teto de 10 cópias extras.
+`drop` reduces the volume of the attack class: the creator emits one message fewer
+per firing. With a high `fraction` this lowers the prevalence of the `programmable`
+class and may hit the 1% floor of the E4 gate
+(`INTENT_LOOP_MIN_ATTACK_PREVALENCE`) — which is the gate doing its job,
+not a bug: an attack that is too rare does not produce a metric that means anything.
+Measured: `fraction=0.4` leaves 30001 attack rows of the 50000 (60%), well
+above the floor. `duplicate`, on the other hand, goes in the opposite direction and multiplies the trace — hence
+the cap of 10 extra copies.
 
-## Escopo
+## Scope
 
-A superfície é limitada aos campos com getter/setter em `Goose` que o creator
-sabe ler e escrever; ampliá-la é aditivo (mais entradas na allowlist dos dois
-lados). O que **não** existe: regras que dependem de mais de uma mensagem
-(janelas, rajadas, estado entre mensagens) — cada regra decide olhando só a
-mensagem corrente.
+The surface is limited to the fields with a getter/setter in `Goose` that the creator
+knows how to read and write; widening it is additive (more entries in the allowlist on both
+sides). What does **not** exist: rules that depend on more than one message
+(windows, bursts, state between messages) — each rule decides looking only at the
+current message.
 
-## Verificação
+## Verification
 
-- `tests/test_programmable_attack.py` — registro, schema (dict de slots, ops
-  válidos, fraction em [0,1], `when` obrigatório), a coerência op↔campo de tempo
-  e o limite de cópias do `duplicate`, a capacidade (só fraction com efeito), a
-  autoração de comportamento/seleção/atraso via `target_values`, o nunca-clampar,
-  e o determinismo.
-- `tests/test_intent_golden_prompts_programmable.py` — os quatro eixos da
-  gramática como golden prompts, com os payloads que o LLM real produziu, mais
-  os pedidos recusados: cinco nos portões da intenção e dois só no schema
-  (a categoria `incoherent`, que existe porque aqui a impossibilidade pode estar
-  na combinação de dois campos legais).
+- `tests/test_programmable_attack.py` — registry, schema (dict of slots, valid
+  ops, fraction in [0,1], `when` required), the op↔time-field coherence
+  and the `duplicate` copy limit, the capability (only fraction with effect), the
+  authoring of behavior/selection/delay via `target_values`, never-clamp,
+  and determinism.
+- `tests/test_intent_golden_prompts_programmable.py` — the four axes of the
+  grammar as golden prompts, with the payloads that the real LLM produced, plus
+  the refused requests: five at the intent gates and two only in the schema
+  (the `incoherent` category, which exists because here the impossibility may lie
+  in the combination of two legal fields).
 - `tests/test_attack_capabilities_catalog.py` / `test_intent_loop_orchestrator.py`
-  — o programmable passa as seis invariantes do catálogo e os sete estágios em
-  cached mode como qualquer ataque.
-- **JAR (26/09, Fase 2.1):** "scale sqNum×3 em 40% + set TTL=5" gerou um trace
-  com 50000 linhas da classe `programmable`.
-- **LLM real (`openai/gpt-oss-120b`, 26/09):** o prompt "reescreva o sqNum
-  multiplicando por 3 em ~40%" → o LLM escolheu `base_attack=programmable` e
-  autorou `{field:sqNum, op:scale, value:3, fraction:0.4}`, em 6826 tokens (sob o
-  TPM de 8000).
-- **JAR (01/10, Fase 2.2), seed 4242, quatro configs:**
-  - *mutação só* (regressão da 2.1): 50000 linhas de ataque — o `when` neutro
-    não mudou nada;
-  - *seleção + atraso* (`when cbStatus=1`, `add timestamp +0.02`, fraction 1.0):
-    as linhas com `cbStatus=1` ficaram com `timestamp - t` **mínimo exatamente
-    0.02** e as com `cbStatus=0` com mínimo 0.00 — o atraso caiu só na seleção;
-  - *duplicação* (`duplicate value=2`, fraction 1.0): 150002 linhas, exatamente
-    3× a baseline, e os zeros de `timestampDiff` saltaram de 31512 para 128706
-    (as cópias ficam adjacentes com o mesmo relógio);
-  - *descarte* (`drop`, fraction 0.4): 30001 linhas, exatamente os 60% que
-    sobram.
-- **Regressão dos outros ataques:** comparados os CRCs das 281 classes
-  `br/ufu/facom/ereno/**` entre o JAR da 2.1 e o da 2.2 — **só
-  `ProgrammableCreatorC.class` difere**.
-- **LLM real (`openai/gpt-oss-120b`, 01/10), um prompt por eixo da gramática.**
-  Em todos os quatro o modelo escolheu `base_attack=programmable` sozinho:
+  — programmable passes the catalog's six invariants and the seven stages in
+  cached mode like any attack.
+- **JAR (2026-09-26, Phase 2.1):** "scale sqNum×3 in 40% + set TTL=5" generated a trace
+  with 50000 rows of the `programmable` class.
+- **Real LLM (`openai/gpt-oss-120b`, 2026-09-26):** the prompt "reescreva o sqNum
+  multiplicando por 3 em ~40%" ("rewrite the sqNum by multiplying it by 3 in ~40%") → the LLM chose `base_attack=programmable` and
+  authored `{field:sqNum, op:scale, value:3, fraction:0.4}`, in 6826 tokens (under the
+  TPM of 8000).
+- **JAR (2026-10-01, Phase 2.2), seed 4242, four configs:**
+  - *mutation only* (regression from 2.1): 50000 attack rows — the neutral `when`
+    changed nothing;
+  - *selection + delay* (`when cbStatus=1`, `add timestamp +0.02`, fraction 1.0):
+    the rows with `cbStatus=1` ended up with a **minimum** `timestamp - t` of **exactly
+    0.02** and those with `cbStatus=0` with a minimum of 0.00 — the delay fell only on the selection;
+  - *duplication* (`duplicate value=2`, fraction 1.0): 150002 rows, exactly
+    3× the baseline, and the zeros of `timestampDiff` jumped from 31512 to 128706
+    (the copies are adjacent with the same clock);
+  - *drop* (`drop`, fraction 0.4): 30001 rows, exactly the 60% that
+    remain.
+- **Regression of the other attacks:** compared the CRCs of the 281 classes
+  `br/ufu/facom/ereno/**` between the 2.1 JAR and the 2.2 one — **only
+  `ProgrammableCreatorC.class` differs**.
+- **Real LLM (`openai/gpt-oss-120b`, 2026-10-01), one prompt per grammar axis.**
+  In all four the model chose `base_attack=programmable` on its own:
 
-  | prompt (resumido) | autorado |
+  | prompt (abridged) | authored |
   |---|---|
-  | "reescreva o sqNum só nas mensagens com o disjuntor aberto" | `when.field=cbStatus`, `when.cmp=eq`, `when.value=0`, `add sqNum`, `fraction=1.0` |
-  | "empurre o relógio 20 ms para a frente, sem reenviar nada" | `op=add`, `field=timestamp`, `value=0.02`, `fraction=1.0` |
-  | "mensagens fora de ordem: recue ~um terço delas em 30 ms" | `op=add`, `field=timestamp`, `value=-0.03`, `fraction=0.33` |
-  | "cada mensagem três vezes em vez de uma" | `op=duplicate`, `value=2`, `fraction=1.0` |
+  | "reescreva o sqNum só nas mensagens com o disjuntor aberto" ("rewrite the sqNum only on the messages with the circuit breaker open") | `when.field=cbStatus`, `when.cmp=eq`, `when.value=0`, `add sqNum`, `fraction=1.0` |
+  | "empurre o relógio 20 ms para a frente, sem reenviar nada" ("push the clock 20 ms forward, without resending anything") | `op=add`, `field=timestamp`, `value=0.02`, `fraction=1.0` |
+  | "mensagens fora de ordem: recue ~um terço delas em 30 ms" ("out-of-order messages: move ~a third of them back by 30 ms") | `op=add`, `field=timestamp`, `value=-0.03`, `fraction=0.33` |
+  | "cada mensagem três vezes em vez de uma" ("each message three times instead of once") | `op=duplicate`, `value=2`, `fraction=1.0` |
 
-  Os dois eixos de temporização saíram exatos, com a conversão ms→s e o sinal
-  certos, e sem o modelo procurar uma op `delay`/`reorder` que não existe.
+  The two timing axes came out exact, with the ms→s conversion and the sign
+  right, and without the model looking for a `delay`/`reorder` op that does not exist.
 
-## Limitação aberta: o modelo às vezes achata `target_values`
+## Open limitation: the model sometimes flattens `target_values`
 
-No prompt de seleção — o que fixa **sete** caminhos, mais que qualquer outro — o
-modelo emitiu os caminhos como argumentos de topo da ferramenta, ao lado de um
-`target_values: null`, e a Groq recusou a chamada inteira
-(`tool_use_failed: additionalProperties ... not allowed`). Aconteceu em 2 de 3
-tentativas desse prompt; nas outras o mesmo prompt nesteou certo e produziu a
-linha da tabela acima.
+In the selection prompt — the one that fixes **seven** paths, more than any other — the
+model emitted the paths as top-level arguments of the tool, next to a
+`target_values: null`, and Groq refused the whole call
+(`tool_use_failed: additionalProperties ... not allowed`). It happened in 2 of 3
+attempts at that prompt; in the others the same prompt nested correctly and produced the
+row of the table above.
 
-É serialização do modelo, não a gramática: a assinatura de `submit_intent_spec`
-tipa `target_values` como dict e os outros três prompts (4 a 5 caminhos) nestearam
-certo. É também maquinário da **Fase 1**, não da 2.2 — só que a 2.2 torna comum
-fixar muitos caminhos de uma vez, que é quando aparece. Um aviso explícito na
-descrição do parâmetro não eliminou o caso. Opções, se virar incômodo: uma
-retentativa em `tool_use_failed`, ou menos caminhos por chamada.
+It is model serialization, not the grammar: the signature of `submit_intent_spec`
+types `target_values` as a dict and the other three prompts (4 to 5 paths) nested
+correctly. It is also **Phase 1** machinery, not 2.2's — except that 2.2 makes it common
+to fix many paths at once, which is when it shows up. An explicit warning in the
+parameter description did not eliminate the case. Options, if it becomes a nuisance: a
+retry on `tool_use_failed`, or fewer paths per call.
 
-## Nota de manutenção
+## Maintenance note
 
-Três pares precisam concordar entre Python e Java, e o Java é sempre a última
-linha do guardrail (se o Python aceitar o que o Java não conhece, a geração
-falha alto com `IllegalArgumentException`, por desenho):
+Three pairs must agree between Python and Java, and Java is always the last
+line of the guardrail (if Python accepts what Java does not know, generation
+fails loudly with `IllegalArgumentException`, by design):
 
 | Python | Java |
 |---|---|
@@ -221,7 +222,7 @@ falha alto com `IllegalArgumentException`, por desenho):
 | `TIME_FIELDS` (idem) | `ProgrammableCreatorC.TIME_FIELDS` |
 | `MAX_EXTRA_COPIES` (idem) | `ProgrammableCreatorC.MAX_EXTRA_COPIES` |
 
-Do lado Python essas constantes moram no **domínio** e a capacidade
-(`config/capabilities/programmable.py`) as importa — o schema precisa delas para
-as regras de coerência, e `config/` já depende de `domain/`, nunca o contrário.
-Uma lista só, nas duas pontas do Python.
+On the Python side these constants live in the **domain** and the capability
+(`config/capabilities/programmable.py`) imports them — the schema needs them for
+the coherence rules, and `config/` already depends on `domain/`, never the other way around.
+A single list, at both Python ends.

@@ -1,318 +1,317 @@
-# Fase 2 — comportamentos de ataque fora do catálogo
+# Phase 2 — attack behaviors outside the catalog
 
-Plano vivo. Escrito em 26/09/2026, depois da tag `intent-driven-v0.2.0` (Fase 1,
-valores ditados). Decisões desta rodada de planejamento marcadas com **[decidido
-26/09]**.
+Living plan. Written on 2026-09-26, after the `intent-driven-v0.2.0` tag (Phase 1,
+dictated values). Decisions from this planning round are marked **[decided
+2026-09-26]**.
 
-## Objetivo
+## Goal
 
-Hoje o usuário escolhe **qual** dos 11 ataques do ERENO, com **qual** efeito e
-intensidade (Fase 0/1), e desde a Fase 1 pode **ditar valores exatos** dos
-campos daquele ataque. O que ele ainda não pode é descrever um **comportamento
-que não existe** entre os 11 — "descarte só as mensagens de trip e reenvie o
-estado anterior 200 ms depois" não mapeia para nenhum ataque catalogado.
+Today the user chooses **which** of the 11 ERENO attacks, with **which** effect and
+intensity (Phase 0/1), and since Phase 1 can **dictate exact values** for that
+attack's fields. What they still cannot do is describe a **behavior
+that does not exist** among the 11 — "drop only the trip messages and resend the
+previous state 200 ms later" does not map to any cataloged attack.
 
-A Fase 2 entrega um **ataque programável**: um ataque genérico no ERENO dirigido
-por **regras declarativas em JSON**. Um comportamento novo passa a ser **dado
-validado, não código Java novo**.
+Phase 2 delivers a **programmable attack**: a generic attack in ERENO driven
+by **declarative rules in JSON**. A new behavior becomes **validated data, not
+new Java code**.
 
-## Guardrail (o mesmo da Fase 1, estendido)
+## Guardrail (the same as Phase 1, extended)
 
-O LLM emite as **regras** (dados tipados); Python determinístico e um schema no
-Java decidem se elas são válidas e as executam. **Nenhum Java é escrito pelo
-LLM.** É a extensão natural da regra central: na Fase 1 o LLM propunha um valor e
-o catálogo decidia se ele existia; aqui o LLM propõe uma regra e o schema decide
-se ela é executável. Um comportamento impossível **falha**, não é ajustado em
-silêncio.
+The LLM emits the **rules** (typed data); deterministic Python and a schema in
+Java decide whether they are valid and execute them. **No Java is written by the
+LLM.** It is the natural extension of the central rule: in Phase 1 the LLM proposed a value and
+the catalog decided whether it existed; here the LLM proposes a rule and the schema decides
+whether it is executable. An impossible behavior **fails**, it is not silently adjusted.
 
 ## Stack
 
-Inalterada e assim permanece (definição do TCC): agentes em **Agno 2.7.2** sobre
-**Groq**; núcleo determinístico em Python; gerador em Java (ERENO). A Fase 2 não
-introduz framework de agente novo.
+Unchanged and it stays that way: agents in **Agno 2.7.2** over
+**Groq**; deterministic core in Python; generator in Java (ERENO). Phase 2 does not
+introduce a new agent framework.
 
-## A realidade dos dois repositórios
+## The reality of the two repositories
 
-O trabalho Java é no repo irmão `../ERENO-2.0`, **branch `feat/journal`** (criada
-da `dev-ian`, que é a branch de onde o JAR atual foi compilado — ver a nota de
-memória `ereno-jar-origem`). O `ereno-ai` consome o JAR compilado em
+The Java work is in the sibling repo `../ERENO-2.0`, **branch `feat/journal`** (created
+from `dev-ian`, which is the branch the current JAR was compiled from — see the
+memory note `ereno-jar-origem`). `ereno-ai` consumes the compiled JAR at
 `generator_runtime/ereno-generator.jar`.
 
-**Disciplina de build (inegociável):** ao recompilar o JAR, comparar a saída
-contra o JAR atual **antes** de trocá-lo em `generator_runtime/`. Os 11 ataques
-existentes têm de sair idênticos byte a byte para as mesmas configs — os
-resultados do piloto E0 e a byte-stability do golden dependem disso. A tag
-`intent-driven-v0.2.0` é o ponto de retorno seguro no lado Python; no lado Java,
-anotar o commit da `dev-ian` que gerou o JAR corrente.
+**Build discipline (non-negotiable):** when recompiling the JAR, compare the output
+against the current JAR **before** swapping it in `generator_runtime/`. The 11
+existing attacks must come out byte-for-byte identical for the same configs — the
+E0 pilot results and the golden's byte-stability depend on it. The tag
+`intent-driven-v0.2.0` is the safe return point on the Python side; on the Java side,
+note the `dev-ian` commit that generated the current JAR.
 
-## O que a investigação de 26/09 encontrou
+## What the 2026-09-26 investigation found
 
-Levantamento no fonte do ERENO (`feat/journal`) e no lado Python:
+Survey of the ERENO source (`feat/journal`) and the Python side:
 
-1. **A infraestrutura de seed já existe.** `ConfigLoader.RNG` é um
-   `ThreadScopedRandom`; a config `randomSeed` chama `setSeed()`; e
-   `IED.randomBetween` já sorteia por essa RNG. **Mas 6 creators furam a RNG com
-   `Math.random()`** (22 ocorrências): uc01 random_replay, uc02 inverse_replay,
-   uc03 masquerade_fault, uc05 injection, uc06 high_stnum, uc08 grayhole. É a
-   causa do não determinismo que o E0 mediu (dois `content_hash` distintos para a
-   mesma config). O conserto é pontual, não uma reconstrução.
-2. **Acrescentar um ataque é mecânico, mas toca vários pontos.**
-   - Java: um `case` em `CreateAttackDatasetAction.createAttackDevice` (é um
-     `switch` fixo por `attackType`); uma classe IED + uma Creator (a interface é
-     `MessageCreator.generate(IED, int)`); um rótulo em `Labels.LABELS` e um ramo
-     em `getLabelForSegmentName` (mapeia segmento→rótulo por prefixo `ucXX` — o
-     programável precisa de um prefixo livre, ex. `uc11`); um segmento em
+1. **The seed infrastructure already exists.** `ConfigLoader.RNG` is a
+   `ThreadScopedRandom`; the `randomSeed` config calls `setSeed()`; and
+   `IED.randomBetween` already draws from that RNG. **But 6 creators bypass the RNG with
+   `Math.random()`** (22 occurrences): uc01 random_replay, uc02 inverse_replay,
+   uc03 masquerade_fault, uc05 injection, uc06 high_stnum, uc08 grayhole. This is the
+   cause of the nondeterminism E0 measured (two distinct `content_hash` for the
+   same config). The fix is targeted, not a rebuild.
+2. **Adding an attack is mechanical, but touches several points.**
+   - Java: a `case` in `CreateAttackDatasetAction.createAttackDevice` (it is a fixed
+     `switch` on `attackType`); an IED class + a Creator (the interface is
+     `MessageCreator.generate(IED, int)`); a label in `Labels.LABELS` and a branch
+     in `getLabelForSegmentName` (maps segment→label by `ucXX` prefix — the
+     programmable one needs a free prefix, e.g. `uc11`); a segment in
      `config/actions/action_create_attack_dataset.json`.
-   - Python: `AttackSpec` em `config/attacks_registry.py` (key, segment_name,
-     label, description, intent_capability_id); baseline em
-     `inputs/attacks/`; modelo congelado em `domain/attack_configs/`; módulo de
-     capacidade em `config/capabilities/`.
-3. **Superfície de mutação = o que `Goose` expõe.** Setters disponíveis:
+   - Python: `AttackSpec` in `config/attacks_registry.py` (key, segment_name,
+     label, description, intent_capability_id); baseline in
+     `inputs/attacks/`; frozen model in `domain/attack_configs/`; capability
+     module in `config/capabilities/`.
+3. **Mutation surface = what `Goose` exposes.** Available setters:
    `setCbStatus`, `setStNum`, `setSqNum`, `setT`, `setGooseTimeAllowedtoLive`,
    `setSvPrefixCsv`, `setLabel`, `setConfRev`, `setPublisherTxTs`,
-   `setSubscriberRxTs`, timestamp. A DSL de mutação mira esse conjunto.
-4. **`AttackConfig` já lê JSON arbitrário** via `getRaw()` (`JsonObject` do Gson)
-   — um Creator genérico pode ler uma lista de regras declarativas sem
-   infraestrutura de parsing nova.
-5. **Restrição de TPM.** O prompt do IntentAgent está em ~6,24k/8000 tokens. O
-   ataque programável **não pode** enumerar campos no catálogo como os outros 11
-   (foi o que estourou o TPM na Fase 1) — ele entra com uma descrição compacta da
-   gramática de regras.
+   `setSubscriberRxTs`, timestamp. The mutation DSL targets this set.
+4. **`AttackConfig` already reads arbitrary JSON** via `getRaw()` (Gson's `JsonObject`)
+   — a generic Creator can read a list of declarative rules without
+   new parsing infrastructure.
+5. **TPM constraint.** The IntentAgent prompt is at ~6.24k/8000 tokens. The
+   programmable attack **cannot** enumerate fields in the catalog like the other 11
+   (that is what blew the TPM in Phase 1) — it enters with a compact description of the
+   rule grammar.
 
-## Sub-fases
+## Sub-phases
 
-Cada uma é entregável e verificável isoladamente.
+Each one is deliverable and verifiable in isolation.
 
-### 2.0 — Determinismo (fundação) **[ENTREGUE 26/09]**
+### 2.0 — Determinism (foundation) **[DELIVERED 2026-09-26]**
 
-Rotear os `Math.random()` dos creators pela `ConfigLoader.RNG`, e propagar
-`IntentSpec.seed` → `GeneratorRunner` → `randomSeed` no action config →
-`ConfigLoader.setSeed`. Antes, o `seed` da intenção existia no contrato mas não
-chegava ao gerador.
+Route the creators' `Math.random()` calls through `ConfigLoader.RNG`, and propagate
+`IntentSpec.seed` → `GeneratorRunner` → `randomSeed` in the action config →
+`ConfigLoader.setSeed`. Before, the intent's `seed` existed in the contract but did not
+reach the generator.
 
-- **Lado Java (`../ERENO-2.0`, `feat/journal`):** substituídos os 22
-  `Math.random()` por `ConfigLoader.RNG.nextDouble()` em 5 creators (uc01, uc02,
-  uc03, uc06, uc08). O uc05 já era determinístico (usa `randomSeed` próprio +
-  `randomBetween`, que passa pela RNG). `CreateAttackDatasetAction` passou a ler
-  um `randomSeed` do topo do action config e chamar `ConfigLoader.setSeed` antes
-  de gerar.
-- **Lado Python:** `GeneratorRunner` ganhou `random_seed` (default `None`,
-  compatível) e grava/remove `randomSeed` no action config ao selecionar o
-  segmento; `intent_loop._build_generator` passa `intent.seed` (baseline e
-  variante da rodada compartilham a seed, comparação pareada).
-- **DoD — verificado:** a mesma config (masquerade_fault) rodada duas vezes com
-  `seed=123` deu **hash idêntico** (`dc67e1cb…`, 80019 linhas); com `seed=999`,
-  hash diferente. Smoke test em 4 dos 5 ataques alterados (random_replay,
-  masquerade_fault, high_stnum, grayhole) produz a classe de ataque normalmente.
-  A distribuição é preservada por construção (`Math.random()` e
-  `RNG.nextDouble()` são ambos uniformes em [0,1)); a diferença é só a fonte da
-  RNG. 1476 testes Python passam.
-- **Achado lateral:** `inverse_replay` (uc02) falha na geração (`returncode=3`) —
-  **mas falha idêntico no JAR antigo (v2.0)**, então é bug pré-existente, fora do
-  conjunto validado no E0, não regressão desta fase. Registrar como item à parte.
-- **Pendências de fechamento do 2.0:** commitar o JAR novo em `generator_runtime`
-  (gitignored — trocado localmente, backup em scratch); atualizar
-  `docs/pilot_e0.md` (a seção "O gerador não é determinístico" agora tem
-  ressalva: vale só sem `randomSeed`).
+- **Java side (`../ERENO-2.0`, `feat/journal`):** the 22
+  `Math.random()` calls replaced by `ConfigLoader.RNG.nextDouble()` in 5 creators (uc01, uc02,
+  uc03, uc06, uc08). uc05 was already deterministic (it uses its own `randomSeed` +
+  `randomBetween`, which goes through the RNG). `CreateAttackDatasetAction` now reads
+  a `randomSeed` from the top of the action config and calls `ConfigLoader.setSeed` before
+  generating.
+- **Python side:** `GeneratorRunner` gained `random_seed` (default `None`,
+  compatible) and writes/removes `randomSeed` in the action config when selecting the
+  segment; `intent_loop._build_generator` passes `intent.seed` (the round's baseline and
+  variant share the seed, paired comparison).
+- **DoD — verified:** the same config (masquerade_fault) run twice with
+  `seed=123` gave an **identical hash** (`dc67e1cb…`, 80019 rows); with `seed=999`,
+  a different hash. A smoke test on 4 of the 5 changed attacks (random_replay,
+  masquerade_fault, high_stnum, grayhole) produces the attack class normally.
+  The distribution is preserved by construction (`Math.random()` and
+  `RNG.nextDouble()` are both uniform on [0,1)); the difference is only the RNG
+  source. 1476 Python tests pass.
+- **Side finding:** `inverse_replay` (uc02) fails at generation (`returncode=3`) —
+  **but fails identically on the old JAR (v2.0)**, so it is a pre-existing bug, outside the
+  set validated in E0, not a regression of this phase. Record as a separate item.
+- **Closing items for 2.0:** commit the new JAR in `generator_runtime`
+  (gitignored — swapped locally, backup in scratch); update
+  `docs/pilot_e0.md` (the section "The generator is not deterministic" now has
+  a caveat: it only holds without `randomSeed`).
 
-### 2.R — Modo de réplicas (varredura de seeds) **[ENTREGUE 26/09]**
+### 2.R — Replicate mode (seed sweep) **[DELIVERED 2026-09-26]**
 
-**Uso:** `uv run adversarial-ids --engine intent --generator-mode jar --prompt
-"..." --replicates 5` (varre `42..46`) ou `--seeds 42,101,777`. O LLM é chamado
-uma vez; o resumo traz média ± desvio da métrica-objetivo.
+**Usage:** `uv run adversarial-ids --engine intent --generator-mode jar --prompt
+"..." --replicates 5` (sweeps `42..46`) or `--seeds 42,101,777`. The LLM is called
+once; the summary gives mean ± standard deviation of the objective metric.
 
-**Verificado (JAR + Groq, 26/09):** 3 réplicas (seeds 42/43/44) → **1 chamada de
-LLM**, três `content_hash` **distintos** (a seed chega ao gerador), as três
-chegaram ao FEEDBACK. O `masquerade_fault` deu recall 1.0 nas três (métrica não
-sensível para essa config; a variância aparece em configs evasivas). Correção
-embutida: o consumo do LLM de intent agora conta só na rodada/réplica que de fato
-chamou o LLM — antes, uma rodada que reusava a intenção somava de novo os tokens
-(bug latente também no round 2+ de campanha). 1497 testes passam.
+**Verified (JAR + Groq, 2026-09-26):** 3 replicates (seeds 42/43/44) → **1 LLM
+call**, three **distinct** `content_hash` values (the seed reaches the generator), all three
+reached FEEDBACK. `masquerade_fault` gave recall 1.0 on all three (a metric not
+sensitive for that config; the variance shows up in evasive configs). Built-in fix: the
+intent LLM consumption now counts only in the round/replicate that actually
+called the LLM — before, a round that reused the intent added the tokens again
+(a latent bug also in round 2+ of a campaign). 1497 tests pass.
 
-O texto abaixo é o desenho original.
-
----
-
-
-Contrapartida da 2.0. A 2.0 tornou cada seed reprodutível; a 2.R usa isso para
-rodar **N seeds do mesmo experimento** e reportar a métrica-objetivo como
-**média ± desvio**, que é o que o TCC precisa para uma afirmação estatística (um
-único trace é uma amostra, não uma medida). Independe da 2.1/2.2/2.3 — vale para
-os 11 ataques atuais e para o programável.
-
-- **Insight que a arquitetura já oferece (economia de TPM):** entre réplicas, só
-  a **geração** muda; a **intenção** é a mesma (mesmo prompt → mesma
-  `IntentSpec`). Então a réplica chama o LLM **uma vez** e reaproveita a
-  `IntentSpec` compilada, variando só o `seed` passado ao `GeneratorRunner`. N
-  réplicas custam **1** chamada de intent, não N — decisivo com o TPM de 8.000
-  (ver `docs/target_values.md`/E0). É a mesma separação intenção↔geração que já
-  sustenta a retomada e a política de feedback (o lado Red é determinístico da
-  rodada 2 em diante).
-- **Onde vive:** um controlador fino que, dada uma `IntentSpec` já compilada,
-  itera sobre uma lista de seeds e chama o núcleo determinístico
-  (`GeneratorRunner` → `IdsEvaluator` → `DetectionReport`) por seed. Cada réplica
-  é um `LoopRecord` próprio (o `seed` já é campo dele), ligadas por um id de
-  lote. A agregação (média ± desvio da métrica-objetivo, e o intervalo) lê o
-  ledger — nada de novo contrato de "resultado agregado" antes de precisar.
-- **Interface:** `--replicates N` (varre `seed, seed+1, …`) ou `--seeds a,b,c`
-  (lista explícita) no `--engine intent`; alternativamente um
-  `scripts/run_replicates.py` para manter a CLI enxuta. Decidir na 2.R.
-- **Relação com a campanha (E10):** uma réplica é **uma rodada** repetida sob
-  seeds diferentes — não uma campanha multi-rodada. As duas são ortogonais:
-  pode-se replicar cada rodada de uma campanha, mas o primeiro corte replica só
-  a rodada 1 (a intenção do prompt), que é o caso do artigo.
-- **DoD:** `--replicates 5` sobre um ataque JAR-mensurável produz 5
-  `LoopRecord` com seeds distintos, **uma** chamada de LLM no lote, e um resumo
-  com média ± desvio da métrica-objetivo. Reexecutar o lote com a mesma lista de
-  seeds reproduz os mesmos números (a 2.0 garante isso).
-- **Cuidado:** só faz sentido em `--generator-mode jar`. Em cached, todo trace é
-  o mesmo arquivo e as réplicas colapsam — o modo deve avisar, como o piloto já
-  faz.
-
-### 2.1 — Fatia vertical: ataque programável, DSL só de mutação **[ENTREGUE 26/09]**
-
-Ver `docs/programmable_attack.md`. Entregue ponta a ponta: `attack_key
-"programmable"` (uc11) no Java (creator/IED lendo `rules` como dict de slots +
-label + switch) e no Python (AttackSpec, baseline, schema, capacidade, playbook).
-O compilador materializa as regras **sem código novo**: reusa o `target_values`
-da Fase 1 — a capacidade expõe `rules.rN.op/field/value` como campos author-only
-(efeito vazio, nunca varridos pela heurística) e `rules.rN.fraction` como a
-alavanca de intensidade. **Verificado com LLM real:** "multiplique o sqNum por 3
-em ~40%" → o LLM escolheu `programmable` e autorou a regra; o JAR gerou a classe
-`programmable`. 1537 testes passam. Escopo: só mutação (seleção/temporização é
-2.2). Nuance documentada: o baseline traz 2 slots com regra default.
-
-O texto abaixo é o desenho original.
+The text below is the original design.
 
 ---
 
 
-Um `attack_key = "programmable"` novo, com **um** tipo de regra: mutação de um
-campo GOOSE (`set` / `add` / `scale`) numa fração das mensagens. Ligado ponta a
-ponta.
+Counterpart of 2.0. 2.0 made each seed reproducible; 2.R uses that to
+run **N seeds of the same experiment** and report the objective metric as
+**mean ± standard deviation**, which is what a statistical claim needs (a
+single trace is a sample, not a measurement). Independent of 2.1/2.2/2.3 — it applies to
+the 11 current attacks and to the programmable one.
 
-- **Java:** `uc11` (prefixo livre) — `ProgrammableIEDC` + `ProgrammableCreatorC`
-  que lê `rules: [{op, field, value, fraction}]` de `AttackConfig.getRaw()`,
-  aplica via os setters de `Goose`, e valida cada regra contra um allowlist de
-  campos mutáveis (o schema Java); rótulo `programmable` em `Labels`; case no
-  switch; segmento `uc11_programmable` no action config.
+- **Insight the architecture already offers (TPM savings):** between replicates, only
+  the **generation** changes; the **intent** is the same (same prompt → same
+  `IntentSpec`). So the replicate calls the LLM **once** and reuses the compiled
+  `IntentSpec`, varying only the `seed` passed to `GeneratorRunner`. N
+  replicates cost **1** intent call, not N — decisive with the TPM of 8,000
+  (see `docs/target_values.md`/E0). It is the same intent↔generation separation that already
+  underpins resumption and the feedback policy (the Red side is deterministic from
+  round 2 on).
+- **Where it lives:** a thin controller that, given an already-compiled `IntentSpec`,
+  iterates over a list of seeds and calls the deterministic core
+  (`GeneratorRunner` → `IdsEvaluator` → `DetectionReport`) per seed. Each replicate
+  is its own `LoopRecord` (`seed` is already a field on it), linked by a batch id. The
+  aggregation (mean ± standard deviation of the objective metric, and the interval) reads
+  the ledger — no new "aggregated result" contract until one is needed.
+- **Interface:** `--replicates N` (sweeps `seed, seed+1, …`) or `--seeds a,b,c`
+  (explicit list) on `--engine intent`; alternatively a
+  `scripts/run_replicates.py` to keep the CLI lean. To be decided in 2.R.
+- **Relation to the campaign (E10):** a replicate is **one round** repeated under
+  different seeds — not a multi-round campaign. The two are orthogonal:
+  each round of a campaign can be replicated, but the first cut replicates only
+  round 1 (the prompt's intent).
+- **DoD:** `--replicates 5` over a JAR-measurable attack produces 5
+  `LoopRecord`s with distinct seeds, **one** LLM call in the batch, and a summary
+  with mean ± standard deviation of the objective metric. Rerunning the batch with the same list of
+  seeds reproduces the same numbers (2.0 guarantees this).
+- **Caution:** it only makes sense in `--generator-mode jar`. In cached mode, every trace is
+  the same file and the replicates collapse — the mode must warn, as the pilot already
+  does.
+
+### 2.1 — Vertical slice: programmable attack, mutation-only DSL **[DELIVERED 2026-09-26]**
+
+See `docs/programmable_attack.md`. Delivered end to end: `attack_key
+"programmable"` (uc11) in Java (creator/IED reading `rules` as a dict of slots +
+label + switch) and in Python (AttackSpec, baseline, schema, capability, playbook).
+The compiler materializes the rules **with no new code**: it reuses Phase 1's
+`target_values` — the capability exposes `rules.rN.op/field/value` as author-only
+fields (empty effect, never swept by the heuristic) and `rules.rN.fraction` as the
+intensity lever. **Verified with a real LLM:** "multiply sqNum by 3
+in ~40%" → the LLM chose `programmable` and authored the rule; the JAR generated the
+`programmable` class. 1537 tests pass. Scope: mutation only (selection/timing is
+2.2). Documented nuance: the baseline brings 2 slots with a default rule.
+
+The text below is the original design.
+
+---
+
+
+A new `attack_key = "programmable"`, with **one** rule type: mutation of a
+GOOSE field (`set` / `add` / `scale`) on a fraction of the messages. Wired end
+to end.
+
+- **Java:** `uc11` (free prefix) — `ProgrammableIEDC` + `ProgrammableCreatorC`
+  that reads `rules: [{op, field, value, fraction}]` from `AttackConfig.getRaw()`,
+  applies them via `Goose`'s setters, and validates each rule against an allowlist of
+  mutable fields (the Java schema); `programmable` label in `Labels`; case in the
+  switch; `uc11_programmable` segment in the action config.
 - **Python:** `AttackSpec("programmable", "uc11_programmable", "programmable",
-  ...)`; baseline mínima em `inputs/`; `domain/attack_configs/programmable.py`
-  (modelo congelado da lista de regras); `config/capabilities/programmable.py`
-  (a gramática de regras como capacidade — quais campos, quais ops, faixas);
-  o compilador `intent_compiler.py` aprende a materializar regras (não só
-  ajustar campos escalares).
-- **DoD:** um prompt que descreve um comportamento que **não** é um dos 11 (ex.
-  "duplique 10% das mensagens de trip com o stNum incrementado") compila para
-  regras, gera um trace, passa os gates do E4 e produz um `DetectionReport`. O
-  loop fecha.
+  ...)`; minimal baseline in `inputs/`; `domain/attack_configs/programmable.py`
+  (frozen model of the rule list); `config/capabilities/programmable.py`
+  (the rule grammar as a capability — which fields, which ops, ranges);
+  the `intent_compiler.py` compiler learns to materialize rules (not just
+  adjust scalar fields).
+- **DoD:** a prompt that describes a behavior that is **not** one of the 11 (e.g.
+  "duplicate 10% of trip messages with stNum incremented") compiles to
+  rules, generates a trace, passes the E4 gates and produces a `DetectionReport`. The
+  loop closes.
 
-### 2.2 — Alargar a DSL: seleção e temporização **[ENTREGUE 01/10]**
+### 2.2 — Widen the DSL: selection and timing **[DELIVERED 2026-10-01]**
 
-Regras de **seleção** (condição sobre um campo da mensagem) e de
-**temporização** (atraso, descarte, duplicação, reordenação), cada tipo como
-dado validado por schema nas duas pontas.
+**Selection** rules (a condition on a message field) and **timing** rules
+(delay, drop, duplication, reordering), each type as data validated by schema
+at both ends.
 
-**Seleção** entrou como um bloco `when = {field, cmp, value}` em cada slot, com
-`cmp ∈ {always, eq, ne, gt, lt, gte, lte}`. A condição é lida da mensagem
-**original**, antes de qualquer mutação — qual mensagem uma regra mira não pode
-depender do que o slot anterior já mudou, ou a ordem dos slots viraria parte do
-comportamento. O `when` é obrigatório no schema e o baseline traz `cmp="always"`:
-`target_values` aplica valor a caminho existente e não cria chave que falta, então
-um `when` opcional nunca seria autorável, e um default não-neutro mudaria o ataque
-default.
+**Selection** came in as a `when = {field, cmp, value}` block in each slot, with
+`cmp ∈ {always, eq, ne, gt, lt, gte, lte}`. The condition is read from the **original**
+message, before any mutation — which message a rule targets cannot
+depend on what the previous slot already changed, or the slot order would become part of the
+behavior. `when` is mandatory in the schema and the baseline brings `cmp="always"`:
+`target_values` applies a value to an existing path and does not create a missing key,
+so an optional `when` would never be authorable, and a non-neutral default would change the
+default attack.
 
-**Temporização não ganhou op própria, e esse é o achado da fase.** O fluxo escrito
-não está na ordem em que o creator emite: as mensagens saem por um
-`PriorityQueue<EthernetFrame>` ordenado por `timestamp`, e os deltas
-(`timestampDiff`, `tDiff`, `delay`) são calculados nessa ordem. Qualquer buffer ou
-troca de posição no creator seria apagado pela fila. Logo o relógio *é* a ordem:
-com `t`/`timestamp` (em segundos) na allowlist de campos mutáveis, **atrasar é
-`add` com operando positivo e reordenar é o mesmo `add` com operando negativo**.
-Só sobraram como ops novas as que mexem na *cardinalidade* e não no relógio:
-`drop` e `duplicate`. `set`/`scale` são recusados nos campos de tempo (relógio
-absoluto: realocam a mensagem em vez de deslocá-la) — uma coerência *entre* campos
-da mesma regra, que vive no schema, porque nenhuma allowlist campo-a-campo
-consegue expressá-la.
+**Timing did not get an op of its own, and that is the finding of the phase.** The written
+stream is not in the order the creator emits: messages leave through a
+`PriorityQueue<EthernetFrame>` ordered by `timestamp`, and the deltas
+(`timestampDiff`, `tDiff`, `delay`) are computed in that order. Any buffer or
+position swap in the creator would be erased by the queue. So the clock *is* the order:
+with `t`/`timestamp` (in seconds) in the mutable-field allowlist, **delaying is
+`add` with a positive operand and reordering is the same `add` with a negative operand**.
+Only the ops that touch *cardinality* rather than the clock remained as new ops:
+`drop` and `duplicate`. `set`/`scale` are refused on the time fields
+(absolute clock: they relocate the message instead of shifting it) — a coherence
+*between* fields of the same rule, which lives in the schema, because no
+field-by-field allowlist can express it.
 
-- **Custo de prompt, e o teto estourado.** A fase somou ~1,6k caracteres ao
-  prompt, e a validação com LLM real bateu no TPM de 8000 da conta: uma
-  requisição medida em **8467 tokens**, HTTP 413. Espaçar não resolve quando uma
-  requisição sozinha passa do limite — e das quatro chamadas, duas passaram em
-  8461 e 8059, ou seja, o teto vinha sendo vencido por sorte. Obrigou a puxar a
-  compactação do catálogo (item da 2.3) para agora: campos idênticos em mais de
-  um ataque viraram uma seção compartilhada citada por caminho, rótulos de efeito
-  viraram `ev`/`at`/`ev+at` e os de tipo `num`/`int`/`bool`/`str`/`int[]`.
-  Instruções de **23448 → 20063 caracteres**; medido depois: 7300, 7414 e 7508
-  tokens nos mesmos prompts. É a mesma troca que `_render_effects` já fazia —
-  dizer uma vez, com legenda, e deixar o portão ser a autoridade.
-- **DoD atingida (JAR, seed 4242):** seleção + atraso caiu só nas mensagens
-  selecionadas (mínimo de `timestamp - t` exatamente 0.02 nelas, 0.00 nas
-  demais); `duplicate value=2` deu exatamente 3× as linhas; `drop fraction=0.4`
-  deixou exatamente 60%; e a config de mutação só reproduziu a 2.1. Regressão
-  dos outros ataques verificada por CRC: das 281 classes do JAR, só
-  `ProgrammableCreatorC.class` mudou. Detalhe em `docs/programmable_attack.md`.
+- **Prompt cost, and the ceiling that was blown.** The phase added ~1.6k characters to the
+  prompt, and validation with a real LLM hit the account's 8000 TPM: a
+  request measured at **8467 tokens**, HTTP 413. Spacing out does not help when a
+  single request exceeds the limit — and of the four calls, two passed at
+  8461 and 8059, that is, the ceiling had been cleared by luck. It forced pulling the
+  catalog compaction (a 2.3 item) forward to now: fields identical across more than one
+  attack became a shared section cited by path, effect labels
+  became `ev`/`at`/`ev+at` and type labels `num`/`int`/`bool`/`str`/`int[]`.
+  Instructions went from **23448 → 20063 characters**; measured afterwards: 7300, 7414 and 7508
+  tokens on the same prompts. It is the same trade that `_render_effects` already made —
+  say it once, with a legend, and let the gate be the authority.
+- **DoD reached (JAR, seed 4242):** selection + delay landed only on the selected
+  messages (minimum of `timestamp - t` exactly 0.02 on them, 0.00 on the
+  others); `duplicate value=2` gave exactly 3× the rows; `drop fraction=0.4`
+  left exactly 60%; and the mutation-only config reproduced just 2.1. Regression
+  of the other attacks verified by CRC: of the JAR's 281 classes, only
+  `ProgrammableCreatorC.class` changed. Detail in `docs/programmable_attack.md`.
 
-### 2.3 — Prompt/TPM, validação e release **[ENTREGUE 01/10]**
+### 2.3 — Prompt/TPM, validation and release **[DELIVERED 2026-10-01]**
 
-Os dois primeiros itens saíram dentro da 2.2, por necessidade: a validação com
-LLM real estourou o TPM e só coube depois de compactar o catálogo.
+The first two items shipped inside 2.2, out of necessity: validation with a real
+LLM blew the TPM and only fit after compacting the catalog.
 
-- ~~Entrada compacta do programável no catálogo do IntentAgent~~ — feita na 2.2
-  (instruções 23448 → 20063 caracteres).
-- ~~Validação com LLM real (`openai/gpt-oss-120b`)~~ — feita na 2.2, quatro
-  eixos, todos exatos.
+- ~~Compact programmable entry in the IntentAgent catalog~~ — done in 2.2
+  (instructions 23448 → 20063 characters).
+- ~~Validation with a real LLM (`openai/gpt-oss-120b`)~~ — done in 2.2, four
+  axes, all exact.
 - **Golden prompts** (`tests/golden_prompts/programmable_intents.json`): 12
-  entradas em **três** categorias, não duas. Os outros ataques só precisam de
-  `valid`/`invalid` porque neles todo pedido impossível morre nos portões da
-  intenção — a impossibilidade é sempre de um campo só. No programável existe uma
-  terceira: `op=scale` e `field=timestamp` passam campo a campo e a combinação
-  não existe, então quem recusa é o schema, dentro do compilador. A categoria
-  `incoherent` fixa essa divisão de trabalho em teste e não só em prosa.
-  As cinco entradas `valid` marcadas `source: "llm"` são os payloads que o modelo
-  real produziu, não payloads inventados — é o que torna a validação repetível
-  sem gastar Groq a cada `pytest`.
+  entries in **three** categories, not two. The other attacks only need
+  `valid`/`invalid` because in them every impossible request dies at the intent
+  gates — the impossibility is always about a single field. In the programmable one there is a
+  third: `op=scale` and `field=timestamp` pass field by field and the combination
+  does not exist, so the one that refuses is the schema, inside the compiler. The
+  `incoherent` category pins this division of labor in a test and not only in prose.
+  The five `valid` entries marked `source: "llm"` are the payloads the real model
+  produced, not invented payloads — which is what makes the validation repeatable
+  without spending Groq on each `pytest`.
 - `docs/programmable_attack.md`; tag `intent-driven-v0.3.0`.
 
-## Riscos
+## Risks
 
-- **Escopo da DSL.** Geral demais é impossível de validar e de caber no prompt;
-  estreito demais não entrega "comportamentos novos". Mitigação: fatia vertical
-  2.1 com um só tipo de regra. **[decidido 26/09]**
-- **TPM.** Cada tipo de regra paga tokens no prompt do IntentAgent (~6,24k/8000
-  hoje). Orçar por incremento; a compressão de efeitos da Fase 1 comprou folga,
-  mas ela é finita.
-- **Regressão dos 11 ataques ao recompilar.** Mitigação: comparação byte a byte
-  do JAR antes de trocar, os 11 idênticos.
-- **Rótulo/label novo desalinhado entre Java e Python** (índice em `Labels` vs.
-  `AttackSpec.label`). Mitigação: um teste que casa os dois.
+- **DSL scope.** Too general is impossible to validate and to fit in the prompt;
+  too narrow does not deliver "new behaviors". Mitigation: vertical slice
+  2.1 with a single rule type. **[decided 2026-09-26]**
+- **TPM.** Each rule type pays tokens in the IntentAgent prompt (~6.24k/8000
+  today). Budget by increment; Phase 1's effect compression bought headroom,
+  but it is finite.
+- **Regression of the 11 attacks on recompilation.** Mitigation: byte-for-byte comparison
+  of the JAR before swapping, all 11 identical.
+- **New label misaligned between Java and Python** (index in `Labels` vs.
+  `AttackSpec.label`). Mitigation: a test that matches the two.
 
-## Estado
+## Status
 
-- Fase 0/1 entregues; tags `intent-driven-v0.1.0` (loop + retomada) e
-  `intent-driven-v0.2.0` (valores ditados). 1476 testes passam sem Groq/Java.
-- Branch Java `feat/journal` criada da `dev-ian`; configs locais da dev-ian em
-  `git stash` (ver memória `ereno-jar-origem`).
-- **2.0 (determinismo) ENTREGUE** — seed reprodutível verificada; JAR recompilado
-  e trocado em `generator_runtime`.
-- **2.R (modo de réplicas) ENTREGUE** — `--replicates`/`--seeds`, 1 chamada de LLM
-  por lote, verificado com JAR + Groq.
-- **2.1 (ataque programável, DSL de mutação) ENTREGUE** — `programmable` (uc11)
-  ponta a ponta, autoração de regras via `target_values`, verificado com JAR +
-  Groq. Ver `docs/programmable_attack.md`.
-- **2.2 (seleção + temporização) ENTREGUE** — `when` por slot, `t`/`timestamp` na
-  allowlist (atraso e reordenação são o mesmo `add` com sinal), `drop`/`duplicate`
-  para cardinalidade. Verificado com o JAR em quatro configs **e com LLM real nos
-  quatro eixos da gramática** (o modelo escolheu `programmable` sozinho e autorou
-  a regra esperada em cada um). A compactação do catálogo que a 2.3 previa veio
-  junto, por necessidade: sem ela a validação não cabia no TPM.
-- **Aberto:** com sete caminhos fixados de uma vez, o modelo às vezes emite os
-  `target_values` como argumentos de topo da ferramenta e a Groq recusa a chamada
-  (`tool_use_failed`). É maquinário da Fase 1 e serialização do modelo, não a
-  gramática — ver `docs/programmable_attack.md`.
-- **2.3 (golden prompts + release) ENTREGUE** — `programmable_intents.json` com
-  12 entradas em três categorias (`valid`/`invalid`/`incoherent`), as cinco
-  válidas vindas dos payloads reais do modelo. Tag `intent-driven-v0.3.0`.
-- **Fase 2 fechada.** Aberto: o modelo às vezes achata `target_values` quando o
-  pedido fixa ~7 caminhos (ver acima), e `inverse_replay` (uc02) segue com o bug
-  de geração pré-existente, de fora da fase.
+- Phase 0/1 delivered; tags `intent-driven-v0.1.0` (loop + resumption) and
+  `intent-driven-v0.2.0` (dictated values). 1476 tests pass without Groq/Java.
+- Java branch `feat/journal` created from `dev-ian`; dev-ian's local configs in
+  `git stash` (see memory note `ereno-jar-origem`).
+- **2.0 (determinism) DELIVERED** — reproducible seed verified; JAR recompiled
+  and swapped in `generator_runtime`.
+- **2.R (replicate mode) DELIVERED** — `--replicates`/`--seeds`, 1 LLM call
+  per batch, verified with JAR + Groq.
+- **2.1 (programmable attack, mutation DSL) DELIVERED** — `programmable` (uc11)
+  end to end, rule authoring via `target_values`, verified with JAR +
+  Groq. See `docs/programmable_attack.md`.
+- **2.2 (selection + timing) DELIVERED** — per-slot `when`, `t`/`timestamp` in the
+  allowlist (delay and reordering are the same signed `add`), `drop`/`duplicate`
+  for cardinality. Verified with the JAR on four configs **and with a real LLM on the
+  four axes of the grammar** (the model chose `programmable` on its own and authored
+  the expected rule in each one). The catalog compaction that 2.3 had planned came
+  along, out of necessity: without it the validation did not fit in the TPM.
+- **Open:** with seven paths fixed at once, the model sometimes emits the
+  `target_values` as top-level tool arguments and Groq refuses the call
+  (`tool_use_failed`). It is Phase 1 machinery and model serialization, not the
+  grammar — see `docs/programmable_attack.md`.
+- **2.3 (golden prompts + release) DELIVERED** — `programmable_intents.json` with
+  12 entries in three categories (`valid`/`invalid`/`incoherent`), the five
+  valid ones coming from the model's real payloads. Tag `intent-driven-v0.3.0`.
+- **Phase 2 closed.** Open: the model sometimes flattens `target_values` when the
+  request fixes ~7 paths (see above), and `inverse_replay` (uc02) still has the
+  pre-existing generation bug, outside the phase.

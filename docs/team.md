@@ -1,63 +1,64 @@
-# Equipe e responsabilidades
+# Team and responsibilities
 
-Este documento registra a divisão de trabalho do projeto Laboratório
-Inteligente conforme `docs/divisao_tarefas.html`. A documentação disponível não
-associa de forma completa os nomes dos contribuidores aos identificadores
-M1–M4; por isso, a identificação por membro é mantida sem inferências.
+This document records the division of work of the Laboratório Inteligente
+(Smart Laboratory) project according to `docs/divisao_tarefas.html`. The
+available documentation does not fully associate the contributors' names with
+the identifiers M1–M4; therefore, the per-member identification is kept without
+inferences.
 
-| Membro | Responsabilidade principal | Issues e entregas |
+| Member | Main responsibility | Issues and deliverables |
 |---|---|---|
-| M1 | Strategist / Red Team | Contrato do Strategist, agente Agno, ferramentas, personas, testes e evolução da estratégia |
-| M2 | Analyst / Blue Team | Contrato do Analyst, agente, explicação das features, mitigação e testes |
-| M3 | Núcleo e orquestração | Layout, domínio, cache, avaliação, Agno Team, memória e reprodutibilidade |
-| M4 | Interface e empacotamento | #6, #18, #19 e #20: pacote, ambiente, CLI, dashboard e documentação final |
+| M1 | Strategist / Red Team | Strategist contract, Agno agent, tools, personas, tests and strategy evolution |
+| M2 | Analyst / Blue Team | Analyst contract, agent, feature explanation, mitigation and tests |
+| M3 | Core and orchestration | Layout, domain, cache, evaluation, Agno Team, memory and reproducibility |
+| M4 | Interface and packaging | #6, #18, #19 and #20: package, environment, CLI, dashboard and final documentation |
 
-## Entregas por fase
+## Deliverables by phase
 
-### Fase 0 — Fundação
+### Phase 0 — Foundation
 
-- M3: layout `src/`, tipos de domínio, dataset cacheado e fixtures;
-- M4: `pyproject.toml` e `.env.example` compatíveis com o layout;
-- M1/M2: contratos de saída necessários aos agentes.
+- M3: `src/` layout, domain types, cached dataset and fixtures;
+- M4: `pyproject.toml` and `.env.example` compatible with the layout;
+- M1/M2: output contracts required by the agents.
 
-### Fase 1 — Agentes
+### Phase 1 — Agents
 
-- M1: Strategist que propõe mudanças na configuração;
-- M2: Analyst que interpreta métricas e recomenda mitigação;
-- M3: workflow que encadeia os agentes e persiste `IterationRecord`.
+- M1: Strategist that proposes changes to the configuration;
+- M2: Analyst that interprets metrics and recommends mitigation;
+- M3: workflow that chains the agents and persists `IterationRecord`.
 
-No estado atual, Strategist e Analyst estão implementados e testados. O
-workflow que deve encadeá-los permanece como placeholder.
+In the current state, Strategist and Analyst are implemented and tested. The
+workflow that is supposed to chain them remains a placeholder.
 
-### Fase 2 — Entrega
+### Phase 2 — Delivery
 
-- M4: CLI fina, dashboard Streamlit, documentação e roteiro;
-- integração das interfaces com o workflow estabilizado pelo M3.
+- M4: thin CLI, Streamlit dashboard, documentation and walkthrough script;
+- integration of the interfaces with the workflow stabilized by M3.
 
-A CLI e o dashboard já compartilham o contrato `ExperimentRunner`. Enquanto o
-workflow não está disponível, ambos usam `CachedHistoryRunner` para demonstrar
-o histórico golden.
+The CLI and the dashboard already share the `ExperimentRunner` contract. While
+the workflow is not available, both use `CachedHistoryRunner` to demonstrate
+the golden history.
 
-## Dependências entre os trabalhos
+## Dependencies between the work items
 
-- M1 e M2 consomem os tipos compartilhados pelo M3;
-- o workflow do M3 depende das saídas do Strategist e do Analyst;
-- M4 consome `Metrics` e `IterationRecord`;
-- a CLI e o dashboard dependem da API pública do workflow para execução real;
-- o dashboard apresenta `analyst_output`, atualmente proveniente da fixture;
-- seeds e stubs permitem testes isolados sem Java e sem todos os agentes reais.
+- M1 and M2 consume the types shared by M3;
+- M3's workflow depends on the outputs of the Strategist and the Analyst;
+- M4 consumes `Metrics` and `IterationRecord`;
+- the CLI and the dashboard depend on the workflow's public API for real execution;
+- the dashboard presents `analyst_output`, currently coming from the fixture;
+- seeds and stubs allow isolated tests without Java and without all the real agents.
 
-## Colaboração por contratos
+## Collaboration through contracts
 
-As fronteiras compartilhadas são:
+The shared boundaries are:
 
-| Contrato | Produzido por | Consumido por |
+| Contract | Produced by | Consumed by |
 |---|---|---|
-| Config do ataque (dict, schema variável por ataque) | Base compartilhada | Strategist, validador e gerador |
-| `Metrics` | Avaliador do IDS | Strategist, Analyst e dashboard |
-| `IterationRecord` | Memória/workflow | CLI, dashboard e histórico |
-| `ExperimentRunner` | Interface M4 | CLI, dashboard e futuro adaptador do workflow |
+| Attack config (dict, schema varies per attack) | Shared base | Strategist, validator and generator |
+| `Metrics` | IDS evaluator | Strategist, Analyst and dashboard |
+| `IterationRecord` | Memory/workflow | CLI, dashboard and history |
+| `ExperimentRunner` | M4 interface | CLI, dashboard and future workflow adapter |
 
-`FakeStrategist`, `FakeAnalyst` e o golden possibilitam desenvolvimento e
-testes independentes. Eles não devem ser apresentados como agentes reais nem
-confundidos com as implementações já disponíveis.
+`FakeStrategist`, `FakeAnalyst` and the golden make independent development and
+testing possible. They must not be presented as real agents nor confused with
+the implementations already available.

@@ -1,142 +1,142 @@
-# Valores ditados pelo pedido (`target_values`)
+# Values dictated by the request (`target_values`)
 
-Antes, o prompt escolhia **qual** ataque e **quanta** intensidade; o valor de
-cada campo saía sempre da heurística do compilador. Agora o pedido pode dizer o
-valor exato de um campo:
+Before, the prompt chose **which** attack and **how much** intensity; each field's
+value always came from the compiler's heuristic. Now the request can state the
+exact value of a field:
 
-> *"Reduza o recall com a duração da falha entre 50 e 80 ms."*
+> *"Reduza o recall com a duração da falha entre 50 e 80 ms."* (*"Reduce the recall with the fault duration between 50 and 80 ms."*)
 
-vira `{"fault.durationMs.min": 50, "fault.durationMs.max": 80}` em
-`IntentSpec.restrictions.target_values`, e a config compilada carrega esses dois
-números tal e qual.
+becomes `{"fault.durationMs.min": 50, "fault.durationMs.max": 80}` in
+`IntentSpec.restrictions.target_values`, and the compiled config carries those two
+numbers as they are.
 
-O guardrail central não muda: a LLM continua produzindo **apenas** a intenção
-tipada. Ela agora propõe também o número, mas quem decide se o número existe é o
-catálogo de capacidades, em Python determinístico.
+The central guardrail does not change: the LLM still produces **only** the typed
+intent. It now also proposes the number, but whoever decides whether the number exists is the
+capability catalog, in deterministic Python.
 
-## A regra única
+## The single rule
 
-**Um valor ditado nunca é corrigido em silêncio.** Ou ele vale exatamente como
-pedido, ou a compilação falha dizendo por quê.
+**A dictated value is never silently corrected.** Either it holds exactly as
+requested, or the compilation fails saying why.
 
-É o que separa um campo fixado de um campo da heurística. A heurística *negocia*:
-`_clamp_paired` aproxima um limite do irmão para preservar `min < max`, porque o
-valor dela é um meio para um efeito, não um fim. Um valor ditado é um fim — o
-usuário disse 80. Ajustá-lo para 79 produziria uma config que afirma um valor que
-ninguém pediu, e o `diff` e a justificativa (que o Defensor lê como evidência)
-passariam a mentir sobre a origem dele.
+This is what separates a pinned field from a heuristic field. The heuristic *negotiates*:
+`_clamp_paired` moves a bound closer to its sibling to preserve `min < max`, because
+its value is a means to an effect, not an end. A dictated value is an end — the
+user said 80. Adjusting it to 79 would produce a config that asserts a value that
+nobody asked for, and the `diff` and the justification (which the Defender reads as evidence)
+would start lying about its origin.
 
-Consequência prática: um pedido impossível **para o pipeline** naquele estágio,
-com a causa no `LoopStage`, em vez de virar um ataque que ninguém pediu.
+Practical consequence: a request that is impossible **for the pipeline** fails at that stage,
+with the cause on the `LoopStage`, instead of becoming an attack that nobody asked for.
 
-## Um campo fixado sai da heurística inteira
+## A pinned field leaves the heuristic entirely
 
-| | campo da heurística | campo fixado |
+| | heuristic field | pinned field |
 |---|---|---|
-| valor | calculado pelo passo da `intensity` | o do pedido |
-| escolha do campo | sorteio reprodutível pela `seed` | sempre aplicado |
-| precisa carregar o `desired_effect`? | sim | não |
-| clamp de par `{min, max}` | sim, cede ao irmão | não, o irmão é que cede |
-| conta em `max_fields_changed` | sim | sim |
+| value | computed by the `intensity` step | the one from the request |
+| choice of field | draw reproducible from the `seed` | always applied |
+| must it carry the `desired_effect`? | yes | no |
+| `{min, max}` pair clamp | yes, yields to the sibling | no, the sibling yields |
+| counts toward `max_fields_changed` | yes | yes |
 
-As duas linhas que merecem explicação:
+The two rows that deserve explanation:
 
-- **Não precisa carregar o efeito.** A heurística só escolhe entre campos
-  *capazes* do efeito pedido. Um valor ditado é uma instrução direta, mais forte
-  que essa escolha — se o pedido nomeia o campo e o valor, o compilador aplica.
-  Por isso um pedido inteiramente ditado também não cai no erro "as restrições
-  removem todos os campos": ele não removeu campo nenhum, nomeou os campos um a
-  um.
-- **Conta na cota.** Um campo fixado é um campo alterado. Se o pedido fixa 4
-  valores e `max_fields_changed` é 3, o portão recusa dizendo o número a usar —
-  em vez de escolher sozinho quais 3 dos 4 obedecer.
+- **It does not need to carry the effect.** The heuristic only chooses among fields
+  *capable* of the requested effect. A dictated value is a direct instruction, stronger
+  than that choice — if the request names the field and the value, the compiler applies it.
+  That is why a fully dictated request also does not hit the error "the restrictions
+  remove all fields": it did not remove any field, it named the fields one by
+  one.
+- **It counts toward the quota.** A pinned field is a changed field. If the request pins 4
+  values and `max_fields_changed` is 3, the gate refuses, stating the number to use —
+  instead of choosing on its own which 3 of the 4 to obey.
 
-## Onde cada coisa é recusada
+## Where each thing is refused
 
-A validação é dividida por **o que cada camada consegue saber**, não por
-conveniência:
+Validation is split by **what each layer can know**, not by
+convenience:
 
-| camada | decide | exemplos |
+| layer | decides | examples |
 |---|---|---|
-| contrato (`domain/intent_spec.py`) | contradições internas do pedido, sem saber de que ataque ele fala | mesmo campo fixado duas vezes; campo fixado *e* proibido; campo fixado fora de `allowed_fields`; número entre aspas numa lista |
-| portão (`config/attack_capabilities.py::validate_target_values`) | o que o catálogo decide sem abrir a baseline | caminho fora da allowlist; tipo errado; fora de `minimum`/`maximum`/`choices`; par `{min, max}` invertido com **os dois** limites fixados; mais fixados que a cota |
-| compilador (`core/intent_compiler.py::_assert_pinned_ranges`) | o que só a baseline decide | limite fixado contra o irmão que ficou na baseline (`min=900` contra `max=800`) |
+| contract (`domain/intent_spec.py`) | internal contradictions of the request, without knowing which attack it is about | same field pinned twice; field pinned *and* forbidden; field pinned outside `allowed_fields`; number in quotes in a list |
+| gate (`config/attack_capabilities.py::validate_target_values`) | what the catalog decides without opening the baseline | path outside the allowlist; wrong type; outside `minimum`/`maximum`/`choices`; inverted `{min, max}` pair with **both** bounds pinned; more pinned than the quota |
+| compiler (`core/intent_compiler.py::_assert_pinned_ranges`) | what only the baseline decides | pinned bound against the sibling that stayed at the baseline (`min=900` against `max=800`) |
 
-O portão roda dentro de `IntentAgent.interpret`, então quase tudo é recusado
-**antes** de qualquer geração — a LLM recebe o erro e corrige na mesma chamada.
-Só o último caso chega ao estágio GENERATOR.
+The gate runs inside `IntentAgent.interpret`, so almost everything is refused
+**before** any generation — the LLM receives the error and corrects it in the same call.
+Only the last case reaches the GENERATOR stage.
 
-## Duas decisões de tipo que não são óbvias
+## Two type decisions that are not obvious
 
-- **`True` nunca passa como inteiro.** `isinstance(True, int)` é verdadeiro em
-  Python; sem a checagem explícita, `cbStatus: true` chegaria ao JSON do ERENO.
-- **`1` passa onde o campo espera `number`.** O pedido diz "probabilidade 1", não
-  "1.0" — exigir o ponto seria exigir sintaxe de ponto flutuante do texto em
-  linguagem natural. Já `80.5` num campo inteiro é recusado: aí a conversão
-  mudaria a magnitude, não a escrita.
+- **`True` never passes as an integer.** `isinstance(True, int)` is true in
+  Python; without the explicit check, `cbStatus: true` would reach the ERENO JSON.
+- **`1` passes where the field expects `number`.** The request says "probability 1", not
+  "1.0" — requiring the decimal point would mean requiring floating-point syntax from natural-language
+  text. `80.5` in an integer field, on the other hand, is refused: there the conversion
+  would change the magnitude, not the spelling.
 
-A linha entre os dois é essa: **converter a representação, nunca a magnitude.**
-Pela mesma razão, `["20", "40"]` é recusado em vez de convertido — a conversão
-preservaria o número, mas a assimetria com `"0.42"` (que o Pydantic recusa num
-campo escalar) não se explicaria para quem lê o contrato.
+The line between the two is this: **convert the representation, never the magnitude.**
+For the same reason, `["20", "40"]` is refused instead of converted — the conversion
+would preserve the number, but the asymmetry with `"0.42"` (which Pydantic refuses in a
+scalar field) could not be explained to whoever reads the contract.
 
-## Intervalos
+## Ranges
 
-O contrato não tem tipo de intervalo porque a config do ataque também não tem:
-`{min, max}` são dois campos. "Entre 50 e 80 ms" são **dois** valores fixados. As
-duas invariantes valem:
+The contract has no range type because the attack config does not either:
+`{min, max}` are two fields. "Between 50 and 80 ms" is **two** pinned values. Both
+invariants hold:
 
-- `min < max` **estrito** — `min == max` passa por todo gate deste repo e o ERENO
-  recusa a execução inteira (*"The lower limit must be less than the upper
-  limit"*); é a mesma invariante que o piloto E0 descobriu, agora aplicada a
-  valores ditados (ver `docs/pilot_e0.md`);
-- fixar **um** limite e deixar o outro na baseline é válido, desde que a ordem
-  sobreviva. Se a heurística escolher o irmão, ela cede ao valor fixado: os
-  fixados são escritos na config **antes**, então o clamp já os enxerga.
+- **strict** `min < max` — `min == max` passes every gate in this repo and ERENO
+  refuses the whole execution (*"The lower limit must be less than the upper
+  limit"*); it is the same invariant that the E0 pilot discovered, now applied to
+  dictated values (see `docs/pilot_e0.md`);
+- pinning **one** bound and leaving the other at the baseline is valid, as long as the order
+  survives. If the heuristic chooses the sibling, it yields to the pinned value: the
+  pinned ones are written into the config **first**, so the clamp already sees them.
 
-## O que isto custou no prompt (e por que acabou sobrando espaço)
+## What this cost in the prompt (and why there ended up being room left over)
 
-O catálogo injetado passou a mostrar a faixa aceita de cada campo entre
-colchetes (`fault.prob — number [0..1]`, `cbStatus — integer [0|1]`) — sem ela a
-LLM não teria como escolher um valor que o portão aceite. Sozinha, essa adição
-levou o prompt do estágio `intent` de ~7,9k para **8381 tokens** (contagem real
-da Groq), **acima** do TPM de 8.000 da conta `on_demand`: a primeira chamada
-real morreu com `rate_limit_exceeded / Request too large`. A funcionalidade era
-inutilizável com o LLM real.
+The injected catalog began to show each field's accepted range in square
+brackets (`fault.prob — number [0..1]`, `cbStatus — integer [0|1]`) — without it the
+LLM would have no way to choose a value the gate accepts. On its own, this addition
+took the `intent` stage prompt from ~7.9k to **8381 tokens** (Groq's actual count),
+**above** the account's `on_demand` TPM of 8,000: the first real call
+died with `rate_limit_exceeded / Request too large`. The feature was
+unusable with the real LLM.
 
-A correção não foi tirar as faixas — foi cortar a redundância que já estava lá.
-O catálogo repetia a lista de efeitos por extenso em cada um dos 103 campos
-(`lower_f1, lower_recall, mimic_normal_traffic`, ~1,9k tokens só nisso), mas a
-invariante 4 garante que as três alavancas de evasão sempre andam juntas — só
-três conjuntos de efeitos existem no catálogo inteiro. Trocá-los por um rótulo
-curto com legenda única (`· evasão`, `· atividade`, `· evasão, atividade`)
-devolveu mais do que as faixas custaram. Resultado medido em três chamadas
-reais: **~6,24k tokens de entrada** — cerca de 1,6k **abaixo** de onde o prompt
-estava antes da Fase 1. O estágio `intent` ganhou folga de TPM, não perdeu.
+The fix was not to remove the ranges — it was to cut the redundancy that was already there.
+The catalog repeated the list of effects in full on each of the 103 fields
+(`lower_f1, lower_recall, mimic_normal_traffic`, ~1.9k tokens on that alone), but
+invariant 4 guarantees that the three evasion levers always go together — only
+three sets of effects exist in the whole catalog. Replacing them with a short
+label with a single legend (`· evasão`, `· atividade`, `· evasão, atividade`) (*evasion*, *activity*, *evasion, activity*)
+gave back more than the ranges cost. Result measured over three real
+calls: **~6.24k input tokens** — about 1.6k **below** where the prompt
+was before Phase 1. The `intent` stage gained TPM headroom, it did not lose any.
 
-O teste continua sendo: uma chamada por minuto (~6,9k in+out contra 8k), ver
-`docs/pilot_e0.md` e a nota sobre o TPM da conta.
+The test remains: one call per minute (~6.9k in+out against 8k), see
+`docs/pilot_e0.md` and the note on the account's TPM.
 
-## Compatibilidade
+## Compatibility
 
-`target_values` é aditivo com default `()`, como `round`/`parent_run_id` no
-`LoopRecord`: uma `IntentSpec` gravada antes desta versão carrega normalmente, e
-`schema_version` continua `1`. Um pedido sem valores ditados compila exatamente
-como antes — a heurística é o caminho comum, não o caminho legado.
+`target_values` is additive with default `()`, like `round`/`parent_run_id` in the
+`LoopRecord`: an `IntentSpec` saved before this version loads normally, and
+`schema_version` remains `1`. A request without dictated values compiles exactly
+as before — the heuristic is the common path, not the legacy path.
 
-## Testes
+## Tests
 
-- `tests/test_intent_target_values.py` — as três camadas de recusa, o valor
-  chegando intacto à config, a intensidade não movendo um campo fixado, a cota
-  compartilhada com a heurística, o irmão do par cedendo ao valor fixado, a
-  lista virando JSON, a escada do E10 sobre uma intenção com valores fixados, e
-  o ponta a ponta até o `attack_candidate.json` em disco.
-- `tests/test_intent_tool_schema.py` — o schema de `target_values` expõe
-  escalares, não objetos vazios (mesmo bug de `list[object]` do Estrategista).
+- `tests/test_intent_target_values.py` — the three layers of refusal, the value
+  arriving intact in the config, the intensity not moving a pinned field, the quota
+  shared with the heuristic, the pair's sibling yielding to the pinned value, the
+  list becoming JSON, the E10 ladder over an intent with pinned values, and
+  the end-to-end path to the `attack_candidate.json` on disk.
+- `tests/test_intent_tool_schema.py` — the `target_values` schema exposes
+  scalars, not empty objects (same `list[object]` bug as the Strategist).
 
-Validação com o LLM real (`openai/gpt-oss-120b`, 26/09/2026, três chamadas
-espaçadas): intervalo em linguagem natural ("entre 50 e 80 ms") extraído para os
-dois caminhos com `max_fields_changed=2`; um campo inexistente (probabilidade no
-`flooding`) faz o LLM cair na heurística em vez de inventar caminho; e um valor
-fora da faixa (`fault.prob=1.5`) é proposto pelo LLM e **recusado pelo portão**
-com mensagem acionável — a garantia do nunca-clampar, confirmada ponta a ponta.
+Validation with the real LLM (`openai/gpt-oss-120b`, 2026-09-26, three spaced-out
+calls): a natural-language range ("entre 50 e 80 ms" — *"between 50 and 80 ms"*) extracted into the
+two paths with `max_fields_changed=2`; a nonexistent field (probability on
+`flooding`) makes the LLM fall back to the heuristic instead of inventing a path; and a value
+outside the range (`fault.prob=1.5`) is proposed by the LLM and **refused by the gate**
+with an actionable message — the never-clamp guarantee, confirmed end to end.

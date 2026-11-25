@@ -1,221 +1,221 @@
-# Catálogo de capacidades intent-driven
+# Intent-driven capability catalog
 
-Referência do que cada ataque expõe ao pipeline intent-driven
-(`--engine intent`) — a allowlist entre uma `IntentSpec` e os campos que
-`core/intent_compiler.py` pode alterar. Fonte de verdade:
-`config/attack_capabilities.py` + `config/capabilities/*.py`. Este documento
-é gerado a partir do catálogo real (ver comando no fim) e não deve divergir
-dele.
+Reference for what each attack exposes to the intent-driven pipeline
+(`--engine intent`) — the allowlist between an `IntentSpec` and the fields that
+`core/intent_compiler.py` may change. Source of truth:
+`config/attack_capabilities.py` + `config/capabilities/*.py`. This document
+is generated from the real catalog (see the command at the end) and must not diverge
+from it.
 
-## Convenções
+## Conventions
 
-- **`capability_id`**: `"<attack_key>.v<N>"` — uma por ataque registrado em
-  `config/attacks_registry.py`, inclusive as 4 variantes `delayed_replay*`
-  (mesmo `delayed_replay_double_drop` sendo campo-a-campo idêntico ao
-  `delayed_replay` base: compartilhar um id faria `AttackCapability.attack_key`
-  mentir para três das quatro specs). O id vai para o `AttackCandidate`;
-  os cinco catálogos podados pelo E0 passaram a `v2`, para que um candidato
-  compilado contra o catálogo antigo continue distinguível.
-- **`polarity`**: `"direct"` (padrão) — valor maior = ataque mais intenso.
-  `"inverse"` — valor maior = ataque **menos** intenso (gaps, intervalos entre
-  rajadas). O compilador inverte a direção efetiva desses campos, para que
-  "evadir detecção" nunca signifique apertar um gap.
-- **Efeitos**: `lower_f1`, `lower_recall`, `mimic_normal_traffic` (as três
-  "de evasão" — sempre com o mesmo conjunto de campos numa capacidade),
-  `increase_attack_activity`. `increase_resource_pressure` existe no contrato
-  mas **nenhum catálogo o anuncia** — ver seção própria abaixo.
-- **`minimum`/`maximum`**: o piso/teto que o compilador respeita. É a única
-  defesa contra compilar o ataque para fora de existência — o pipeline
-  intent-driven não roda `shared/validator.py` (isso é só do loop legado).
-- **Pares `{min, max}`**: o piso/teto de cada campo não protege o *par*. Um
-  limite empurrado contra o irmão congelado pararia em cima dele, e
-  `min == max` passa pelo catálogo e pelo schema do ataque mas o ERENO recusa
-  a execução inteira ("The lower limit must be less than the upper limit").
-  A invariante é garantida estruturalmente no compilador
-  (`intent_compiler._clamp_paired`, que trata o irmão como limite efetivo em
-  vez de encostar nele), não campo a campo aqui — nenhuma declaração de
-  capacidade precisa se preocupar com isso. Ver `docs/pilot_e0.md`.
+- **`capability_id`**: `"<attack_key>.v<N>"` — one per attack registered in
+  `config/attacks_registry.py`, including the 4 `delayed_replay*` variants
+  (even though `delayed_replay_double_drop` is field-for-field identical to the base
+  `delayed_replay`: sharing an id would make `AttackCapability.attack_key`
+  lie for three of the four specs). The id goes into the `AttackCandidate`;
+  the five catalogs pruned by E0 moved to `v2`, so that a candidate
+  compiled against the old catalog remains distinguishable.
+- **`polarity`**: `"direct"` (default) — larger value = more intense attack.
+  `"inverse"` — larger value = **less** intense attack (gaps, intervals between
+  bursts). The compiler inverts the effective direction of these fields, so that
+  "evade detection" never means tightening a gap.
+- **Effects**: `lower_f1`, `lower_recall`, `mimic_normal_traffic` (the three
+  "evasion" ones — always with the same set of fields within a capability),
+  `increase_attack_activity`. `increase_resource_pressure` exists in the contract
+  but **no catalog advertises it** — see its own section below.
+- **`minimum`/`maximum`**: the floor/ceiling that the compiler respects. It is the only
+  defense against compiling the attack out of existence — the intent-driven pipeline
+  does not run `shared/validator.py` (that belongs only to the legacy loop).
+- **`{min, max}` pairs**: the floor/ceiling of each field does not protect the *pair*. A
+  bound pushed against the frozen sibling would stop right on top of it, and
+  `min == max` passes the catalog and the attack schema but ERENO refuses
+  the whole run ("The lower limit must be less than the upper limit").
+  The invariant is guaranteed structurally in the compiler
+  (`intent_compiler._clamp_paired`, which treats the sibling as the effective bound instead
+  of touching it), not field by field here — no capability declaration
+  needs to worry about it. See `docs/pilot_e0.md`.
 
-## Ataques e campos
+## Attacks and fields
 
-### `masquerade_fault` (`masquerade_fault.v2`) — 11 de 12 campos
+### `masquerade_fault` (`masquerade_fault.v2`) — 11 of 12 fields
 
-| campo | tipo | pol. | bounds/choices | efeitos |
+| field | type | pol. | bounds/choices | effects |
 |---|---|---|---|---|
-| `fault.prob` | number | direct | [0.0, 1.0] | evasão + atividade |
-| `fault.durationMs.min` | integer | direct | ≥0 | evasão |
-| `fault.durationMs.max` | integer | direct | ≥0 | evasão |
-| `cbStatus` | integer | direct | {0, 1} | evasão |
-| `incrementStNumOnFault` | boolean | direct | {False, True} | evasão |
-| `sqnumMode` | string | direct | {fast, normal} | evasão |
-| `analog.deltaAbs.min` | number | direct | ≥0.0 | evasão |
-| `analog.deltaAbs.max` | number | direct | ≥0.0 | evasão |
-| `trapArea.multiplier.min` | number | direct | ≥0.0 | evasão |
-| `trapArea.multiplier.max` | number | direct | ≥0.0 | evasão |
-| `trapArea.spikeProb` | number | direct | [0.0, 1.0] | evasão + atividade |
+| `fault.prob` | number | direct | [0.0, 1.0] | evasion + activity |
+| `fault.durationMs.min` | integer | direct | ≥0 | evasion |
+| `fault.durationMs.max` | integer | direct | ≥0 | evasion |
+| `cbStatus` | integer | direct | {0, 1} | evasion |
+| `incrementStNumOnFault` | boolean | direct | {False, True} | evasion |
+| `sqnumMode` | string | direct | {fast, normal} | evasion |
+| `analog.deltaAbs.min` | number | direct | ≥0.0 | evasion |
+| `analog.deltaAbs.max` | number | direct | ≥0.0 | evasion |
+| `trapArea.multiplier.min` | number | direct | ≥0.0 | evasion |
+| `trapArea.multiplier.max` | number | direct | ≥0.0 | evasion |
+| `trapArea.spikeProb` | number | direct | [0.0, 1.0] | evasion + activity |
 
-### `random_replay` (`random_replay.v2`) — 10 de 15 campos
+### `random_replay` (`random_replay.v2`) — 10 of 15 fields
 
-| campo | tipo | pol. | bounds | efeitos |
+| field | type | pol. | bounds | effects |
 |---|---|---|---|---|
-| `windowS.{min,max}` | number | direct | [0.1, 30.0] | evasão |
-| `delayMs.{min,max}` | number | direct | [1.0, 2000.0] | evasão |
-| `burst.prob` | number | direct | [0.0, 1.0] | evasão + atividade |
-| `burst.{min,max}` | integer | direct | [1, 50] | evasão + atividade |
-| `burst.gapMs.{min,max}` | number | **inverse** | [0.05, 1000.0] | evasão + atividade |
-| `reorderProb` | number | direct | [0.0, 1.0] | evasão |
+| `windowS.{min,max}` | number | direct | [0.1, 30.0] | evasion |
+| `delayMs.{min,max}` | number | direct | [1.0, 2000.0] | evasion |
+| `burst.prob` | number | direct | [0.0, 1.0] | evasion + activity |
+| `burst.{min,max}` | integer | direct | [1, 50] | evasion + activity |
+| `burst.gapMs.{min,max}` | number | **inverse** | [0.05, 1000.0] | evasion + activity |
+| `reorderProb` | number | direct | [0.0, 1.0] | evasion |
 
-> **Incerteza registrada**: `delayMs.{min,max}` está tagueado `direct` (menos
-> atraso ≈ temporização mais próxima do normal), mas um replay quase sem
-> atraso também é uma duplicata mais óbvia — plausivelmente `inverse`.
-> Resolver com um experimento A/B (`--generator-mode jar`, comparar recall)
-> em vez de garantir.
+> **Recorded uncertainty**: `delayMs.{min,max}` is tagged `direct` (less
+> delay ≈ timing closer to normal), but a replay with almost no
+> delay is also a more obvious duplicate — plausibly `inverse`.
+> Resolve with an A/B experiment (`--generator-mode jar`, compare recall)
+> rather than guessing.
 
-### `inverse_replay` (`inverse_replay.v2`) — 9 de 12 campos
+### `inverse_replay` (`inverse_replay.v2`) — 9 of 12 fields
 
-Mesma família estrutural do `random_replay`. `blockLen` substitui `windowS`;
-`delayMs` é **inteiro** aqui (vs. float no uc01); sem `ethSpoof`/`reorderProb`.
-`burst.gapMs.{min,max}` também é `inverse`, pelo mesmo motivo.
+Same structural family as `random_replay`. `blockLen` replaces `windowS`;
+`delayMs` is an **integer** here (vs. a float in uc01); no `ethSpoof`/`reorderProb`.
+`burst.gapMs.{min,max}` is also `inverse`, for the same reason.
 
-### `injection` (`injection.v1`) — 2 de 12 campos
+### `injection` (`injection.v1`) — 2 of 12 fields
 
-| campo | tipo | pol. | bounds/choices | efeitos |
+| field | type | pol. | bounds/choices | effects |
 |---|---|---|---|---|
-| `numInjectedMessages` | integer | direct | [5, 5000] | evasão + atividade |
-| `injectionPattern` | string | — | {random, uniform} | evasão |
+| `numInjectedMessages` | integer | direct | [5, 5000] | evasion + activity |
+| `injectionPattern` | string | — | {random, uniform} | evasion |
 
-O piso 5 de `numInjectedMessages` existe porque o gate E4
-(`DatasetBundle`) exige `min_attack_rows=5` por padrão — um valor menor
-produziria um candidato que o próprio pipeline rejeitaria no PREPROCESS.
+The floor of 5 on `numInjectedMessages` exists because the E4 gate
+(`DatasetBundle`) requires `min_attack_rows=5` by default — a smaller value
+would produce a candidate that the pipeline itself would reject in PREPROCESS.
 
-### `high_stnum` (`high_stnum.v2`) — 5 de 11 campos, só evasão
+### `high_stnum` (`high_stnum.v2`) — 5 of 11 fields, evasion only
 
-| campo | tipo | pol. | bounds/choices | efeitos |
+| field | type | pol. | bounds/choices | effects |
 |---|---|---|---|---|
-| `jump.{min,max}` | integer | direct | [1, 1000] | evasão |
-| `sqnumResetProb` | number | direct | [0.0, 1.0] | evasão |
-| `sqNumDelta.max` | integer | direct | [0, 100] | evasão |
-| `randomizeTimestamp` | boolean | direct | {False, True} | evasão |
+| `jump.{min,max}` | integer | direct | [1, 1000] | evasion |
+| `sqnumResetProb` | number | direct | [0.0, 1.0] | evasion |
+| `sqNumDelta.max` | integer | direct | [0, 100] | evasion |
+| `randomizeTimestamp` | boolean | direct | {False, True} | evasion |
 
-As duas alavancas de atividade (`count.lambda`, `ttlOverride.prob`) saíram
-pelo E0, então o `high_stnum` não anuncia mais `increase_attack_activity`.
+The two activity levers (`count.lambda`, `ttlOverride.prob`) were removed
+by E0, so `high_stnum` no longer advertises `increase_attack_activity`.
 
-### `flooding` (`flooding.v1`) — 8 campos, cobertura total
+### `flooding` (`flooding.v1`) — 8 fields, full coverage
 
-| campo | tipo | pol. | bounds/choices | efeitos |
+| field | type | pol. | bounds/choices | effects |
 |---|---|---|---|---|
-| `burst.{min,max}` | integer | direct | [1, 2000] | evasão + atividade |
-| `gapMs.{min,max}` | number | **inverse** | [0.01, 10.0] | evasão + atividade |
-| `stnumEveryPacket` | boolean | direct | {False, True} | evasão |
-| `sqnumStrideValues` | integer_list | direct | — | **só atividade** |
-| `ttlMs` | integer | direct | [1, 1000] | evasão |
-| `ethSrcSpoofProb` | number | direct | [0.0, 1.0] | evasão |
+| `burst.{min,max}` | integer | direct | [1, 2000] | evasion + activity |
+| `gapMs.{min,max}` | number | **inverse** | [0.01, 10.0] | evasion + activity |
+| `stnumEveryPacket` | boolean | direct | {False, True} | evasion |
+| `sqnumStrideValues` | integer_list | direct | — | **activity only** |
+| `ttlMs` | integer | direct | [1, 1000] | evasion |
+| `ethSrcSpoofProb` | number | direct | [0.0, 1.0] | evasion |
 
-`gapMs` é a alavanca principal do ataque — gap **menor** entre pacotes é o
-que caracteriza flooding, daí `inverse`. `sqnumStrideValues` só carrega
-`increase_attack_activity`: escalar a lista elementwise por um fator &lt;1
-(evasão) produz um multiset degenerado (`[1,2,4]` × 0.5 → `[1,1,2]`, duplicando
-o stride 1), então a direção de evasão não é segura para esse campo.
+`gapMs` is the main lever of the attack — a **smaller** gap between packets is
+what characterizes flooding, hence `inverse`. `sqnumStrideValues` only carries
+`increase_attack_activity`: scaling the list elementwise by a factor &lt;1
+(evasion) produces a degenerate multiset (`[1,2,4]` × 0.5 → `[1,1,2]`, duplicating
+stride 1), so the evasion direction is not safe for this field.
 
-### `grayhole` (`grayhole.v2`) — 5 de 12 campos
+### `grayhole` (`grayhole.v2`) — 5 of 12 fields
 
-| campo | tipo | pol. | bounds | efeitos |
+| field | type | pol. | bounds | effects |
 |---|---|---|---|---|
-| `dropRate.{min,max}` | number | direct | [0.05, 1.0] | evasão + atividade |
-| `burstDropProb` | number | direct | [0.0, 1.0] | evasão + atividade |
-| `burstDropLen.{min,max}` | integer | direct | [1, 100] | evasão + atividade |
+| `dropRate.{min,max}` | number | direct | [0.05, 1.0] | evasion + activity |
+| `burstDropProb` | number | direct | [0.0, 1.0] | evasion + activity |
+| `burstDropLen.{min,max}` | integer | direct | [1, 100] | evasion + activity |
 
-`dropRate.{min,max}` é semanticamente uma probabilidade cujas folhas se
-chamam `min`/`max` — o clamp genérico legado (que casa por substring `"prob"`
-na chave) não a alcança; aqui os limites são explícitos, com piso `0.05` (não
-`0.0`) para não deixar o compilador reduzir a taxa de descarte a um ponto
-onde o ataque deixa de existir fisicamente.
+`dropRate.{min,max}` is semantically a probability whose leaves are called
+`min`/`max` — the legacy generic clamp (which matches by the substring `"prob"`
+in the key) does not reach it; here the bounds are explicit, with a floor of `0.05` (not
+`0.0`) so that the compiler cannot reduce the drop rate to a point
+where the attack ceases to exist physically.
 
 ### `delayed_replay` / `_backoff` / `_batch_dump` / `_double_drop` (uc10)
 
-Campos comuns às 4 variantes:
+Fields common to the 4 variants:
 
-| campo | tipo | pol. | bounds | efeitos |
+| field | type | pol. | bounds | effects |
 |---|---|---|---|---|
-| `burstInterval.{min,max}` | integer | **inverse** | [10, 5000] | evasão + atividade |
-| `burstMax` | integer | direct | [1, 2000] | evasão + atividade |
-| `selectionProb.value` | number | direct | [0.05, 1.0] | evasão + atividade |
-| `networkDelayMs.{min,max}` | number | direct | [1.0, 5000.0] | evasão |
-| `shiftSendTimestamp` | boolean | direct | {False, True} | evasão |
-| `replaceWithFake` | boolean | direct | {False, True} | evasão |
+| `burstInterval.{min,max}` | integer | **inverse** | [10, 5000] | evasion + activity |
+| `burstMax` | integer | direct | [1, 2000] | evasion + activity |
+| `selectionProb.value` | number | direct | [0.05, 1.0] | evasion + activity |
+| `networkDelayMs.{min,max}` | number | direct | [1.0, 5000.0] | evasion |
+| `shiftSendTimestamp` | boolean | direct | {False, True} | evasion |
+| `replaceWithFake` | boolean | direct | {False, True} | evasion |
 
-Extras por variante: `_backoff` adiciona `rateMultiplier` (direct,
-`[1.0, 10.0]` — `1.0` é "backoff desligado", o piso semântico correto, não
-`0.0`); `_batch_dump` adiciona `microGapMs` (**inverse**, `[0.1, 100.0]`).
-`_double_drop` não adiciona nada — a variante é dispatch-only, diferenciada
-só pelo `attackType`.
+Extras per variant: `_backoff` adds `rateMultiplier` (direct,
+`[1.0, 10.0]` — `1.0` is "backoff off", the correct semantic floor, not
+`0.0`); `_batch_dump` adds `microGapMs` (**inverse**, `[0.1, 100.0]`).
+`_double_drop` adds nothing — the variant is dispatch-only, differentiated
+only by the `attackType`.
 
-`selectionProb.value` é uma probabilidade cuja chave-folha é `value` — o
-clamp genérico legado não a alcança.
+`selectionProb.value` is a probability whose leaf key is `value` — the legacy
+generic clamp does not reach it.
 
-## Campos excluídos e por quê
+## Excluded fields and why
 
-| campo | ataque(s) | motivo |
+| field | attack(s) | reason |
 |---|---|---|
-| `orderBy` | `delayed_replay*` (4) | string sem enum documentado em nenhum lugar do repo. `FieldCapability._string_fields_need_choices` rejeitaria a declaração sem `choices` na hora do import. Recuperável via arqueologia no bytecode do JAR (`generator_runtime/ereno-generator.jar`), como foi feito para `sqnumMode` — decompilar a classe criadora do uc10 e achar o `switch`/`equalsIgnoreCase` sobre a string. |
-| `randomSeed` | `injection` | controle de reprodutibilidade, não uma alavanca de intensidade. |
-| `stNum`, `sqNum`, `cbStatus.values`, `ttlMs`, `confRev` (9 caminhos) | `injection` | só têm efeito físico quando `injectionPattern == "synthetic"`; o baseline usa `"random"` (clona mensagens legítimas, ignora essas faixas). Compilar uma mudança nelas produziria um diff sem efeito físico — corromperia a política E10, que mediria "sem melhora" e escalaria uma alavanca morta. Habilitá-los exige mudar o baseline (`inputs/attacks/uc05_injection.json`) para `"synthetic"`, o que também mudaria o que `--engine live --attack injection` (loop legado) otimiza — decisão de dados fora do escopo deste catálogo. |
-| `sqNumDelta.min`, `padBytes.min` | `high_stnum` | baseline `0`, morto nas duas direções: `decrease` não desce de um piso `0`, e `increase` sem `maximum` é multiplicativo (`0 × fator = 0`). Só os `.max` de cada par entram. |
-| `protectStatusChanges`, `statusChangeDropProb` | `grayhole` | a probabilidade só é consultada com o gate ligado (as mensagens de mudança de estado caem com ela em vez de `dropRate`); o gate fica `false` na baseline e nunca esteve no catálogo, então a probabilidade era inalcançável — o E0 a mediu inerte. |
+| `orderBy` | `delayed_replay*` (4) | a string with no enum documented anywhere in the repo. `FieldCapability._string_fields_need_choices` would reject the declaration without `choices` at import time. Recoverable via archaeology on the JAR bytecode (`generator_runtime/ereno-generator.jar`), as was done for `sqnumMode` — decompile the uc10 creator class and find the `switch`/`equalsIgnoreCase` over the string. |
+| `randomSeed` | `injection` | a reproducibility control, not an intensity lever. |
+| `stNum`, `sqNum`, `cbStatus.values`, `ttlMs`, `confRev` (9 paths) | `injection` | they only have a physical effect when `injectionPattern == "synthetic"`; the baseline uses `"random"` (clones legitimate messages, ignores these ranges). Compiling a change to them would produce a diff with no physical effect — it would corrupt the E10 policy, which would measure "no improvement" and escalate a dead lever. Enabling them requires changing the baseline (`inputs/attacks/uc05_injection.json`) to `"synthetic"`, which would also change what `--engine live --attack injection` (legacy loop) optimizes — a data decision outside the scope of this catalog. |
+| `sqNumDelta.min`, `padBytes.min` | `high_stnum` | baseline `0`, dead in both directions: `decrease` does not go below a floor of `0`, and `increase` without `maximum` is multiplicative (`0 × factor = 0`). Only the `.max` of each pair enters. |
+| `protectStatusChanges`, `statusChangeDropProb` | `grayhole` | the probability is only consulted with the gate on (state-change messages are dropped with it instead of `dropRate`); the gate is `false` in the baseline and was never in the catalog, so the probability was unreachable — E0 measured it as inert. |
 
-### Excluídos pela auditoria do E0 (13/10/2026)
+### Excluded by the E0 audit (2026-10-13)
 
-O teste de catálogo garante que cada campo muda a **config**; não garante que
-a config mude o **trace**. `scripts/run_e0_sensitivity.py` gera cada campo
-sozinho contra a referência nas mesmas seeds, e os campos abaixo deram trace
-idêntico byte a byte. A escolha foi podar o catálogo, não consertar o
-gerador: consertar mudaria o simulador para o ataque ficar mais fácil de
-detectar, e no caso do TTL criaria um artefato.
+The catalog test guarantees that each field changes the **config**; it does not guarantee that
+the config changes the **trace**. `scripts/run_e0_sensitivity.py` generates each field
+alone against the reference on the same seeds, and the fields below gave a
+byte-for-byte identical trace. The choice was to prune the catalog, not to fix the
+generator: fixing it would change the simulator to make the attack easier to
+detect, and in the case of the TTL it would create an artifact.
 
-| campo | ataque(s) | causa no ERENO-2.0 |
+| field | attack(s) | cause in ERENO-2.0 |
 |---|---|---|
-| `count.lambda` | `random_replay`, `inverse_replay`, `high_stnum` | nenhum creator lê; a quantidade de mensagens de ataque é o orçamento por segmento de `CreateAttackDatasetAction` (prevalência 50% qualquer que seja o valor). |
-| `ttlOverride.{valuesMs,prob}`, `ttlMsValues` | `random_replay`, `inverse_replay`, `high_stnum`, `masquerade_fault` | o TTL é aplicado na mensagem, mas `Goose.copy()` não copia `gooseTimeAllowedtoLive` e o creator emite a cópia: o CSV sai sempre com 11000. Consertar criaria um artefato — o benigno tem TTL constante, e `getFrameLen()` soma o TTL como texto, o que vazaria para `frameLengthDiff`. O `prob` não é inerte (consome sorteios), mas não tem efeito fora da RNG. |
-| `ethSpoof.{srcProb,dstProb}` | `random_replay` | o creator nunca lê (e `Goose.ethSrc` é `static`). Trocar o MAC de um replay o deixaria menos parecido com o publisher. |
-| `padBytes.max` | `high_stnum` | o creator nunca lê; enchimento dentro de uma PDU BER faria um frame malformado. |
-| `extraDelayMs.{min,max}`, `delayBurstProb`, `delayBurstLen.{min,max}` | `grayhole` | `GrayHoleVictimCreatorC` nunca lê; as mensagens que sobrevivem saem sem atraso. Modelar o atraso é decisão do estudo do próprio grayhole. |
+| `count.lambda` | `random_replay`, `inverse_replay`, `high_stnum` | no creator reads it; the number of attack messages is the per-segment budget of `CreateAttackDatasetAction` (50% prevalence whatever the value). |
+| `ttlOverride.{valuesMs,prob}`, `ttlMsValues` | `random_replay`, `inverse_replay`, `high_stnum`, `masquerade_fault` | the TTL is applied to the message, but `Goose.copy()` does not copy `gooseTimeAllowedtoLive` and the creator emits the copy: the CSV always comes out with 11000. Fixing it would create an artifact — the benign traffic has a constant TTL, and `getFrameLen()` adds the TTL as text, which would leak into `frameLengthDiff`. The `prob` is not inert (it consumes draws), but has no effect outside the RNG. |
+| `ethSpoof.{srcProb,dstProb}` | `random_replay` | the creator never reads it (and `Goose.ethSrc` is `static`). Swapping the MAC of a replay would make it less like the publisher. |
+| `padBytes.max` | `high_stnum` | the creator never reads it; padding inside a BER PDU would make a malformed frame. |
+| `extraDelayMs.{min,max}`, `delayBurstProb`, `delayBurstLen.{min,max}` | `grayhole` | `GrayHoleVictimCreatorC` never reads them; the messages that survive come out with no delay. Modeling the delay is a decision for the grayhole study itself. |
 
-**Não auditado ainda:** `flooding.ttlMs` e `flooding.ethSrcSpoofProb` passam
-pelos mesmos dois mecanismos (TTL via `copy()`, `ethSrc` estático) e são
-suspeitos; o E0 não cobriu o `flooding`.
+**Not audited yet:** `flooding.ttlMs` and `flooding.ethSrcSpoofProb` go through
+the same two mechanisms (TTL via `copy()`, static `ethSrc`) and are
+suspect; E0 did not cover `flooding`.
 
-## `increase_resource_pressure` — por que nenhum catálogo o anuncia
+## `increase_resource_pressure` — why no catalog advertises it
 
-É o efeito fisicamente mais natural para `flooding`/`grayhole`, mas
-`DetectionReport` não tem uma métrica que meça pressão de recurso — as únicas
-candidatas seriam `latency_ms` (mede nosso próprio processo Python, não o
-barramento GOOSE) ou algo derivado de `DatasetBundle.class_counts`/linhas por
-segundo (exigiria uma segunda fonte no `decide_feedback`, mudança de contrato
-fora do escopo desta entrega). Anunciar o efeito sem uma métrica real faria
-`core/feedback_policy.py` "escolher uma métrica arbitrária e fingir medição" —
-exatamente o que o módulo documenta que não faz. Uma campanha que peça esse
-efeito é rejeitada no portão de entrada (`resolve_candidate_paths`) com uma
-mensagem acionável, em vez de morrer tarde na rodada 1 com
-`NO_OBJECTIVE_METRIC`. `increase_attack_activity` cobre a metade fisicamente
-representável do pedido nos mesmos campos (`burst.*`, `gapMs.*`,
-`dropRate.*`) — a perda é lexical, não física.
+It is the physically most natural effect for `flooding`/`grayhole`, but
+`DetectionReport` has no metric that measures resource pressure — the only
+candidates would be `latency_ms` (measures our own Python process, not the
+GOOSE bus) or something derived from `DatasetBundle.class_counts`/rows per
+second (it would require a second source in `decide_feedback`, a contract change
+outside the scope of this delivery). Advertising the effect without a real metric would make
+`core/feedback_policy.py` "choose an arbitrary metric and pretend to measure" —
+exactly what the module documents that it does not do. A campaign that asks for this
+effect is rejected at the entry gate (`resolve_candidate_paths`) with an
+actionable message, instead of dying late in round 1 with
+`NO_OBJECTIVE_METRIC`. `increase_attack_activity` covers the physically
+representable half of the request in the same fields (`burst.*`, `gapMs.*`,
+`dropRate.*`) — the loss is lexical, not physical.
 
-## Limitação de modo cached
+## Cached mode limitation
 
-Em `--generator-mode cached` o dataset servido é sempre
-`data/baseline_dataset.csv`, cuja classe de ataque é `masquerade_fake_fault`.
-O portão de integração E4 (`build_dataset_bundle`,
-`expected_attack_label=spec.label`) exige que esse rótulo esteja presente no
-trace — então **os 10 ataques que não são `masquerade_fault` só são
-fisicamente mensuráveis em `--generator-mode jar`**; em modo cacheado o
-pipeline para no estágio PREPROCESS com um erro do gate, não com um crash.
-Os testes (`tests/test_intent_loop_orchestrator.py`) sintetizam um CSV
-mínimo por rótulo para exercitar os sete estágios sem Java.
+In `--generator-mode cached` the dataset served is always
+`data/baseline_dataset.csv`, whose attack class is `masquerade_fake_fault`.
+The E4 integration gate (`build_dataset_bundle`,
+`expected_attack_label=spec.label`) requires that label to be present in the
+trace — so **the 10 attacks that are not `masquerade_fault` are only
+physically measurable in `--generator-mode jar`**; in cached mode the
+pipeline stops at the PREPROCESS stage with a gate error, not a crash.
+The tests (`tests/test_intent_loop_orchestrator.py`) synthesize a minimal CSV
+per label to exercise the seven stages without Java.
 
-As 4 variantes `delayed_replay*` compartilham `label="delayed_replay"` no
-registry — o gate E4 não as distingue por classe entre si.
+The 4 `delayed_replay*` variants share `label="delayed_replay"` in the
+registry — the E4 gate does not distinguish them from each other by class.
 
-## Como este documento foi gerado
+## How this document was generated
 
 ```bash
 uv run python -c "
@@ -227,8 +227,8 @@ for k in list_attack_keys():
 "
 ```
 
-`tests/test_attack_capabilities_catalog.py` mantém este catálogo honesto —
-qualquer alavanca morta na config, caminho não documentado ou efeito sem campo
-que o produza falha ali antes de chegar aqui. Alavanca morta no **trace** (a
-config muda, o gerador ignora) só aparece rodando o gerador:
-`uv run python scripts/run_e0_sensitivity.py` (precisa do JAR).
+`tests/test_attack_capabilities_catalog.py` keeps this catalog honest —
+any dead lever in the config, undocumented path or effect with no field
+that produces it fails there before it gets here. A lever that is dead in the **trace** (the
+config changes, the generator ignores it) only shows up by running the generator:
+`uv run python scripts/run_e0_sensitivity.py` (needs the JAR).

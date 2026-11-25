@@ -1,198 +1,197 @@
-# Observabilidade e UI do loop intent-driven (E11)
+# Observability and UI of the intent-driven loop (E11)
 
-Fecha a janela D55-60 do lado da operação. O critério de pronto do épico é
-literal — *"usuário vê estágio, duração, artefatos, erro e resultado"* — e a
-linha "Operação" da tabela de aceite acrescenta *"timeout, retry, logs
-estruturados, segredo → falhas têm estágio/causa; prompts não expõem chaves;
-execução cabe no orçamento definido"*.
+Closes the D55-60 window on the operations side. The epic's definition of done is
+literal — *"the user sees stage, duration, artifacts, error and outcome"* — and the
+"Operation" row of the acceptance table adds *"timeout, retry, structured logs,
+secret → failures have a stage/cause; prompts do not expose keys;
+execution fits within the defined budget"*.
 
-## O que existia e o que faltava
+## What existed and what was missing
 
-`LoopRecord`/`LoopStage` (E3) já carregavam `name`, `status`,
-`duration_seconds`, `artifact_ref` e `error` por estágio. Faltavam três coisas:
+`LoopRecord`/`LoopStage` (E3) already carried `name`, `status`,
+`duration_seconds`, `artifact_ref` and `error` per stage. Three things were missing:
 
-1. **Ninguém lia.** As duas UIs conheciam só `IterationRecord` (loop legado
-   Strategist↔Analyst); o motor intent-driven não era alcançável pela interface.
-   A CLI imprimia estágio, artefato e erro — mas não a duração, que media e
-   jogava fora.
-2. **Nada era observável durante a execução.** O `LoopRecord` só existe depois
-   que a campanha termina. Enquanto ela roda, quem olha não vê nada — e a UI
-   tapava esse buraco por conta própria, deduzindo a fase corrente por
-   substring de `stdout` capturado
-   (`studio/bridge.py::progress()` procurava `"=== ITERAÇÃO"` e `"concluída"`).
-   Renomear uma mensagem de log quebrava a barra de progresso sem nenhum teste
-   ficar vermelho.
-3. **`cost_usd` era declarado e nunca populado.** Não dá para afirmar que a
-   execução cabe no orçamento sobre um campo que é sempre `None`.
+1. **Nobody read them.** Both UIs only knew `IterationRecord` (the legacy
+   Strategist↔Analyst loop); the intent-driven engine was not reachable from the interface.
+   The CLI printed stage, artifact and error — but not the duration, which it measured
+   and then threw away.
+2. **Nothing was observable during execution.** The `LoopRecord` only exists after
+   the campaign ends. While it runs, anyone watching sees nothing — and the UI
+   papered over that gap on its own, inferring the current phase by substring
+   from captured `stdout`
+   (`studio/bridge.py::progress()` looked for `"=== ITERAÇÃO"` and `"concluída"`
+   (*"=== ITERATION"* and *"completed"*)).
+   Renaming a log message broke the progress bar without a single test turning red.
+3. **`cost_usd` was declared and never populated.** One cannot claim that
+   the execution fits within the budget based on a field that is always `None`.
 
-## LoopEvent: o que está acontecendo agora
+## LoopEvent: what is happening right now
 
-`domain/loop_event.py` é o contrato da transição. Quatro tipos, e a divisão é
-estrutural: `run_started`/`run_finished` falam da execução (`stage=None`),
-`stage_started`/`stage_finished` falam de um dos sete estágios. `status` e
-`duration_seconds` só existem no par `*_finished` — um evento de início que
-afirmasse duração estaria mentindo, e o validador recusa em vez de deixar a UI
-decidir se acredita.
+`domain/loop_event.py` is the transition contract. Four types, and the split is
+structural: `run_started`/`run_finished` are about the execution (`stage=None`),
+`stage_started`/`stage_finished` are about one of the seven stages. `status` and
+`duration_seconds` exist only on the `*_finished` pair — a start event that
+claimed a duration would be lying, and the validator refuses it instead of leaving the UI
+to decide whether to believe it.
 
-A ordem é `sequence`, não `created_at`: dois estágios rápidos cabem no mesmo
-timestamp, e o relógio pode andar para trás numa sincronização de NTP.
+Ordering is by `sequence`, not `created_at`: two fast stages can share the same
+timestamp, and the clock can go backwards on an NTP sync.
 
-O vocabulário de estágio (`LoopStageName`) e de status (`LoopStageStatus`) vem
-de `loop_record`. Evento e registro falam dos mesmos sete estágios, ou a
-timeline ao vivo e o histórico contariam histórias diferentes da mesma execução
-— e um teste do orquestrador fixa exatamente essa igualdade, campo a campo.
+The stage vocabulary (`LoopStageName`) and the status vocabulary (`LoopStageStatus`) come
+from `loop_record`. Event and record speak of the same seven stages, or the
+live timeline and the history would tell different stories about the same execution
+— and an orchestrator test pins exactly that equality, field by field.
 
-### Onde os eventos nascem
+### Where events are born
 
-`IntentLoopOrchestrator._stage` é o ponto único: ele já media início, fim,
-duração, artefato e causa da falha. O que mudou é que as três variáveis soltas
-da rodada (`stages`, `run_dir`, e agora o emissor) viraram um `_RoundContext`,
-cujo `record_stage` anexa o `LoopStage` **e** emite o `LoopEvent` na mesma
-chamada. É o que torna impossível registrar um sem anunciar o outro.
+`IntentLoopOrchestrator._stage` is the single point: it already measured start, end,
+duration, artifact and failure cause. What changed is that the three loose variables
+of the round (`stages`, `run_dir`, and now the emitter) became a `_RoundContext`,
+whose `record_stage` appends the `LoopStage` **and** emits the `LoopEvent` in the same
+call. That is what makes it impossible to record one without announcing the other.
 
-### Onde os eventos vão
+### Where events go
 
-`shared/loop_event_store.py`. Um sink é `(LoopEvent) -> None` e nada mais — sem
-classe abstrata, porque o de arquivo é classe (tem caminho), o da UI é um
-`append` e um teste passa `lambda`. `fanout` compõe vários e engole a exceção de
-cada um: observabilidade quebrada é um problema menor que um pipeline
-interrompido por causa dela.
+`shared/loop_event_store.py`. A sink is `(LoopEvent) -> None` and nothing more — no
+abstract class, because the file one is a class (it has a path), the UI one is an
+`append` and a test passes a `lambda`. `fanout` composes several and swallows each
+one's exception: broken observability is a smaller problem than a pipeline
+interrupted because of it.
 
-O sink de arquivo é **sempre** ligado, por execução: rodar pela CLI deixa
-`events.jsonl` no diretório da run sem ninguém pedir. Quem passa um `event_sink`
-para `run_intent_loop`/`IntentLoopOrchestrator` é quem precisa dos eventos
-*antes* do fim — a UI ao vivo.
+The file sink is **always** on, per execution: running through the CLI leaves
+`events.jsonl` in the run directory without anyone asking. Whoever passes an `event_sink`
+to `run_intent_loop`/`IntentLoopOrchestrator` is who needs the events
+*before* the end — the live UI.
 
-**JSONL, e não o `save_json` do resto do repo.** Um array JSON só é legível
-depois do colchete final, ou seja, depois que a execução terminou — exatamente
-quando o arquivo deixa de servir para observar. Linha a linha, a UI lê a
-timeline de uma execução em curso, e uma execução que morreu no meio deixa em
-disco tudo que chegou a acontecer. A leitura pula linha truncada em vez de
-falhar: é justamente dessa execução que mais se quer ver a timeline.
+**JSONL, and not the `save_json` used in the rest of the repo.** A JSON array is only readable
+after the closing bracket, that is, after the execution has finished — exactly
+when the file stops being useful for observing. Line by line, the UI reads the
+timeline of an execution in progress, and an execution that died midway leaves on
+disk everything that managed to happen. The reader skips a truncated line instead of
+failing: it is precisely for that execution that one most wants to see the timeline.
 
-## A tela
+## The screen
 
-Página **Loop intent-driven** do studio
-(`interfaces/dashboard/studio/view_loop.py`). Dispara a campanha a partir de uma
-intenção em português — prompt, rodadas, modo do gerador e detector — e mostra
-as cinco coisas que a janela cobra, cada uma da sua fonte:
+The **Loop intent-driven** page of the studio
+(`interfaces/dashboard/studio/view_loop.py`). It launches the campaign from an
+intent written in Portuguese — prompt, rounds, generator mode and detector — and shows
+the five things the window asks for, each from its own source:
 
-| o que | de onde |
+| what | from where |
 |---|---|
-| estágio corrente, erro | `LoopEvent` ao vivo |
-| duração, artefatos | `LoopStage` do `LoopRecord` persistido |
-| resultado | os JSON que a execução deixou no diretório dela |
+| current stage, error | live `LoopEvent` |
+| duration, artifacts | `LoopStage` of the persisted `LoopRecord` |
+| outcome | the JSON files the execution left in its directory |
 
-O resultado precisa da terceira fonte porque o `LoopRecord` guarda o *caminho*
-do artefato, não o conteúdo: `loop_bridge.outcome_for` abre
-`detection_report.json`, `defense_plan.json` e `defense_rules.json`. Todo campo
-é opcional — uma execução que parou no ERENO não tem relatório de detecção, e
-isso é informação, não erro.
+The outcome needs the third source because the `LoopRecord` stores the *path*
+of the artifact, not its content: `loop_bridge.outcome_for` opens
+`detection_report.json`, `defense_plan.json` and `defense_rules.json`. Every field
+is optional — an execution that stopped at ERENO has no detection report, and
+that is information, not an error.
 
-Estágio que nunca rodou aparece como **pendente** em vez de sumir da tabela:
-numa execução que parou no terceiro, o que falta é metade da informação.
+A stage that never ran appears as **pending** instead of vanishing from the table:
+in an execution that stopped at the third, what is missing is half the information.
 
-`loop_bridge.py` é irmã de `bridge.py` e diferente dela no essencial: aquela
-captura `stdout` e adivinha; esta registra um sink e lê evento tipado.
-`progress()` aqui é estágios fechados sobre esperados (sete por rodada), sem
-heurística e sem o teto artificial de 98% que a outra precisa.
+`loop_bridge.py` is a sibling of `bridge.py` and differs from it in what matters:
+that one captures `stdout` and guesses; this one registers a sink and reads a typed event.
+`progress()` here is closed stages over expected ones (seven per round), with no
+heuristic and without the artificial 98% ceiling the other one needs.
 
-## Segredo
+## Secrets
 
-`shared/redaction.py`. O caminho pelo qual uma chave escaparia não é o prompt
-que escrevemos — é o **erro** que gravamos de volta: `_stage` registra
-`str(exc)`, e a exceção de um cliente HTTP costuma trazer a requisição que
-falhou, cabeçalho de autorização incluído. Aquele texto vai para
-`loop_records.json`, para `events.jsonl` e para a tela.
+`shared/redaction.py`. The path through which a key would escape is not the prompt
+we write — it is the **error** we write back: `_stage` records
+`str(exc)`, and an HTTP client exception usually carries the request that
+failed, authorization header included. That text goes to
+`loop_records.json`, to `events.jsonl` and to the screen.
 
-Duas defesas, e a primeira é a que vale:
+Two defenses, and the first is the one that counts:
 
-1. **O valor real.** Toda env var cujo nome contém `API_KEY`, `SECRET`, `TOKEN`,
-   `PASSWORD`, `CREDENTIAL`… tem seu valor procurado literalmente no texto. Não
-   depende de a chave ter formato reconhecível — só de ela estar no ambiente,
-   que é exatamente o caso quando ela vazou de lá. Valores com menos de 12
-   caracteres são ignorados: um `DEBUG_TOKEN=1` apagaria todo dígito 1 das
-   mensagens.
-2. **O formato.** `gsk_…`, `sk-…`, `Bearer …` — pega a chave que não é a deste
-   processo.
+1. **The real value.** Every env var whose name contains `API_KEY`, `SECRET`, `TOKEN`,
+   `PASSWORD`, `CREDENTIAL`… has its value searched for literally in the text. It does not
+   depend on the key having a recognizable format — only on it being in the environment,
+   which is exactly the case when it leaked from there. Values shorter than 12
+   characters are ignored: a `DEBUG_TOKEN=1` would erase every digit 1 in the
+   messages.
+2. **The format.** `gsk_…`, `sk-…`, `Bearer …` — catches a key that is not this
+   process's.
 
-A mensagem em volta sobrevive: `401 Unauthorized para ***` continua
-diagnosticável.
+The surrounding message survives: `401 Unauthorized para ***` (*401 Unauthorized for ****)
+remains diagnosable.
 
-**Por que não no contrato.** Seria tentador fazer `LoopStage`/`LoopEvent`
-redigirem sozinhos. Não: o contrato passaria a ler `os.environ`, e um modelo
-congelado que depende do ambiente deixa de ser reproduzível. A redação mora no
-ponto de emissão, que é onde o texto nasce.
+**Why not in the contract.** It would be tempting to make `LoopStage`/`LoopEvent`
+redact by themselves. No: the contract would start reading `os.environ`, and a
+frozen model that depends on the environment stops being reproducible. Redaction lives
+at the point of emission, which is where the text is born.
 
-## Orçamento
+## Budget
 
-`domain/run_usage.py::AgentUsage` + `agents/usage.py`. Os agentes registram em
-`last_usage` o que a resposta do provedor declarou, lido por `getattr` em vez de
-importar o tipo do `agno` — funciona igual com agente real, stub, ou uma versão
-da lib em que o objeto de métricas mudou de nome.
+`domain/run_usage.py::AgentUsage` + `agents/usage.py`. The agents record in
+`last_usage` what the provider's response declared, read through `getattr` instead of
+importing the `agno` type — it works the same with a real agent, a stub, or a
+version of the lib in which the metrics object changed its name.
 
-Contabiliza-se **antes** dos portões: a chamada foi paga mesmo quando a saída é
-recusada logo depois. Um orçamento que só conta chamada bem-sucedida não mede o
-que se gastou.
+Accounting happens **before** the gates: the call was paid for even when the output is
+refused right after. A budget that only counts successful calls does not measure
+what was spent.
 
-**Token, não dólar.** `input_tokens`/`output_tokens` são contagem informada pelo
-provedor; `cost_usd` só existe quando ele informa, e o repo não carrega tabela
-de preço própria — ela envelhece em silêncio (o `MODEL_ID` default deste projeto
-já precisou mudar porque a Groq aposentou o modelo), e um custo errado é pior
-que custo ausente porque parece que serve para decidir. Somar um custo conhecido
-com um desconhecido não finge que o segundo é zero.
+**Tokens, not dollars.** `input_tokens`/`output_tokens` are counts reported by the
+provider; `cost_usd` only exists when it reports one, and the repo carries no
+price table of its own — it ages silently (this project's default `MODEL_ID`
+already had to change because Groq retired the model), and a wrong cost is worse
+than a missing one because it looks usable for deciding. Adding a known cost
+to an unknown one does not pretend the latter is zero.
 
-`INTENT_LOOP_TOKEN_BUDGET` (env var, default `0` = desligado) é o teto da
-campanha. Ele é checado **entre** rodadas e fica fora da política de feedback do
-E10 de propósito: a política decide se vale a pena continuar *cientificamente*,
-o teto decide se dá para continuar *operacionalmente*. Misturar os dois faria um
-estouro de custo aparecer como veredito sobre o experimento.
+`INTENT_LOOP_TOKEN_BUDGET` (env var, default `0` = off) is the campaign's cap. It is checked **between**
+rounds and kept outside the E10 feedback policy on purpose: the policy decides whether it is worth continuing *scientifically*,
+the cap decides whether it is possible to continue *operationally*. Mixing the two would make a
+cost overrun look like a verdict on the experiment.
 
-Duas consequências deliberadas:
+Two deliberate consequences:
 
-- **a rodada em curso sempre termina** — um `LoopRecord` pela metade não é mais
-  barato, só menos útil;
-- **campanha cujos agentes não informam consumo nunca é interrompida** por aqui.
-  Zero token é uma afirmação sobre a chamada; `None` é a confissão de que não se
-  sabe, e comparar um orçamento contra um zero inventado puniria quem só não tem
-  a informação.
+- **the round in progress always finishes** — a half-finished `LoopRecord` is no
+  cheaper, just less useful;
+- **a campaign whose agents do not report usage is never interrupted** by this. Zero
+  tokens is a statement about the call; `None` is the admission that it is not
+  known, and comparing a budget against an invented zero would punish whoever merely lacks
+  the information.
 
-O consumo aparece no rodapé do resumo da CLI e no painel da execução no studio —
-e só quando foi informado: um `0 tokens` impresso porque ninguém contou seria
-pior que a ausência.
+Usage appears in the footer of the CLI summary and in the execution panel in the studio —
+and only when it was reported: a `0 tokens` printed because nobody counted would be
+worse than its absence.
 
-## Timeout e retry
+## Timeout and retry
 
-Já existiam antes do E11, no `GeneratorRunner`:
-`GENERATOR_TIMEOUT_SECONDS`, `GENERATOR_MAX_RETRIES` e
-`GENERATOR_RETRY_BACKOFF_SECONDS` (ver `config/settings.py`). O E11 não os
-mudou; o que ele acrescenta é a falha daquele estágio aparecer com estágio e
-causa na timeline e na tela, em vez de só no `stdout`.
+They already existed before E11, in `GeneratorRunner`:
+`GENERATOR_TIMEOUT_SECONDS`, `GENERATOR_MAX_RETRIES` and
+`GENERATOR_RETRY_BACKOFF_SECONDS` (see `config/settings.py`). E11 did not
+change them; what it adds is that the failure of that stage appears with stage and
+cause in the timeline and on the screen, instead of only in `stdout`.
 
-## Testes
+## Tests
 
-- contrato do `LoopEvent`: evento de estágio sem estágio, evento de execução com
-  estágio, `*_finished` sem status, início declarando resultado, e a igualdade
-  de vocabulário com o `LoopRecord` (`tests/test_loop_events.py`);
-- sinks: uma linha JSON válida por evento, `snapshot` que não aliasa a lista
-  viva, `fanout` que sobrevive a um sink que explode, leitura que pula linha
-  truncada e ordena por `(round, sequence)` e não por timestamp;
-- emissão: a timeline completa de uma execução, a igualdade campo a campo entre
-  evento e `LoopStage`, o `events.jsonl` gravado sem ninguém pedir, o estágio
-  que falha nomeando a causa, a rodada da campanha em cada evento, e um sink
-  quebrado que não derruba a execução (`tests/test_intent_loop_orchestrator.py`);
-- ponte da UI: diretório derivado do artefato e não de `settings`, os três
-  artefatos de resultado, execução que morreu cedo, artefato corrompido lido
-  como ausente, `progress()` por estágio fechado, estágio corrente e causa da
-  falha (`tests/test_studio_loop_bridge.py`);
-- a página em si, via `AppTest`: abre sem histórico, e mostra status, duração e
-  nome do artefato de uma execução salva, com os estágios que não rodaram como
-  pendentes;
-- redação: o valor real sem formato reconhecível, os padrões conhecidos, o valor
-  curto que não é segredo, e o caminho de ponta a ponta — uma chave na exceção
-  do agente não chega ao `LoopStage` nem à timeline (`tests/test_redaction.py`);
-- consumo e orçamento: soma que preserva custo desconhecido, custo sem token
-  recusado, leitura tolerante da resposta do provedor, agregação no
-  `LoopRecord`, o teto que corta a próxima rodada e o que nunca corta
+- the `LoopEvent` contract: a stage event without a stage, an execution event with a
+  stage, `*_finished` without status, a start declaring an outcome, and vocabulary equality
+  with the `LoopRecord` (`tests/test_loop_events.py`);
+- sinks: one valid JSON line per event, a `snapshot` that does not alias the live list,
+  a `fanout` that survives a sink that blows up, a reader that skips a
+  truncated line and sorts by `(round, sequence)` and not by timestamp;
+- emission: the complete timeline of an execution, field-by-field equality between
+  event and `LoopStage`, the `events.jsonl` written without anyone asking, the stage
+  that fails naming the cause, the campaign round in each event, and a
+  broken sink that does not bring down the execution (`tests/test_intent_loop_orchestrator.py`);
+- UI bridge: directory derived from the artifact and not from `settings`, the three
+  outcome artifacts, an execution that died early, a corrupted artifact read
+  as absent, `progress()` by closed stage, current stage and failure cause
+  (`tests/test_studio_loop_bridge.py`);
+- the page itself, via `AppTest`: it opens without history, and shows the status, duration and
+  artifact name of a saved execution, with the stages that did not run shown
+  as pending;
+- redaction: the real value with no recognizable format, the known patterns, the
+  short value that is not a secret, and the end-to-end path — a key in the agent's
+  exception does not reach the `LoopStage` or the timeline (`tests/test_redaction.py`);
+- usage and budget: a sum that preserves unknown cost, a cost without tokens
+  refused, tolerant reading of the provider response, aggregation in the
+  `LoopRecord`, the cap that cuts the next round and the one that never cuts
   (`tests/test_run_usage.py`);
-- duração e consumo no resumo da CLI (`tests/test_cli_intent_engine.py`).
+- duration and usage in the CLI summary (`tests/test_cli_intent_engine.py`).

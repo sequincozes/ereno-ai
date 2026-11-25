@@ -1,37 +1,37 @@
-# Referências para a introdução do ERENO-AI
+# References for the ERENO-AI introduction
 
-Verificação em 17 de setembro de 2026. As afirmações abaixo se limitam aos resumos e metadados das fontes primárias indicadas. Não constituem uma revisão sistemática nem demonstram ineditismo da arquitetura proposta.
+Checked on September 17, 2026. The statements below are limited to the abstracts and metadata of the primary sources indicated. They do not constitute a systematic review nor demonstrate that the proposed architecture is novel.
 
 ## ERENO
 
-Silvio E. Quincozes, Célio Albuquerque, Diego G. Passos e Daniel Mossé. **ERENO: A Framework for Generating Realistic IEC–61850 Intrusion Detection Datasets for Smart Grids**. IEEE Transactions on Dependable and Secure Computing, 21(4), 3851–3865, 2024. **DOI: 10.1109/TDSC.2023.3336857**.
+Silvio E. Quincozes, Célio Albuquerque, Diego G. Passos and Daniel Mossé. **ERENO: A Framework for Generating Realistic IEC–61850 Intrusion Detection Datasets for Smart Grids**. IEEE Transactions on Dependable and Secure Computing, 21(4), 3851–3865, 2024. **DOI: 10.1109/TDSC.2023.3336857**.
 
-Fonte primária: [registro da IEEE](https://ieeexplore.ieee.org/document/10339874/). O texto indexado da página da editora informa a publicação antecipada em 4 de dezembro de 2023 e a edição definitiva de julho/agosto de 2024; utilizar 2024 na referência com volume e páginas. DOI e ano da edição também constam do [ORCID de Célio Albuquerque](https://orcid.org/0000-0002-7959-6569).
+Primary source: [IEEE record](https://ieeexplore.ieee.org/document/10339874/). The indexed text of the publisher's page reports early access publication on December 4, 2023 and the final issue of July/August 2024; use 2024 in the reference with volume and pages. The DOI and issue year also appear in [Célio Albuquerque's ORCID](https://orcid.org/0000-0002-7959-6569).
 
-Afirmações sustentadas: o ERENO gera tráfego sintético segundo especificações IEC 61850 e disponibiliza conjuntos de dados com tráfego normal e sete classes de ataque. O artigo identifica a falta de dados representativos e a utilização de bases proprietárias como obstáculos à avaliação e reprodução de resultados de IDS em subestações. Não atribuir ao ERENO original um ciclo multiagente baseado em LLM nem resultados da proposta ERENO-AI.
+Supported claims: ERENO generates synthetic traffic according to IEC 61850 specifications and provides datasets with normal traffic and seven attack classes. The paper identifies the lack of representative data and the use of proprietary datasets as obstacles to evaluating and reproducing IDS results in substations. Do not attribute to the original ERENO an LLM-based multi-agent cycle or results of the ERENO-AI proposal.
 
-## Ataques GOOSE
+## GOOSE attacks
 
-Taha Selim Ustun, Shaik Mullapathi Farooq e S. M. Suhail Hussain. **A Novel Approach for Mitigation of Replay and Masquerade Attacks in Smartgrids Using IEC 61850 Standard**. IEEE Access, 7, 156044–156053, 2019. **DOI: 10.1109/ACCESS.2019.2948117**.
+Taha Selim Ustun, Shaik Mullapathi Farooq and S. M. Suhail Hussain. **A Novel Approach for Mitigation of Replay and Masquerade Attacks in Smartgrids Using IEC 61850 Standard**. IEEE Access, 7, 156044–156053, 2019. **DOI: 10.1109/ACCESS.2019.2948117**.
 
-Fonte primária: [registro institucional com resumo e metadados](https://pure.kfupm.edu.sa/en/publications/a-novel-approach-for-mitigation-of-replay-and-masquerade-attacks-/). Identificador IEEE: 8873588. [DOI](https://doi.org/10.1109/ACCESS.2019.2948117).
+Primary source: [institutional record with abstract and metadata](https://pure.kfupm.edu.sa/en/publications/a-novel-approach-for-mitigation-of-replay-and-masquerade-attacks-/). IEEE identifier: 8873588. [DOI](https://doi.org/10.1109/ACCESS.2019.2948117).
 
-Afirmações sustentadas: mensagens GOOSE podem ser objeto de replay e masquerade; a alteração do conteúdo dificulta a distinção entre mensagens legítimas e falsificadas. O artigo analisa esses ataques e implementa uma solução de autenticação e integridade, avaliada em laboratório. Evitar afirmar que toda implementação atual do IEC 61850 é desprotegida ou que o estudo prova consequências físicas em qualquer instalação.
+Supported claims: GOOSE messages can be subject to replay and masquerade; altering the content makes it harder to tell legitimate messages from forged ones. The paper analyzes these attacks and implements an authentication and integrity solution, evaluated in a laboratory. Avoid stating that every current IEC 61850 implementation is unprotected or that the study proves physical consequences in any installation.
 
-## Detecção em subestações
+## Detection in substations
 
-Silvio E. Quincozes, Célio Albuquerque, Diego Passos e Daniel Mossé. **A survey on intrusion detection and prevention systems in digital substations**. Computer Networks, 184, 107679, 2021. **DOI: 10.1016/j.comnet.2020.107679**.
+Silvio E. Quincozes, Célio Albuquerque, Diego Passos and Daniel Mossé. **A survey on intrusion detection and prevention systems in digital substations**. Computer Networks, 184, 107679, 2021. **DOI: 10.1016/j.comnet.2020.107679**.
 
-Fontes primárias: [editora Elsevier](https://www.sciencedirect.com/science/article/pii/S1389128620312895), [cópia na página institucional do autor](https://www.facom.ufu.br/~sequincozes/producoes/quincozes2021survey.pdf).
+Primary sources: [Elsevier publisher](https://www.sciencedirect.com/science/article/pii/S1389128620312895), [copy on the author's institutional page](https://www.facom.ufu.br/~sequincozes/producoes/quincozes2021survey.pdf).
 
-Afirmações sustentadas: a comunicação digital entre dispositivos de subestações permite monitoramento e controle; os requisitos temporais e as características operacionais tornam inadequada a transposição automática de IDS convencionais. O estudo organiza aspectos de projeto e avaliação de IDS e identifica limitações diante de masquerade. A caracterização do estado da arte é de 2021; não apresentar sua avaliação como levantamento atualizado até 2026.
+Supported claims: digital communication between substation devices enables monitoring and control; timing requirements and operational characteristics make the automatic transposition of conventional IDS inadequate. The study organizes IDS design and evaluation aspects and identifies limitations in the face of masquerade. The characterization of the state of the art is from 2021; do not present its assessment as a survey updated through 2026.
 
-## Notas complementares verificadas pelo agente principal
+## Complementary notes verified by the main agent
 
-B. Biggio, G. Fumera e F. Roli. **Security Evaluation of Pattern Classifiers under Attack**. IEEE Transactions on Knowledge and Data Engineering, 26(4), 984–996, 2014. **DOI: 10.1109/TKDE.2013.57**. Fonte primária: [IEEE](https://ieeexplore.ieee.org/document/6494573). Fundamenta a avaliação de classificadores sob manipulação intencional e condições adversariais. Não prova a eficácia específica do ERENO-AI.
+B. Biggio, G. Fumera and F. Roli. **Security Evaluation of Pattern Classifiers under Attack**. IEEE Transactions on Knowledge and Data Engineering, 26(4), 984–996, 2014. **DOI: 10.1109/TKDE.2013.57**. Primary source: [IEEE](https://ieeexplore.ieee.org/document/6494573). It underpins the evaluation of classifiers under intentional manipulation and adversarial conditions. It does not prove the specific effectiveness of ERENO-AI.
 
-Qingyun Wu et al. **AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation**. Preprint arXiv, 2023. **DOI: 10.48550/arXiv.2308.08155**. Fonte primária: [arXiv](https://arxiv.org/abs/2308.08155). Fundamenta a composição de agentes com LLMs e ferramentas; não constitui evidência de ganho de detecção em GOOSE. O DOI citado é do preprint e deve ser identificado como tal.
+Qingyun Wu et al. **AutoGen: Enabling Next-Gen LLM Applications via Multi-Agent Conversation**. arXiv preprint, 2023. **DOI: 10.48550/arXiv.2308.08155**. Primary source: [arXiv](https://arxiv.org/abs/2308.08155). It underpins the composition of agents with LLMs and tools; it is not evidence of detection gains on GOOSE. The cited DOI is that of the preprint and must be identified as such.
 
-## Orientação de redação
+## Writing guidance
 
-Separar as evidências publicadas da hipótese deste trabalho. A combinação de geração de ataques, detecção e realimentação pode ser apresentada como proposta a avaliar. Ganhos de robustez, evolução da dificuldade, generalização e redução de falsos positivos dependem dos experimentos do ERENO-AI e não devem aparecer como resultados já obtidos.
+Separate the published evidence from this work's hypothesis. The combination of attack generation, detection and feedback can be presented as a proposal to be evaluated. Gains in robustness, difficulty evolution, generalization and false-positive reduction depend on the ERENO-AI experiments and must not appear as results already obtained.

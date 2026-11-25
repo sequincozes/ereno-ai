@@ -1,125 +1,126 @@
-# Validação da saída do agente Analista
+# Validation of the Analyst agent output
 
-## Objetivo
+## Goal
 
-O agente Analista atua como componente Blue Team do loop adversarial.
-Ele recebe as métricas produzidas pelo IDS Random Forest, interpreta
-as evidências disponíveis e recomenda mitigações defensivas.
+The Analyst agent acts as the Blue Team component of the adversarial loop.
+It receives the metrics produced by the Random Forest IDS, interprets
+the available evidence and recommends defensive mitigations.
 
-A resposta da LLM não é aceita diretamente. Toda saída passa por
-validação tipada e por regras determinísticas antes de ser entregue
-ao Orquestrador ou persistida no histórico.
+The LLM response is not accepted directly. Every output goes through
+typed validation and deterministic rules before it is handed
+to the Orchestrator or persisted in the history.
 
-## Contrato de saída
+## Output contract
 
-A resposta deve respeitar o modelo `AnalystOutput`, composto por:
+The response must conform to the `AnalystOutput` model, which consists of:
 
-- número da iteração;
-- lista de features relevantes;
-- diagnóstico defensivo;
-- lista de mitigações;
-- nível de severidade.
+- iteration number;
+- list of relevant features;
+- defensive diagnosis;
+- list of mitigations;
+- severity level.
 
-Cada feature contém:
+Each feature contains:
 
-- nome da feature;
-- valor de importância;
-- explicação em linguagem natural.
+- feature name;
+- importance value;
+- natural-language explanation.
 
-As mitigações permitidas são:
+The allowed mitigations are:
 
 - `threshold`;
 - `feature`;
 - `retrain`.
 
-A severidade deve ser:
+The severity must be:
 
 - `high`;
 - `medium`;
 - `low`.
 
-## Validação por schema
+## Schema validation
 
-O modelo Pydantic `AnalystOutput` rejeita:
+The Pydantic model `AnalystOutput` rejects:
 
-- campos extras;
-- iteração negativa;
-- importância negativa;
-- severidade fora dos valores permitidos;
-- tipo de mitigação inválido;
-- diagnóstico ou recomendação vazios;
-- resposta incompatível com o contrato.
+- extra fields;
+- negative iteration;
+- negative importance;
+- severity outside the allowed values;
+- invalid mitigation type;
+- empty diagnosis or recommendation;
+- responses incompatible with the contract.
 
-## Validação contra as métricas
+## Validation against the metrics
 
-A função `validate_output_against_metrics` verifica se a resposta
-está sustentada pelos dados reais da iteração.
+The function `validate_output_against_metrics` checks whether the response
+is supported by the real data of the iteration.
 
-São rejeitadas:
+The following are rejected:
 
-1. features que não aparecem nas evidências;
-2. features duplicadas;
-3. valores de importância alterados;
-4. severidade incompatível com o F1;
-5. iteração diferente da solicitada;
-6. ausência de explicação quando existem features disponíveis.
+1. features that do not appear in the evidence;
+2. duplicate features;
+3. altered importance values;
+4. severity incompatible with the F1;
+5. an iteration different from the one requested;
+6. missing explanation when features are available.
 
-## Uso de SHAP e feature importances
+## Use of SHAP and feature importances
 
-Quando valores SHAP estão disponíveis, eles são usados como evidência
-principal.
+When SHAP values are available, they are used as the primary
+evidence.
 
-Quando SHAP não está disponível, o sistema utiliza
-`top_feature_importances`, produzido pelo Random Forest, como fallback.
+When SHAP is not available, the system uses
+`top_feature_importances`, produced by the Random Forest, as a fallback.
 
-O agente apenas interpreta essas evidências. Ele não calcula nem
-inventa valores de importância.
+The agent only interprets this evidence. It does not compute or
+invent importance values.
 
-## Regra de severidade
+## Severity rule
 
-A severidade é calculada deterministicamente a partir do F1 da classe
-`masquerade`:
+The severity is computed deterministically from the F1 of the `masquerade`
+class:
 
-- F1 menor que 0.50: `high`;
-- F1 maior ou igual a 0.50 e menor que 0.80: `medium`;
-- F1 maior ou igual a 0.80: `low`;
-- F1 ausente: `low`.
+- F1 below 0.50: `high`;
+- F1 greater than or equal to 0.50 and below 0.80: `medium`;
+- F1 greater than or equal to 0.80: `low`;
+- F1 absent: `low`.
 
-A LLM recebe a severidade esperada no campo `required_severity`,
-mas a resposta ainda é validada novamente pelo código.
+The LLM receives the expected severity in the `required_severity` field,
+but the response is still validated again by the code.
 
-## Segurança e escopo
+## Safety and scope
 
-O agente:
+The agent:
 
-- analisa somente dados sintéticos;
-- não acessa sistemas reais;
-- não produz código ofensivo;
-- não altera configurações de ataque;
-- não inventa métricas;
-- não afirma causalidade sem evidência;
-- produz somente recomendações defensivas.
+- analyzes synthetic data only;
+- does not access real systems;
+- does not produce offensive code;
+- does not change attack configurations;
+- does not invent metrics;
+- does not claim causality without evidence;
+- produces defensive recommendations only.
 
-## Testes
+## Tests
 
-Os testes automatizados cobrem:
+The automated tests cover:
 
-- contrato `AnalystOutput`;
-- tipos de mitigação;
-- limites de severidade;
-- prioridade de SHAP;
-- fallback para feature importances;
-- detecção de feature inventada;
-- detecção de importância alterada;
-- detecção de severidade incorreta;
-- detecção de iteração incorreta;
-- conversão de dict, JSON e modelo Pydantic;
-- execução sem chamadas externas usando agente falso.
+- the `AnalystOutput` contract;
+- mitigation types;
+- severity thresholds;
+- SHAP priority;
+- fallback to feature importances;
+- detection of an invented feature;
+- detection of an altered importance;
+- detection of an incorrect severity;
+- detection of an incorrect iteration;
+- conversion of dict, JSON and Pydantic model;
+- execution without external calls using a fake agent.
 
-O teste manual com Groq está disponível em:
+The manual test with Groq is available at:
 
 ```text
 scripts/test_analyst_real.py
+```
 
-Ele não faz parte da suíte automática porque realiza chamada externa
-e consome tokens da API.
+It is not part of the automatic suite because it makes an external call
+and consumes API tokens.

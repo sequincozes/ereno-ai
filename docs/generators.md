@@ -1,109 +1,108 @@
-# Geradores — de onde o trace vem
+# Generators — where the trace comes from
 
-O pipeline treina um IDS sobre um trace. Até aqui, "qual gerador produziu esse
-trace" não era uma pergunta que o sistema soubesse responder a partir dos
-artefatos: o ERENO era a única fonte possível, o estágio que gerava o trace se
-chamava `ereno` no vocabulário do `LoopRecord`, e o modo cacheado — que devolve
-sempre o mesmo arquivo — se parecia com uma execução normal. O registro de geradores
-(`core/generators.py`) faz o mesmo movimento que o épico E8 fez com o detector,
-só que a montante.
+The pipeline trains an IDS on a trace. Until now, "which generator produced this
+trace" was not a question the system could answer from its artifacts: ERENO was the only possible source, the stage that generated the trace was
+called `ereno` in the `LoopRecord` vocabulary, and cached mode — which always returns
+the same file — looked like a normal run. The generator registry
+(`core/generators.py`) makes the same move epic E8 made with the detector,
+only upstream.
 
-## Os dois backends registrados
+## The two registered backends
 
-| chave | simulador | precisa de Java | varia com a config |
+| key | simulator | needs Java | varies with the config |
 |---|---|---|---|
-| `cached` (default) | — | não | **não** |
-| `jar` | ERENO | sim | sim |
+| `cached` (default) | — | no | **no** |
+| `jar` | ERENO | yes | yes |
 
-`cached` serve `data/baseline_dataset.csv`, um trace benigno+ataque versionado.
-É o que permite rodar o loop inteiro, os testes e o CI sem o JAR.
+`cached` serves `data/baseline_dataset.csv`, a versioned benign+attack trace.
+It is what allows running the whole loop, the tests and CI without the JAR.
 
-`jar` executa o gerador ERENO (Java) sobre o attack config compilado.
+`jar` runs the ERENO generator (Java) over the compiled attack config.
 
 ```bash
 uv run adversarial-ids --engine intent --generator-mode jar --prompt "..."
 ```
 
-As chaves são `cached`/`jar` por compatibilidade com a CLI e as env vars que já
-existiam. O campo que diz o que de fato produziu o trace é `simulator`, no
-manifest — hoje há um backend por simulador, mas não precisa continuar assim
-(ERENO via JAR e ERENO embarcado seriam dois backends, um simulador).
+The keys are `cached`/`jar` for compatibility with the CLI and the env vars that
+already existed. The field that says what actually produced the trace is `simulator`, in the
+manifest — today there is one backend per simulator, but it need not stay that way
+(ERENO via JAR and embedded ERENO would be two backends, one simulator).
 
-## `produces_per_config_variation`, o campo que existe para não deixar mentir
+## `produces_per_config_variation`, the field that exists so it cannot lie
 
-É a diferença entre **medir o efeito de uma intenção** e **exercitar o fluxo**.
+It is the difference between **measuring the effect of an intent** and **exercising the flow**.
 
-Em `cached` o trace é o mesmo arquivo em toda execução, então o
-`DetectionReport` não se move entre rodadas: uma campanha estaciona na rodada 2
-com `no_improvement`, e qualquer leitura do tipo "esta intenção derrubou o
-recall" feita sobre um run cacheado é uma afirmação sobre nada. Isso já estava
-documentado em prosa; agora está num campo que uma máquina lê, gravado em
-`generator_manifest.json` ao lado do resultado.
+In `cached` the trace is the same file on every run, so the
+`DetectionReport` does not move between rounds: a campaign parks at round 2
+with `no_improvement`, and any reading of the kind "this intent dropped
+recall" made over a cached run is a claim about nothing. This was already
+documented in prose; now it is in a field a machine reads, written to
+`generator_manifest.json` next to the result.
 
-A capacidade vem do **registro**, nunca de quem grava o manifest, e o contrato
-de domínio recusa um manifest que discorde do backend que ele nomeia. Um
-manifest afirmando que `cached` varia com a config descreve um gerador que não
-existe — e é exatamente a afirmação que faria um platô de campanha passar por
-resultado experimental.
+The capability comes from the **registry**, never from whoever writes the manifest, and the
+domain contract refuses a manifest that disagrees with the backend it names. A
+manifest claiming that `cached` varies with the config describes a generator that does not
+exist — and it is exactly the claim that would make a campaign plateau pass for an
+experimental result.
 
-## O quarto manifest
+## The fourth manifest
 
-`generator_manifest.json` fecha a cadeia de proveniência de uma rodada, ao lado
-dos três que já existiam:
+`generator_manifest.json` closes the provenance chain of a round, next to the
+three that already existed:
 
-| manifest | responde |
+| manifest | answers |
 |---|---|
-| `generator_manifest.json` | de onde o trace veio |
-| `feature_manifest.json` (E6) | como as features foram preparadas |
-| `selection_manifest.json` (E7) | quais sobreviveram, sobre quantas linhas |
-| `detector_manifest.json` (E8) | qual modelo aprendeu, com quais hiperparâmetros |
+| `generator_manifest.json` | where the trace came from |
+| `feature_manifest.json` (E6) | how the features were prepared |
+| `selection_manifest.json` (E7) | which ones survived, over how many rows |
+| `detector_manifest.json` (E8) | which model learned, with which hyperparameters |
 
-Ele não repete o `DatasetBundle`: o bundle responde *o que está no trace*
-(colunas, classes, contagem, hash do conteúdo), o manifest responde *como ele
-foi produzido*. Mesma divisão que `DetectionReport` (quão bem o detector foi) e
-`DetectorManifest` (que detector era). Com os dois lado a lado, uma diferença
-entre dois resultados é atribuível à config, ao simulador ou à semente; sem
-eles, não é atribuível a nada.
+It does not repeat the `DatasetBundle`: the bundle answers *what is in the trace*
+(columns, classes, count, content hash), the manifest answers *how it
+was produced*. Same split as `DetectionReport` (how well the detector did) and
+`DetectorManifest` (which detector it was). With both side by side, a difference
+between two results is attributable to the config, the simulator or the seed; without
+them, it is attributable to nothing.
 
-`random_seed` registra a semente repassada ao backend (Fase 2.0). `None`
-significa RNG do relógio — duas execuções da mesma config não são comparáveis
-byte a byte, o que é a diferença entre uma réplica e uma repetição.
+`random_seed` records the seed passed to the backend (Phase 2.0). `None`
+means clock RNG — two runs of the same config are not comparable byte for
+byte, which is the difference between a replicate and a repetition.
 
-## Adicionar um backend
+## Adding a backend
 
-O diagrama de arquitetura do journal põe ERENO, Mininet e libiec61850 lado a
-lado. Para entrar, um backend precisa de:
+The architecture diagram puts ERENO, Mininet and libiec61850 side by
+side. To get in, a backend needs:
 
-1. uma classe que cumpra `GeneratorLike` — `generate_dataset(attack_config,
-   iteration) -> caminho do CSV`, uma linha só: tudo que separa um backend de
-   outro (subprocesso, JVM, topologia de rede) é assunto interno dele;
-2. uma chave a mais em `GeneratorKey` (`domain/generator_manifest.py`) e nas
-   três tabelas de capacidade ao lado dela;
-3. um `GeneratorSpec` a mais no registro, declarando capacidades, as opções que
-   ele exige e como se constrói.
+1. a class that fulfills `GeneratorLike` — `generate_dataset(attack_config,
+   iteration) -> CSV path`, a single line: everything that separates one backend from
+   another (subprocess, JVM, network topology) is its own internal matter;
+2. one more key in `GeneratorKey` (`domain/generator_manifest.py`) and in the
+   three capability tables next to it;
+3. one more `GeneratorSpec` in the registry, declaring capabilities, the options it
+   requires and how it is built.
 
-Nada mais muda: nem `GeneratorRunner`, nem o orquestrador, nem o avaliador. A
-checagem de sincronia roda na importação — uma chave registrada e ausente do
-`Literal` produziria um manifest impossível de validar, e uma chave só no
-`Literal` seria uma opção de CLI que não constrói nada; as duas falham antes de
-qualquer campanha começar.
+Nothing else changes: not `GeneratorRunner`, not the orchestrator, not the evaluator.
+The sync check runs at import — a key registered and absent from the
+`Literal` would produce a manifest impossible to validate, and a key only in the
+`Literal` would be a CLI option that builds nothing; both fail before
+any campaign starts.
 
-## Duas honestidades sobre o estado atual
+## Two honesties about the current state
 
-**Os dois backends registrados são a mesma classe.** `cached` e `jar` são ambos
-`GeneratorRunner`, e a escolha entre eles é literalmente passar ou não
-`cached_dataset_path`. Isto é descrição, não arquitetura aspiracional: a costura
-que o registro abre vale para o **terceiro** backend, que se implementa sozinho.
-Mesma ressalva que o `DetectorLike` do E8 faz sobre si mesmo.
+**The two registered backends are the same class.** `cached` and `jar` are both
+`GeneratorRunner`, and the choice between them is literally passing or not passing
+`cached_dataset_path`. This is description, not aspirational architecture: the seam
+that the registry opens holds for the **third** backend, which implements itself.
+Same caveat that E8's `DetectorLike` makes about itself.
 
-**O vocabulário de estágios foi corrigido junto (`schema_version` 2).** Até a v1
-o `LoopStageName` chamava de `generator` a etapa que **compila** a intenção num
-`AttackCandidate`, e de `ereno` a que de fato gera o trace — o dashboard já
-compensava rotulando o primeiro como "Compilação". Numa arquitetura de backends
-plugáveis, nomear um estágio com o nome de um backend é o tipo de coisa que um
-revisor nota. Na v2 são `compiler` e `generator`, cada um com o nome do que faz.
+**The stage vocabulary was fixed along with it (`schema_version` 2).** Up to v1
+`LoopStageName` called `generator` the step that **compiles** the intent into an
+`AttackCandidate`, and `ereno` the one that actually generates the trace — the dashboard already
+compensated by labeling the first as "Compilation". In an architecture of
+pluggable backends, naming a stage after a backend is the kind of thing a
+reviewer notices. In v2 they are `compiler` and `generator`, each named for what it does.
 
-Ledgers da v1 são recusados por `load_loop_records` com a razão e o caminho do
-arquivo, não com um erro de enum do Pydantic. Eles vivem em `outputs/`, que é
-descartável (`scripts/init_state.py`), então não há migração a escrever — só um
-arquivo a apagar.
+v1 ledgers are refused by `load_loop_records` with the reason and the path of the
+file, not with a Pydantic enum error. They live in `outputs/`, which is
+disposable (`scripts/init_state.py`), so there is no migration to write — only a
+file to delete.
