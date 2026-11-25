@@ -1,0 +1,16 @@
+{
+  "attackType": "flooding",
+  "enabled": true,
+  "burst": {
+    "min": 15,
+    "max": 200
+  },
+  "gapMs": {
+    "min": 0.05,
+    "max": 0.5
+  },
+  "stnumEveryPacket": true,
+  "sqnumStrideValues": [1, 2, 4],
+  "ttlMs": 20,
+  "ethSrcSpoofProb": 0.2
+}

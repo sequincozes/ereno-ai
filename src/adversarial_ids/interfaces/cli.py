@@ -1,0 +1,769 @@
+"""Interface de linha de comando do adversarial-ids."""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import subprocess
+import sys
+from collections.abc import Callable, Sequence
+from pathlib import Path
+from typing import Any, TextIO
+
+from adversarial_ids.config.attacks_registry import (
+    DEFAULT_ATTACK_KEY,
+    list_attack_keys,
+)
+from adversarial_ids.config.settings import (
+    DETECTOR_MODE,
+    GENERATOR_MODE,
+    INTENT_LOOP_DEFAULT_ROUNDS,
+    ITERATION_HISTORY_PATH,
+    LOOP_RECORDS_PATH,
+    MODEL_ID,
+    TOTAL_ITERATIONS,
+)
+from adversarial_ids.agents.orchestrator.campaign_resume import (
+    CampaignResumeError,
+    plan_resume,
+)
+from adversarial_ids.agents.injector import DEFAULT_INJECTOR_KEY, list_injector_keys
+from adversarial_ids.agents.injector.java_sources import list_source_attacks
+from adversarial_ids.domain.detector_manifest import DETECTOR_KEYS
+from adversarial_ids.domain.loop_record import LoopRecord, LoopStageStatus
+from adversarial_ids.shared.loop_record_store import load_loop_records
+from adversarial_ids.interfaces.experiment_runner import (
+    ExperimentRunner,
+    create_default_runner,
+)
+
+RunIntentLoop = Callable[..., tuple[LoopRecord, ...]]
+# Devolve um ReplicateResult (Fase 2.R). Tipado como Callable[..., object] para
+# não acoplar a CLI ao contrato de runtime do orquestrador — o handler só lê os
+# atributos que precisa.
+RunIntentReplicates = Callable[..., object]
+
+
+def _dashboard_app_path() -> Path:
+    return Path(__file__).parent / "dashboard" / "app.py"
+
+
+def _print_dashboard_hint(*, engine: str, stdout: TextIO) -> None:
+    """Mostra onde estão os resultados e como abrir o dashboard."""
+
+    app = _dashboard_app_path()
+    if engine == "live":
+        print(f"\nResultados salvos em: {ITERATION_HISTORY_PATH}", file=stdout)
+    print(
+        "\nPara ver o panorama (desempenho + explicabilidade) no dashboard:\n"
+        f"  uv run --extra dashboard streamlit run {app}\n"
+        "  Depois abra: http://localhost:8501\n"
+        "  (ou rode com --open-dashboard para abrir automaticamente.)",
+        file=stdout,
+    )
+
+
+def _launch_dashboard(*, stdout: TextIO, stderr: TextIO) -> None:
+    """Abre o dashboard Streamlit (bloqueia até Ctrl+C). Streamlit abre o navegador."""
+
+    if importlib.util.find_spec("streamlit") is None:
+        print(
+            "streamlit não está instalado. Rode: uv sync --extra dashboard",
+            file=stderr,
+        )
+        return
+    app = _dashboard_app_path()
+    print(
+        "\nAbrindo o dashboard em http://localhost:8501 (Ctrl+C para encerrar)...",
+        file=stdout,
+    )
+    subprocess.run([sys.executable, "-m", "streamlit", "run", str(app)])
+
+
+def create_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Executa o experimento adversarial do Laboratório Inteligente."
+    )
+    parser.add_argument(
+        "--model-id",
+        default=MODEL_ID,
+        help="Identificador do modelo Groq.",
+    )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=TOTAL_ITERATIONS,
+        help="Quantidade de iterações adversariais.",
+    )
+    parser.add_argument(
+        "--generator-mode",
+        choices=("cached", "jar"),
+        default=GENERATOR_MODE,
+        help="Modo do gerador sintético (usado apenas com --engine live).",
+    )
+    parser.add_argument(
+        "--engine",
+        choices=("demo", "live", "intent"),
+        default="demo",
+        help=(
+            "demo (default): replay do histórico golden, sem Groq/Java. "
+            "live: loop real Strategist->Analyst (exige GROQ_API_KEY). "
+            "intent: pipeline intent-driven ponta a ponta (E3/E4; exige "
+            "GROQ_API_KEY e --prompt)."
+        ),
+    )
+    parser.add_argument(
+        "--prompt",
+        default=None,
+        help=(
+            "Apenas com --engine intent: intenção em linguagem natural "
+            "(ex.: 'reduza o recall variando a temporização da falha'). O "
+            "ataque-base vem da própria intenção, não de --attack."
+        ),
+    )
+    parser.add_argument(
+        "--rounds",
+        type=int,
+        # default=None (sentinela) pelo mesmo motivo de --detector: com
+        # --resume, "não passou a flag" quer dizer "o teto que a campanha
+        # gravou", não INTENT_LOOP_DEFAULT_ROUNDS.
+        default=None,
+        help=(
+            "Apenas com --engine intent: rodadas encadeadas pela política de "
+            "feedback (E10). Da segunda em diante a intenção vem da política, "
+            "não de uma nova chamada de LLM. Distinto de --iterations, que "
+            "pertence ao loop legado (--engine live/demo). Default: "
+            f"{INTENT_LOOP_DEFAULT_ROUNDS}; com --resume, o teto que a campanha "
+            "gravou."
+        ),
+    )
+    parser.add_argument(
+        "--resume",
+        default=None,
+        metavar="RUN_ID",
+        help=(
+            "Apenas com --engine intent, no lugar de --prompt: retoma a campanha "
+            "a que RUN_ID pertence (qualquer rodada dela). Refaz a última rodada "
+            "se ela falhou, roda a próxima se a campanha parou por orçamento ou "
+            "interrupção, e não faz nada se a política de feedback a encerrou. "
+            "Nenhuma rodada já gravada é reexecutada."
+        ),
+    )
+    parser.add_argument(
+        "--replicates",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Apenas com --engine intent + --prompt: roda a MESMA intenção sob N "
+            "seeds (42, 43, …, 42+N-1) e reporta a métrica-objetivo como média ± "
+            "desvio (Fase 2.R). O LLM é chamado uma única vez para o lote; só a "
+            "geração varia. Só é significativo em --generator-mode jar. Exclusivo "
+            "com --seeds e --rounds."
+        ),
+    )
+    parser.add_argument(
+        "--seeds",
+        default=None,
+        metavar="A,B,C",
+        help=(
+            "Apenas com --engine intent + --prompt: lista explícita de seeds do "
+            "lote de réplicas (ex.: '42,101,777'), no lugar de --replicates."
+        ),
+    )
+    parser.add_argument(
+        "--orchestration",
+        choices=("team", "direct"),
+        default="team",
+        help=(
+            "Apenas com --engine live: 'team' (default) dirige os agentes por um "
+            "agno.team.Team; 'direct' usa o encadeamento determinístico."
+        ),
+    )
+    parser.add_argument(
+        "--persona",
+        choices=("conservative", "aggressive"),
+        default="conservative",
+        help=(
+            "Apenas com --engine live: perfil do Estrategista. 'conservative' "
+            "altera 1 campo por iteração; 'aggressive' altera até 3."
+        ),
+    )
+    parser.add_argument(
+        "--attack",
+        choices=list_attack_keys(),
+        default=DEFAULT_ATTACK_KEY,
+        metavar="TIPO",
+        help=(
+            "Apenas com --engine live: tipo de ataque do ERENO que os agentes vão "
+            "otimizar. Opções: " + ", ".join(list_attack_keys()) + "."
+        ),
+    )
+    parser.add_argument(
+        "--detector",
+        choices=list(DETECTOR_KEYS),
+        # default=None (e NÃO DETECTOR_MODE) para distinguir "o usuário passou
+        # a flag" de "herdou o default do ambiente" — sem a sentinela, o teste
+        # de rejeição do engine demo abaixo viraria "você divergiu de
+        # DETECTOR_MODE", que rejeita `--detector random_forest` e libera a
+        # omissão da flag quando DETECTOR_MODE está definido: exatamente o
+        # inverso do pretendido. O default efetivo é resolvido em _detector().
+        default=None,
+        metavar="MODELO",
+        help=(
+            "Apenas com --engine live/intent: modelo que o IDS treina (épico E8). "
+            "Opções: " + ", ".join(DETECTOR_KEYS) + ". Os dois SVMs pedem escala "
+            "padronizada automaticamente; 'svm_rbf' não produz importância de "
+            "feature e custa O(n^2) no volume de treino."
+        ),
+    )
+    parser.add_argument(
+        "--injector",
+        choices=list_injector_keys(),
+        # default=None pelo mesmo motivo de --detector: distinguir "passou a
+        # flag" de "herdou o default" para recusá-la fora do --engine intent.
+        default=None,
+        help=(
+            "Apenas com --engine intent: estratégia que propõe o ataque. "
+            "'intent' (default): o LLM traduz o pedido sobre o catálogo. "
+            "'model': o LLM lê o creator Java de --injector-source e propõe um "
+            "ataque novo na DSL do programmable. 'data': o LLM lê o perfil do "
+            "trace em --injector-dataset e propõe um ataque novo na mesma DSL. "
+            "Ver docs/injectors.md."
+        ),
+    )
+    parser.add_argument(
+        "--injector-source",
+        choices=list_source_attacks(),
+        default=None,
+        metavar="ATAQUE",
+        help=(
+            "Apenas com --injector model: ataque cujo creator Java o LLM lê "
+            "(lido de ERENO_SOURCE_DIR). Opções: "
+            + ", ".join(list_source_attacks())
+            + "."
+        ),
+    )
+    parser.add_argument(
+        "--injector-dataset",
+        default=None,
+        metavar="CSV",
+        help="Apenas com --injector data: trace do ERENO cujo perfil o LLM lê.",
+    )
+    parser.add_argument(
+        "--injector-label",
+        default=None,
+        metavar="CLASSE",
+        help=(
+            "Apenas com --injector data: classe de ataque a perfilar, quando o "
+            "trace tem mais de uma além de 'normal'."
+        ),
+    )
+    parser.add_argument(
+        "--open-dashboard",
+        action="store_true",
+        help="Ao terminar, abre o dashboard Streamlit com o panorama dos resultados.",
+    )
+    return parser
+
+
+def _stage_marker(status: LoopStageStatus) -> str:
+    return {
+        LoopStageStatus.SUCCEEDED: "OK",
+        LoopStageStatus.FAILED: "FALHOU",
+        LoopStageStatus.SKIPPED: "PULADO",
+        LoopStageStatus.RUNNING: "RODANDO",
+        LoopStageStatus.PENDING: "PENDENTE",
+    }.get(status, status.value)
+
+
+def _print_loop_record_summary(
+    record: LoopRecord, *, stdout: TextIO, round_label: str | None = None
+) -> None:
+    header = f"\nLoop intent-driven concluído: run_id={record.run_id}"
+    if round_label:
+        header += f" ({round_label})"
+    print(header, file=stdout)
+    for stage in record.stages:
+        # Duração por estágio (E11): o critério da janela é "usuário vê estágio,
+        # duração, artefatos, erro e resultado", e era justamente a duração que
+        # o resumo media mas não mostrava.
+        duration = (
+            "     —" if stage.duration_seconds is None
+            else f"{stage.duration_seconds:6.2f}s"
+        )
+        line = f"  [{_stage_marker(stage.status)}] {duration}  {stage.name}"
+        if stage.artifact_ref:
+            line += f" -> {stage.artifact_ref}"
+        if stage.error:
+            line += f" ({stage.error})"
+        print(line, file=stdout)
+
+    footer: list[str] = []
+    if record.total_duration_seconds is not None:
+        footer.append(f"{record.total_duration_seconds:.2f}s")
+    # Consumo (E11): só aparece quando os agentes informaram. Um "0 tokens"
+    # impresso porque ninguém contou seria pior que a ausência.
+    if record.total_tokens is not None:
+        footer.append(f"{record.total_tokens} tokens")
+    if record.cost_usd is not None:
+        footer.append(f"US$ {record.cost_usd:.4f}")
+    if footer:
+        print(f"  total: {' · '.join(footer)}", file=stdout)
+
+
+def _round_label(record: LoopRecord, *, total: int) -> str | None:
+    # O número vem do registro, não da posição na lista: numa retomada a
+    # primeira rodada devolvida pode ser a 3ª da campanha.
+    if total == 1 and record.round == 1 and record.retry_of is None:
+        return None
+    label = f"Rodada {record.round}/{record.max_rounds or total}"
+    if record.retry_of is not None:
+        label += f", nova tentativa de {record.retry_of}"
+    return label
+
+
+def _print_campaign_summary(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> None:
+    total = len(records)
+    for record in records:
+        _print_loop_record_summary(
+            record, stdout=stdout, round_label=_round_label(record, total=total)
+        )
+    print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
+
+
+def _run_intent_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    run_intent_loop: RunIntentLoop | None,
+    resume_intent_loop: RunIntentLoop | None,
+    run_intent_replicates: RunIntentReplicates | None,
+    loop_records_path: Path,
+    detector: str,
+) -> int:
+    if args.resume and args.prompt:
+        print(
+            "Erro: --resume e --prompt são exclusivos (a campanha retomada usa o "
+            "prompt que ela gravou).",
+            file=stderr,
+        )
+        return 2
+
+    if not args.prompt and not args.resume:
+        print(
+            "Erro: --engine intent exige --prompt (a intenção em linguagem natural) "
+            "ou --resume RUN_ID.",
+            file=stderr,
+        )
+        return 2
+
+    if args.rounds is not None and args.rounds < 1:
+        print(f"Erro: --rounds precisa ser >= 1 (veio {args.rounds}).", file=stderr)
+        return 2
+
+    if args.resume:
+        return _resume_intent_engine(
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            resume_intent_loop=resume_intent_loop,
+            loop_records_path=loop_records_path,
+            detector=detector,
+        )
+
+    if args.replicates is not None or args.seeds is not None:
+        return _run_replicate_engine(
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            run_intent_replicates=run_intent_replicates,
+            detector=detector,
+        )
+
+    if run_intent_loop is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            run_intent_loop as run_intent_loop,
+        )
+
+    try:
+        records = run_intent_loop(
+            prompt=args.prompt,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+            rounds=args.rounds if args.rounds is not None else INTENT_LOOP_DEFAULT_ROUNDS,
+            detector=detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao executar o loop intent-driven: {error}", file=stderr)
+        return 1
+
+    return _report_campaign(records, stdout=stdout)
+
+
+def _resolve_replicate_seeds(args: argparse.Namespace) -> list[int]:
+    """Resolve a lista de seeds do lote a partir de --replicates ou --seeds.
+
+    Levanta ``ValueError`` com mensagem acionável em qualquer entrada inválida
+    (as duas juntas, N não positivo, lista malformada ou com repetição).
+    """
+
+    if args.replicates is not None and args.seeds is not None:
+        raise ValueError("--replicates e --seeds são exclusivos; use só um.")
+    if args.rounds is not None:
+        raise ValueError(
+            "--rounds pertence à campanha (E10) e não se combina com réplicas; "
+            "uma réplica é a rodada 1 repetida sob outra seed."
+        )
+
+    if args.replicates is not None:
+        if args.replicates < 1:
+            raise ValueError(f"--replicates precisa ser >= 1 (veio {args.replicates}).")
+        # Varredura a partir da seed default do projeto (42), determinística.
+        return [42 + i for i in range(args.replicates)]
+
+    parts = [p.strip() for p in args.seeds.split(",") if p.strip()]
+    if not parts:
+        raise ValueError("--seeds não pode ser vazio.")
+    try:
+        seeds = [int(p) for p in parts]
+    except ValueError as exc:
+        raise ValueError(f"--seeds só aceita inteiros separados por vírgula: {exc}") from exc
+    if len(set(seeds)) != len(seeds):
+        raise ValueError(f"as seeds de --seeds precisam ser distintas: {seeds}.")
+    return seeds
+
+
+def _run_replicate_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    run_intent_replicates: RunIntentReplicates | None,
+    detector: str,
+) -> int:
+    try:
+        seeds = _resolve_replicate_seeds(args)
+    except ValueError as error:
+        print(f"Erro: {error}", file=stderr)
+        return 2
+
+    if args.generator_mode != "jar":
+        # Não é erro: o modo roda, mas em cached todo trace é o mesmo arquivo e as
+        # réplicas colapsam. Avisar é mais útil que recusar (o piloto faz igual).
+        print(
+            "Aviso: réplicas só divergem em --generator-mode jar; em "
+            f"{args.generator_mode!r} todos os traces são o mesmo arquivo e a "
+            "estatística será degenerada.",
+            file=stderr,
+        )
+
+    if run_intent_replicates is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            run_intent_replicates as run_intent_replicates,
+        )
+
+    try:
+        result = run_intent_replicates(
+            prompt=args.prompt,
+            seeds=seeds,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+            detector=detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao executar o lote de réplicas: {error}", file=stderr)
+        return 1
+
+    return _report_replicates(result, stdout=stdout)
+
+
+def _report_replicates(result, *, stdout: TextIO) -> int:
+    total = len(result.records)
+    for record in result.records:
+        _print_loop_record_summary(
+            record, stdout=stdout, round_label=f"Réplica seed={record.seed}"
+        )
+    print(f"\nLote de réplicas {result.batch_id}:", file=stdout)
+    print(
+        f"  {total} réplica(s), {result.llm_calls} chamada(s) de LLM, "
+        f"{len(result.objective_values)} com métrica-objetivo.",
+        file=stdout,
+    )
+    if result.mean is not None:
+        metric = result.objective_metric or "objetivo"
+        line = f"  {metric}: média {result.mean:.4f}"
+        if result.stdev is not None:
+            line += f" ± {result.stdev:.4f} (n={len(result.objective_values)})"
+        else:
+            line += " (uma medida só; sem desvio)"
+        print(line, file=stdout)
+    print(f"Registro salvo em: {LOOP_RECORDS_PATH}", file=stdout)
+
+    has_failed_stage = any(
+        stage.status == LoopStageStatus.FAILED
+        for record in result.records
+        for stage in record.stages
+    )
+    return 1 if has_failed_stage else 0
+
+
+def _report_campaign(records: tuple[LoopRecord, ...], *, stdout: TextIO) -> int:
+    _print_campaign_summary(records, stdout=stdout)
+    has_failed_stage = any(
+        stage.status == LoopStageStatus.FAILED
+        for record in records
+        for stage in record.stages
+    )
+    return 1 if has_failed_stage else 0
+
+
+def _resume_intent_engine(
+    args: argparse.Namespace,
+    *,
+    stdout: TextIO,
+    stderr: TextIO,
+    resume_intent_loop: RunIntentLoop | None,
+    loop_records_path: Path,
+    detector: str,
+) -> int:
+    # Resolvido aqui, antes de montar os agentes: uma campanha que a política
+    # já encerrou não tem nada a retomar, e descobrir isso não deveria exigir
+    # GROQ_API_KEY. O orquestrador resolve de novo sobre o mesmo ledger — este
+    # é só o aviso antecipado.
+    try:
+        point = plan_resume(
+            load_loop_records(loop_records_path), args.resume, rounds=args.rounds
+        )
+    except CampaignResumeError as error:
+        print(f"Erro: {error}", file=stderr)
+        return 2
+
+    print(f"Retomada de {args.resume}: {point.reason}", file=stdout)
+    if point.action == "done":
+        print("Nada a retomar; nenhum registro novo.", file=stdout)
+        return 0
+
+    # Sem --detector, a campanha segue com o detector que ela já treinava —
+    # o default de ambiente só vale quando nenhuma rodada chegou a treinar.
+    resolved_detector = args.detector or point.detector or detector
+
+    if resume_intent_loop is None:
+        from adversarial_ids.agents.orchestrator.intent_live import (
+            resume_intent_loop as resume_intent_loop,
+        )
+
+    try:
+        records = resume_intent_loop(
+            run_id=args.resume,
+            model_id=args.model_id,
+            generator_mode=args.generator_mode,
+            rounds=args.rounds,
+            detector=resolved_detector,
+            injector=args.injector,
+            injector_options=args.injector_options,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao retomar o loop intent-driven: {error}", file=stderr)
+        return 1
+
+    return _report_campaign(records, stdout=stdout)
+
+
+_INJECTOR_FLAGS = {
+    "injector_source": ("--injector-source", "model"),
+    "injector_dataset": ("--injector-dataset", "data"),
+    "injector_label": ("--injector-label", "data"),
+}
+
+
+def _resolve_injector(
+    args: argparse.Namespace, *, stderr: TextIO
+) -> tuple[str, dict[str, Any]] | None:
+    """Resolve ``--injector`` e o insumo dele; ``None`` (e a causa) se inválido.
+
+    Só checa combinação de flags — barato e sem I/O. Ler o creator ou perfilar o
+    trace fica com ``prepare_injector``, uma vez, na montagem do orquestrador.
+    """
+
+    given = [name for name in ("injector", *_INJECTOR_FLAGS) if getattr(args, name)]
+    if args.engine != "intent":
+        if given:
+            flag = "--" + given[0].replace("_", "-")
+            print(f"Erro: {flag} só se aplica a --engine intent.", file=stderr)
+            return None
+        return DEFAULT_INJECTOR_KEY, {}
+
+    injector = args.injector or DEFAULT_INJECTOR_KEY
+    for name, (flag, owner) in _INJECTOR_FLAGS.items():
+        if getattr(args, name) is not None and injector != owner:
+            print(f"Erro: {flag} só se aplica a --injector {owner}.", file=stderr)
+            return None
+
+    if injector == "model":
+        if args.injector_source is None:
+            print(
+                "Erro: --injector model exige --injector-source (o ataque cujo "
+                "creator Java o LLM vai ler).",
+                file=stderr,
+            )
+            return None
+        return injector, {"source_attack": args.injector_source}
+
+    if injector == "data":
+        if args.injector_dataset is None:
+            print(
+                "Erro: --injector data exige --injector-dataset (o trace cujo "
+                "perfil o LLM vai ler).",
+                file=stderr,
+            )
+            return None
+        options: dict[str, Any] = {"dataset_path": args.injector_dataset}
+        if args.injector_label is not None:
+            options["attack_label"] = args.injector_label
+        return injector, options
+
+    return injector, {}
+
+
+def _resolve_detector(detector: str | None, *, stderr: TextIO) -> str | None:
+    """Resolve ``--detector`` (ou o default de ambiente) e valida a chave.
+
+    ``argparse`` só aplica ``choices`` a valores vindos de ``argv``, nunca ao
+    ``default`` — então um ``DETECTOR_MODE`` com erro de digitação no ``.env``
+    passaria por aqui cru e só estouraria lá no núcleo, como traceback. Devolve
+    ``None`` (e já imprime a causa) quando a chave não existe.
+    """
+
+    resolved = detector or DETECTOR_MODE
+    if resolved not in DETECTOR_KEYS:
+        origin = "--detector" if detector is not None else "DETECTOR_MODE"
+        print(
+            f"Erro: {origin}={resolved!r} não é um detector conhecido. "
+            f"Opções: {', '.join(DETECTOR_KEYS)}.",
+            file=stderr,
+        )
+        return None
+    return resolved
+
+
+def run_cli(
+    runner: ExperimentRunner | None = None,
+    argv: Sequence[str] | None = None,
+    *,
+    stdout: TextIO = sys.stdout,
+    stderr: TextIO = sys.stderr,
+    run_intent_loop: RunIntentLoop | None = None,
+    resume_intent_loop: RunIntentLoop | None = None,
+    run_intent_replicates: RunIntentReplicates | None = None,
+    loop_records_path: Path = LOOP_RECORDS_PATH,
+) -> int:
+    args = create_parser().parse_args(argv)
+
+    if args.engine == "demo" and args.detector is not None:
+        # Checado aqui, e não só em create_default_runner: esta é a única
+        # combinação de flags inválida que o usuário consegue digitar (as
+        # demais o argparse barra por `choices`), então merece a mesma
+        # mensagem limpa + exit code 2 que --prompt ausente recebe, em vez de
+        # um traceback vazando da camada de baixo.
+        print(
+            f"Erro: --detector {args.detector} não se aplica a --engine demo "
+            "(o histórico golden é um replay já gravado; nenhum detector é treinado). "
+            "Use --engine live ou --engine intent.",
+            file=stderr,
+        )
+        return 2
+
+    detector = _resolve_detector(args.detector, stderr=stderr)
+    if detector is None:
+        return 2
+
+    resolved_injector = _resolve_injector(args, stderr=stderr)
+    if resolved_injector is None:
+        return 2
+    args.injector, args.injector_options = resolved_injector
+
+    if args.engine == "intent":
+        return _run_intent_engine(
+            args,
+            stdout=stdout,
+            stderr=stderr,
+            run_intent_loop=run_intent_loop,
+            resume_intent_loop=resume_intent_loop,
+            run_intent_replicates=run_intent_replicates,
+            loop_records_path=loop_records_path,
+            detector=detector,
+        )
+
+    generator_mode = args.generator_mode
+    if runner is None:
+        runner = create_default_runner(
+            args.engine,
+            # A sentinela crua, não o valor já resolvido: `create_default_runner`
+            # também precisa distinguir "escolha explícita" (que o engine demo
+            # recusa) de "herdou o default". A validação da chave já aconteceu
+            # em _resolve_detector acima.
+            detector=args.detector,
+            orchestration=args.orchestration,
+            persona=args.persona,
+        )
+        if args.engine == "demo":
+            # O replay golden não usa Java; força o modo cacheado mesmo quando o
+            # default de settings resolve para 'jar' (JAR presente na máquina).
+            generator_mode = "cached"
+
+    try:
+        records = runner.run(
+            iterations=args.iterations,
+            model_id=args.model_id,
+            generator_mode=generator_mode,
+            attack=args.attack,
+        )
+    except KeyboardInterrupt:
+        print("Execução interrompida pelo usuário.", file=stderr)
+        return 130
+    except Exception as error:  # fronteira da interface
+        print(f"Erro ao executar o experimento: {error}", file=stderr)
+        return 1
+
+    if not records:
+        print("Execução concluída sem registros.", file=stdout)
+        return 0
+
+    final_record = records[-1]
+    final_f1 = final_record.metrics.f1_score_attack
+    f1_text = "indisponível" if final_f1 is None else f"{final_f1:.4f}"
+    print(
+        "Execução concluída: "
+        f"{len(records)} registro(s), "
+        f"última iteração={final_record.iteration}, F1 final={f1_text}.",
+        file=stdout,
+    )
+
+    _print_dashboard_hint(engine=args.engine, stdout=stdout)
+    if args.open_dashboard:
+        _launch_dashboard(stdout=stdout, stderr=stderr)
+
+    return 0
+
+
+def main() -> int:
+    return run_cli()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

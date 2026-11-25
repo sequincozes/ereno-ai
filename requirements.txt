@@ -1,5 +1,0 @@
-agno
-groq
-python-dotenv
-pandas
-scikit-learn

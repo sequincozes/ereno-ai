@@ -1,0 +1,25 @@
+{
+  "attackType": "grayhole",
+  "description": "Selective message dropping attack (UC08)",
+  "dropRate": {
+    "min": 0.25,
+    "max": 0.35
+  },
+  "burstDropProb": 0.20,
+  "burstDropLen": {
+    "min": 3,
+    "max": 7
+  },
+  "extraDelayMs": {
+    "min": 10.0,
+    "max": 100.0
+  },
+  "delayBurstProb": 0.12,
+  "delayBurstLen": {
+    "min": 2,
+    "max": 4
+  },
+  "protectStatusChanges": false,
+  "statusChangeDropProb": 0.25,
+  "comment": "Intelligent selective dropping with burst patterns and delays to mask the attack"
+}

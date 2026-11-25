@@ -1,0 +1,28 @@
+{
+  "attackType": "inverse_replay",
+  "enabled": true,
+  "count": {
+    "lambda": 600
+  },
+  "blockLen": {
+    "min": 25,
+    "max": 30
+  },
+  "delayMs": {
+    "min": 10,
+    "max": 100
+  },
+  "burst": {
+    "prob": 0.25,
+    "min": 5,
+    "max": 15,
+    "gapMs": {
+      "min": 0.2,
+      "max": 1.5
+    }
+  },
+  "ttlOverride": {
+    "valuesMs": [500, 1500],
+    "prob": 0.15
+  }
+}

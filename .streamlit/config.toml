@@ -1,0 +1,16 @@
+# Tema base do ERENO AI Studio — sala de controle de subestação (dark).
+# As cores casam com studio/theme.py; o CSS injetado refina o resto.
+[theme]
+base = "dark"
+primaryColor = "#34d3ee"
+backgroundColor = "#0a0e14"
+secondaryBackgroundColor = "#0f1620"
+textColor = "#e6edf3"
+font = "sans-serif"
+
+[server]
+# Uploads não são usados; mantém o runtime enxuto.
+maxUploadSize = 20
+
+[browser]
+gatherUsageStats = false

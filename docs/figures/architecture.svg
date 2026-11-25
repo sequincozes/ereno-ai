@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1484 372" width="1484" height="372" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+  <title>ERENO-AI — architecture</title>
+  <desc>Injector agent, generator, pre-processor, detector and defender agent in series. Solid: the operational path (metrics, deterministic feedback policy, and optional retraining on the variants found). Dashed: the advisory path (the defense plan is gated and recorded, never applied). Only the two agents call an LLM.</desc>
+  <defs>
+    <style>
+      .agent      { rx: 14; ry: 14; stroke-width: 3; }
+      .inner      { rx: 8;  ry: 8;  stroke-width: 1.5; }
+      .agent-name { font-size: 19px; font-weight: 700; fill: #ffffff; text-anchor: middle; }
+      .item       { font-size: 15px; fill: #1a1a1a; text-anchor: middle; }
+      .artifact   { font-size: 15px; font-weight: 600; fill: #ffffff; text-anchor: middle; }
+      .edge       { stroke: #1a1a1a; stroke-width: 2; fill: none; }
+      .head       { fill: #1a1a1a; stroke: none; }
+      .gate       { font-size: 15px; font-weight: 600; fill: #1a1a1a; text-anchor: middle; }
+      .llm        { font-size: 15px; font-weight: 700; fill: #1a1a1a; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect width="1484" height="372" fill="#ffffff"/>
+  <rect x="60.0" y="6" width="64" height="26" rx="13" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>
+  <text class="llm" x="92.0" y="25">LLM</text>
+  <rect class="agent" x="12" y="40" width="160" height="210" fill="#e8463c" stroke="#b5241c"/>
+  <text class="agent-name" x="92.0" y="70">Injector</text>
+  <rect class="inner" x="24" y="84" width="136" height="34" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item" x="92.0" y="106.0">Intent-driven</text>
+  <rect class="inner" x="24" y="126" width="136" height="34" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item" x="92.0" y="148.0">Model-driven</text>
+  <rect class="inner" x="24" y="168" width="136" height="34" fill="#fbd9d6" stroke="#b5241c"/>
+  <text class="item" x="92.0" y="190.0">Data-driven</text>
+  <rect class="inner" x="24" y="210" width="136" height="28" fill="#f6b4ae" stroke="#b5241c"/>
+  <text class="item" x="92.0" y="229.0">…</text>
+  <line class="edge" x1="172" y1="145" x2="185" y2="145"/>
+  <polygon class="head" points="185,140 192,145 185,150"/>
+  <rect x="192" y="128" width="104" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="244.0" y="150.0">IntentSpec</text>
+  <text class="gate" x="244" y="185">compiler +</text>
+  <text class="gate" x="244" y="202">catalog gate</text>
+  <line class="edge" x1="296" y1="145" x2="309" y2="145"/>
+  <polygon class="head" points="309,140 316,145 309,150"/>
+  <rect class="agent" x="316" y="40" width="176" height="210" fill="#1f6fc4" stroke="#124a87"/>
+  <text class="agent-name" x="404.0" y="70">Generator</text>
+  <rect class="inner" x="328" y="84" width="152" height="34" fill="#cfe3f7" stroke="#124a87"/>
+  <text class="item" x="404.0" y="106.0">ERENO (jar)</text>
+  <rect class="inner" x="328" y="126" width="152" height="34" fill="#cfe3f7" stroke="#124a87"/>
+  <text class="item" x="404.0" y="148.0">Cached replay</text>
+  <rect class="inner" x="328" y="168" width="152" height="34" fill="#e7eef6" stroke="#8fa9c4" stroke-dasharray="5 4"/>
+  <text class="item" x="404.0" y="190.0" fill="#5c6b7a">Mininet</text>
+  <rect class="inner" x="328" y="210" width="152" height="28" fill="#aecdee" stroke="#124a87"/>
+  <text class="item" x="404.0" y="229.0">…</text>
+  <line class="edge" x1="492" y1="145" x2="505" y2="145"/>
+  <polygon class="head" points="505,140 512,145 505,150"/>
+  <rect x="512" y="128" width="72" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="548.0" y="150.0">Trace</text>
+  <line class="edge" x1="584" y1="145" x2="597" y2="145"/>
+  <polygon class="head" points="597,140 604,145 597,150"/>
+  <rect class="agent" x="604" y="40" width="300" height="210" fill="#2a9150" stroke="#1a6135"/>
+  <text class="agent-name" x="754.0" y="70">Pre-Processor</text>
+  <rect class="inner" x="614" y="80" width="136" height="160" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="682" y="101" font-weight="700">Undersampling</text>
+  <rect class="inner" x="624" y="110" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="682.0" y="128.0">None</text>
+  <rect class="inner" x="624" y="142" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="682.0" y="160.0">Random</text>
+  <rect class="inner" x="624" y="174" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="682.0" y="192.0">Ratio</text>
+  <rect class="inner" x="624" y="206" width="116" height="26" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item" x="682.0" y="224.0">…</text>
+  <rect class="inner" x="758" y="80" width="136" height="160" fill="#d6f0de" stroke="#1a6135"/>
+  <text class="item" x="826" y="101" font-weight="700">Selection</text>
+  <rect class="inner" x="768" y="110" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="826.0" y="128.0">None</text>
+  <rect class="inner" x="768" y="142" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="826.0" y="160.0">Filter (MI)</text>
+  <rect class="inner" x="768" y="174" width="116" height="26" fill="#ffffff" stroke="#1a6135"/>
+  <text class="item" x="826.0" y="192.0">Wrapper (RFE)</text>
+  <rect class="inner" x="768" y="206" width="116" height="26" fill="#bfe6cc" stroke="#1a6135"/>
+  <text class="item" x="826.0" y="224.0">…</text>
+  <line class="edge" x1="904" y1="145" x2="917" y2="145"/>
+  <polygon class="head" points="917,140 924,145 917,150"/>
+  <rect x="924" y="128" width="88" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="968.0" y="150.0">Features</text>
+  <line class="edge" x1="1012" y1="145" x2="1025" y2="145"/>
+  <polygon class="head" points="1025,140 1032,145 1025,150"/>
+  <rect class="agent" x="1032" y="40" width="184" height="210" fill="#8c6bc8" stroke="#5c3f95"/>
+  <text class="agent-name" x="1124.0" y="70">Detector</text>
+  <rect class="inner" x="1044" y="84" width="160" height="32" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item" x="1124.0" y="105.0">Random Forest</text>
+  <rect class="inner" x="1044" y="124" width="160" height="32" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item" x="1124.0" y="145.0">XGBoost</text>
+  <rect class="inner" x="1044" y="164" width="160" height="32" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item" x="1124.0" y="185.0">SVM (linear/RBF)</text>
+  <rect class="inner" x="1044" y="204" width="160" height="32" fill="#e6ddf5" stroke="#5c3f95"/>
+  <text class="item" x="1124.0" y="225.0">Decision Tree</text>
+  <line class="edge" x1="1216" y1="145" x2="1229" y2="145"/>
+  <polygon class="head" points="1229,140 1236,145 1229,150"/>
+  <rect x="1236" y="128" width="92" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="1282.0" y="142.0">Detection</text>
+  <text class="artifact" x="1282.0" y="158.0">Report</text>
+  <line class="edge" x1="1328" y1="145" x2="1341" y2="145"/>
+  <polygon class="head" points="1341,140 1348,145 1341,150"/>
+  <rect x="1378.0" y="6" width="64" height="26" rx="13" fill="#ffffff" stroke="#1a1a1a" stroke-width="2"/>
+  <text class="llm" x="1410.0" y="25">LLM</text>
+  <rect class="agent" x="1348" y="40" width="124" height="210" fill="#e08c18" stroke="#9c5f05"/>
+  <text class="agent-name" x="1410.0" y="70">Defender</text>
+  <rect class="inner" x="1358" y="82" width="104" height="48" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item" x="1410.0" y="102.0">Evidence</text>
+  <text class="item" x="1410.0" y="120.0">gate</text>
+  <rect class="inner" x="1358" y="136" width="104" height="48" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item" x="1410.0" y="156.0">IEC 61850</text>
+  <text class="item" x="1410.0" y="174.0">playbooks</text>
+  <rect class="inner" x="1358" y="190" width="104" height="48" fill="#fbe6c4" stroke="#9c5f05"/>
+  <text class="item" x="1410.0" y="210.0">Rule</text>
+  <text class="item" x="1410.0" y="228.0">evaluation</text>
+  <path class="edge" d="M 1282 162 L 1282 292 L 92.0 292 L 92.0 257"/>
+  <polygon class="head" points="87.0,257 92.0,250 97.0,257"/>
+  <path class="edge" d="M 1124.0 292 L 1124.0 257"/>
+  <polygon class="head" points="1119.0,257 1124.0,250 1129.0,257"/>
+  <text class="gate" x="1200.0" y="268" text-anchor="middle">optional retraining</text>
+  <text class="gate" x="1200.0" y="285" text-anchor="middle">on found variants</text>
+  <rect x="330" y="275" width="520" height="34" rx="9" fill="#1a1a1a"/>
+  <text class="artifact" x="590.0" y="297">Operational: metrics → deterministic feedback policy → next intent</text>
+  <path class="edge" stroke-dasharray="7 5" d="M 1410.0 250 L 1410.0 348 L 48.0 348 L 48.0 257"/>
+  <polygon class="head" points="43.0,257 48.0,250 53.0,257"/>
+  <rect x="422.0" y="331" width="640" height="34" rx="9" fill="#ffffff" stroke="#1a1a1a" stroke-width="2" stroke-dasharray="7 5"/>
+  <text class="gate" x="742.0" y="353">Advisory: DefensePlan, validated and recorded, never applied automatically</text>
+</svg>

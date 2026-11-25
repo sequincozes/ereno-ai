@@ -1,0 +1,3 @@
+# Mantém o cache do uv dentro do projeto. Isso evita dependência do cache
+# global do usuário e torna o bootstrap consistente em CI e ambientes isolados.
+cache-dir = ".uv-cache"

@@ -2,6 +2,12 @@
 venv/
 .venv/
 env/
+.uv-cache/
+.uv-cache-test/
+.pytest_cache/
+
+AGENTS.md
+issues.md
 
 # Variáveis de ambiente (ignora suas senhas e tokens)
 .env
@@ -9,3 +15,31 @@ env/
 pycache/
 init__.pyc
 __pycache__/
+*.pyc
+outputs/
+!outputs/.gitkeep
+logs/
+
+# Pacote instalado em modo editável (pip install -e .)
+*.egg-info/
+build/
+dist/
+generator_runtime/target/training/
+generator_runtime/target/tracking/
+generator_runtime/*.jar
+generator_runtime/target/benign_data/*
+# Attack configs gerados em runtime pelo GeneratorRunner (por --attack).
+# O uc03 é versionado (baseline histórico); os demais são efêmeros.
+generator_runtime/config/attacks/*
+!generator_runtime/config/attacks/uc03_masquerade_fault.json
+
+.claude/
+CLAUDE.md
+# Documentos de planejamento na raiz (ex.: o plano de 60 dias em PDF).
+# Ficam locais de propósito: são material de trabalho, não artefato do repo.
+/*.pdf
+# Rascunho local (ex.: os .tex do artigo em preparação). Mesma razão do PDF
+# acima: material de trabalho, e o artigo tem repositório próprio.
+/tmp/
+
+Artigo/

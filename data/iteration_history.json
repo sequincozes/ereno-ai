@@ -1,0 +1,899 @@
+{
+  "history": [
+    {
+      "iteration": 0,
+      "attack_config": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.6,
+          "durationMs": {
+            "min": 50,
+            "max": 800
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "fast",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.8
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 2.5
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "strategist_output": null,
+      "metrics": {
+        "evaluation_type": "baseline_internal_test",
+        "dataset_path": "C:\\Users\\ResTIC16\\Desktop\\Unipampa\\LAB ES INTELIGENTE\\Projeto_final\\ERENO-AI-LAB\\outputs\\dataset_iteration_0.csv",
+        "accuracy": 1.0,
+        "precision_attack": 1.0,
+        "recall_attack": 1.0,
+        "f1_score_attack": 1.0,
+        "support_attack": 8966,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "attack_count": 8966,
+        "normal_count": 15000,
+        "full_attack_count": null,
+        "full_normal_count": null,
+        "tp": 8966,
+        "fp": 0,
+        "fn": 0,
+        "tn": 15000,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 79884,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11282079749830654
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.09774394189058537
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.09172864485682322
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.058671212768868795
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05754491443838888
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025304373118190334
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.022301482973048944
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.019397347113386122
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.010114613900124261
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0023490866077032335
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005877017661208499
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.0003636762351525483
+          }
+        ],
+        "config_changed": false,
+        "attack_count_ratio_vs_baseline": 1.0,
+        "degenerate_variant": false
+      },
+      "analyst_output": {
+        "iteration": 0,
+        "deceptive_features": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987,
+            "explanation": "[fake] a feature 'vsbBTrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008,
+            "explanation": "[fake] a feature 'isbATrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515,
+            "explanation": "[fake] a feature 'vsbCTrapAreaSum' pesou na decisão do RF."
+          }
+        ],
+        "diagnosis": "[fake] diagnóstico da iteração 0 (f1=1.0).",
+        "mitigations": [
+          {
+            "type": "threshold",
+            "recommendation": "[fake] revisar o limiar de decisão do RF."
+          },
+          {
+            "type": "feature",
+            "recommendation": "[fake] revisar features temporais/derivadas."
+          }
+        ],
+        "severity": "low"
+      },
+      "timestamp": "2026-01-01T00:00:00+00:00"
+    },
+    {
+      "iteration": 1,
+      "attack_config": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.75,
+          "durationMs": {
+            "min": 50,
+            "max": 800
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "fast",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.8
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 2.5
+          },
+          "spikeProb": 0.5
+        }
+      },
+      "strategist_output": {
+        "reasoning": "[fake] iteração 1: ajustar fault.prob para 0.75.",
+        "persona": "aggressive",
+        "changes": [
+          {
+            "field": "fault.prob",
+            "value": 0.75
+          }
+        ]
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "C:\\Users\\ResTIC16\\Desktop\\Unipampa\\LAB ES INTELIGENTE\\Projeto_final\\ERENO-AI-LAB\\outputs\\dataset_iteration_1.csv",
+        "accuracy": 1.0,
+        "precision_attack": 1.0,
+        "recall_attack": 1.0,
+        "f1_score_attack": 1.0,
+        "support_attack": 29886,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "attack_count": 29886,
+        "normal_count": 49998,
+        "full_attack_count": null,
+        "full_normal_count": null,
+        "tp": 29886,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 79884,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11282079749830654
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.09774394189058537
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.09172864485682322
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.058671212768868795
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05754491443838888
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025304373118190334
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.022301482973048944
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.019397347113386122
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.010114613900124261
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0023490866077032335
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005877017661208499
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.0003636762351525483
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 1.0,
+        "degenerate_variant": false
+      },
+      "analyst_output": {
+        "iteration": 1,
+        "deceptive_features": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987,
+            "explanation": "[fake] a feature 'vsbBTrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008,
+            "explanation": "[fake] a feature 'isbATrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515,
+            "explanation": "[fake] a feature 'vsbCTrapAreaSum' pesou na decisão do RF."
+          }
+        ],
+        "diagnosis": "[fake] diagnóstico da iteração 1 (f1=1.0).",
+        "mitigations": [
+          {
+            "type": "threshold",
+            "recommendation": "[fake] revisar o limiar de decisão do RF."
+          },
+          {
+            "type": "feature",
+            "recommendation": "[fake] revisar features temporais/derivadas."
+          }
+        ],
+        "severity": "low"
+      },
+      "timestamp": "2026-01-01T00:00:01+00:00"
+    },
+    {
+      "iteration": 2,
+      "attack_config": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.75,
+          "durationMs": {
+            "min": 50,
+            "max": 800
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "fast",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 0.8
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 2.5
+          },
+          "spikeProb": 0.6
+        }
+      },
+      "strategist_output": {
+        "reasoning": "[fake] iteração 2: ajustar trapArea.spikeProb para 0.6.",
+        "persona": "conservative",
+        "changes": [
+          {
+            "field": "trapArea.spikeProb",
+            "value": 0.6
+          }
+        ]
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "C:\\Users\\ResTIC16\\Desktop\\Unipampa\\LAB ES INTELIGENTE\\Projeto_final\\ERENO-AI-LAB\\outputs\\dataset_iteration_2.csv",
+        "accuracy": 1.0,
+        "precision_attack": 1.0,
+        "recall_attack": 1.0,
+        "f1_score_attack": 1.0,
+        "support_attack": 29886,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "attack_count": 29886,
+        "normal_count": 49998,
+        "full_attack_count": null,
+        "full_normal_count": null,
+        "tp": 29886,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 79884,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11282079749830654
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.09774394189058537
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.09172864485682322
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.058671212768868795
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05754491443838888
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025304373118190334
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.022301482973048944
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.019397347113386122
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.010114613900124261
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0023490866077032335
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005877017661208499
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.0003636762351525483
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 1.0,
+        "degenerate_variant": false
+      },
+      "analyst_output": {
+        "iteration": 2,
+        "deceptive_features": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987,
+            "explanation": "[fake] a feature 'vsbBTrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008,
+            "explanation": "[fake] a feature 'isbATrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515,
+            "explanation": "[fake] a feature 'vsbCTrapAreaSum' pesou na decisão do RF."
+          }
+        ],
+        "diagnosis": "[fake] diagnóstico da iteração 2 (f1=1.0).",
+        "mitigations": [
+          {
+            "type": "threshold",
+            "recommendation": "[fake] revisar o limiar de decisão do RF."
+          },
+          {
+            "type": "feature",
+            "recommendation": "[fake] revisar features temporais/derivadas."
+          }
+        ],
+        "severity": "low"
+      },
+      "timestamp": "2026-01-01T00:00:02+00:00"
+    },
+    {
+      "iteration": 3,
+      "attack_config": {
+        "attackType": "masquerade_fault",
+        "enabled": true,
+        "fault": {
+          "prob": 0.75,
+          "durationMs": {
+            "min": 50,
+            "max": 800
+          }
+        },
+        "cbStatus": 1,
+        "incrementStNumOnFault": true,
+        "sqnumMode": "fast",
+        "ttlMsValues": [
+          20,
+          40,
+          80
+        ],
+        "analog": {
+          "deltaAbs": {
+            "min": 0.2,
+            "max": 1.2
+          }
+        },
+        "trapArea": {
+          "multiplier": {
+            "min": 1.2,
+            "max": 2.5
+          },
+          "spikeProb": 0.6
+        }
+      },
+      "strategist_output": {
+        "reasoning": "[fake] iteração 3: ajustar analog.deltaAbs.max para 1.2.",
+        "persona": "aggressive",
+        "changes": [
+          {
+            "field": "analog.deltaAbs.max",
+            "value": 1.2
+          }
+        ]
+      },
+      "metrics": {
+        "evaluation_type": "variant_external_test",
+        "dataset_path": "C:\\Users\\ResTIC16\\Desktop\\Unipampa\\LAB ES INTELIGENTE\\Projeto_final\\ERENO-AI-LAB\\outputs\\dataset_iteration_3.csv",
+        "accuracy": 1.0,
+        "precision_attack": 1.0,
+        "recall_attack": 1.0,
+        "f1_score_attack": 1.0,
+        "support_attack": 29886,
+        "attack_label_encoded": 0,
+        "attack_label_original": "masquerade_fake_fault",
+        "attack_count": 29886,
+        "normal_count": 49998,
+        "full_attack_count": null,
+        "full_normal_count": null,
+        "tp": 29886,
+        "fp": 0,
+        "fn": 0,
+        "tn": 49998,
+        "label_column": "class",
+        "class_mapping": {
+          "0": "masquerade_fake_fault",
+          "1": "normal"
+        },
+        "dataset_rows": 79884,
+        "dataset_columns": 54,
+        "removed_columns": [
+          "APDUSize",
+          "GooseTimestamp",
+          "SqNum",
+          "StNum",
+          "TPID",
+          "Time",
+          "apduSizeDiff",
+          "confRev",
+          "datSet",
+          "delay",
+          "e2eLatency",
+          "ethDst",
+          "ethSrc",
+          "ethType",
+          "frameLen",
+          "frameLengthDiff",
+          "goID",
+          "gocbRef",
+          "gooseAppid",
+          "gooseLen",
+          "gooseLengthDiff",
+          "gooseTimeAllowedtoLive",
+          "ndsCom",
+          "numDatSetEntries",
+          "protocol",
+          "receivedTimestamp",
+          "sqDiff",
+          "stDiff",
+          "t",
+          "tDiff",
+          "test",
+          "timeFromLastChange",
+          "timestampDiff"
+        ],
+        "used_features": [
+          "isbA",
+          "isbB",
+          "isbC",
+          "vsbA",
+          "vsbB",
+          "vsbC",
+          "isbARmsValue",
+          "isbBRmsValue",
+          "isbCRmsValue",
+          "vsbARmsValue",
+          "vsbBRmsValue",
+          "vsbCRmsValue",
+          "isbATrapAreaSum",
+          "isbBTrapAreaSum",
+          "isbCTrapAreaSum",
+          "vsbATrapAreaSum",
+          "vsbBTrapAreaSum",
+          "vsbCTrapAreaSum",
+          "cbStatus",
+          "cbStatusDiff"
+        ],
+        "top_feature_importances": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515
+          },
+          {
+            "feature": "cbStatus",
+            "importance": 0.11282079749830654
+          },
+          {
+            "feature": "isbBTrapAreaSum",
+            "importance": 0.09774394189058537
+          },
+          {
+            "feature": "vsbATrapAreaSum",
+            "importance": 0.09172864485682322
+          },
+          {
+            "feature": "isbCTrapAreaSum",
+            "importance": 0.058671212768868795
+          },
+          {
+            "feature": "vsbC",
+            "importance": 0.05754491443838888
+          },
+          {
+            "feature": "isbB",
+            "importance": 0.025304373118190334
+          },
+          {
+            "feature": "vsbA",
+            "importance": 0.022301482973048944
+          },
+          {
+            "feature": "vsbB",
+            "importance": 0.019397347113386122
+          },
+          {
+            "feature": "isbA",
+            "importance": 0.010114613900124261
+          },
+          {
+            "feature": "isbC",
+            "importance": 0.0023490866077032335
+          },
+          {
+            "feature": "isbBRmsValue",
+            "importance": 0.0005877017661208499
+          },
+          {
+            "feature": "isbARmsValue",
+            "importance": 0.0003636762351525483
+          }
+        ],
+        "config_changed": true,
+        "attack_count_ratio_vs_baseline": 1.0,
+        "degenerate_variant": false
+      },
+      "analyst_output": {
+        "iteration": 3,
+        "deceptive_features": [
+          {
+            "feature": "vsbBTrapAreaSum",
+            "importance": 0.17780962203325987,
+            "explanation": "[fake] a feature 'vsbBTrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "isbATrapAreaSum",
+            "importance": 0.1725516043977008,
+            "explanation": "[fake] a feature 'isbATrapAreaSum' pesou na decisão do RF."
+          },
+          {
+            "feature": "vsbCTrapAreaSum",
+            "importance": 0.15032493550815515,
+            "explanation": "[fake] a feature 'vsbCTrapAreaSum' pesou na decisão do RF."
+          }
+        ],
+        "diagnosis": "[fake] diagnóstico da iteração 3 (f1=1.0).",
+        "mitigations": [
+          {
+            "type": "threshold",
+            "recommendation": "[fake] revisar o limiar de decisão do RF."
+          },
+          {
+            "type": "feature",
+            "recommendation": "[fake] revisar features temporais/derivadas."
+          }
+        ],
+        "severity": "low"
+      },
+      "timestamp": "2026-01-01T00:00:03+00:00"
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+"""orchestrator/intent_live.py — liga o ``IntentLoopOrchestrator`` aos agentes reais.
+
+``IntentLoopOrchestrator`` (intent_loop.py) é agente-agnóstico: fala com
+qualquer objeto que satisfaça ``IntentLike``/``DefenderLike``. Este módulo é
+a costura que liga os agentes reais (``IntentAgent`` do E1/E2, ``DefenderAgent``
+do E5) a esses contratos e expõe ``run_intent_loop`` — o ponto de entrada
+público que a CLI liga via ``--engine intent`` (a feature flag da entrega
+E3/E4).
+
+Caminho opt-in: exige ``GROQ_API_KEY`` (o ``IntentAgent`` chama a Groq uma
+vez por campanha — só na primeira rodada, já que da segunda em diante a
+intenção vem da política de feedback do E10; o ``DefenderAgent`` chama uma
+vez por rodada) e, em ``generator_mode="jar"``, o JAR do ERENO.
+Por isso o import de ``agno`` (via ``agents.intent.agent`` e
+``agents.defender.agent``) fica confinado a este módulo — o mesmo motivo que
+mantém ``agents/orchestrator/live.py`` separado de ``workflow.py``.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping, Sequence
+from typing import Any
+
+from adversarial_ids.agents.defender.agent import DefenderAgent
+from adversarial_ids.agents.injector import build_injector, prepare_injector
+
+from adversarial_ids.agents.orchestrator.intent_loop import (
+    IntentLoopOrchestrator,
+    ReplicateResult,
+)
+from adversarial_ids.config.settings import (
+    DETECTOR_MODE,
+    INTENT_LOOP_DEFAULT_ROUNDS,
+    MODEL_ID,
+)
+from adversarial_ids.domain.loop_record import LoopRecord
+from adversarial_ids.shared.loop_event_store import LoopEventSink
+
+
+def build_intent_loop(
+    *,
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
+) -> IntentLoopOrchestrator:
+    """Monta o orquestrador v2 com o injetor e o ``DefenderAgent`` reais.
+
+    ``injector`` escolhe a estratégia que propõe o ataque (``intent``, o
+    default e o comportamento de antes; ``model``; ``data`` — ver
+    ``agents/injector``). ``injector_options`` leva o insumo dela
+    (``source_attack`` ou ``dataset_path``/``attack_label``). O contexto é lido
+    aqui, antes de qualquer chamada paga: um creator ou trace inválido falha já.
+    """
+
+    prepared = prepare_injector(injector, **dict(injector_options or {}))
+    return IntentLoopOrchestrator(
+        intent_agent=build_injector(prepared, model_id=model_id),
+        defender_agent=DefenderAgent(model_id=model_id),
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+    )
+
+
+def run_intent_loop(
+    *,
+    prompt: str,
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    rounds: int = INTENT_LOOP_DEFAULT_ROUNDS,
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
+) -> tuple[LoopRecord, ...]:
+    """Roda a campanha intent-driven ponta a ponta e devolve um ``LoopRecord``
+    por rodada.
+
+    Assinatura estável usada por ``interfaces/cli.py`` (``--engine intent``).
+    Sem parâmetro ``attack``: o ataque-base vem do ``IntentSpec.base_attack``
+    que o ``IntentAgent`` extrai de ``prompt`` na primeira rodada (ver
+    ``IntentLoopOrchestrator.run_campaign``). ``rounds=1`` (default) resolve
+    uma única rodada — o mesmo comportamento de antes do E10.
+
+    ``detector`` (E8) escolhe qual modelo o estágio DETECTOR treina; o default
+    ``random_forest`` mantém o comportamento anterior. Ver ``docs/detectors.md``.
+
+    ``event_sink`` (E11) observa a timeline enquanto ela acontece. É opcional
+    porque a execução já grava ``events.jsonl`` por conta própria; quem passa um
+    sink é quem precisa dos eventos *antes* do fim — a UI ao vivo.
+    """
+
+    orchestrator = build_intent_loop(
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
+    )
+    return orchestrator.run_campaign(prompt, rounds=rounds)
+
+
+def resume_intent_loop(
+    *,
+    run_id: str,
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    rounds: int | None = None,
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
+) -> tuple[LoopRecord, ...]:
+    """Retoma a campanha de ``run_id`` e devolve só as rodadas novas.
+
+    Mesma montagem de ``run_intent_loop``; o prompt vem do ledger, não de um
+    argumento — a campanha retomada é a mesma intenção, não uma nova. Ver
+    ``IntentLoopOrchestrator.resume_campaign``.
+    """
+
+    orchestrator = build_intent_loop(
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
+    )
+    return orchestrator.resume_campaign(run_id, rounds=rounds)
+
+
+def run_intent_replicates(
+    *,
+    prompt: str,
+    seeds: Sequence[int],
+    model_id: str = MODEL_ID,
+    generator_mode: str = "cached",
+    detector: str = DETECTOR_MODE,
+    event_sink: LoopEventSink | None = None,
+    injector: str = "intent",
+    injector_options: Mapping[str, Any] | None = None,
+) -> ReplicateResult:
+    """Roda a mesma intenção sob várias seeds e devolve o resumo do lote (2.R).
+
+    Mesma montagem de ``run_intent_loop``; o LLM é chamado uma vez para o lote
+    (ver ``IntentLoopOrchestrator.run_replicates``). Só é fisicamente
+    significativo em ``generator_mode="jar"``.
+    """
+
+    orchestrator = build_intent_loop(
+        model_id=model_id,
+        generator_mode=generator_mode,
+        detector=detector,
+        event_sink=event_sink,
+        injector=injector,
+        injector_options=injector_options,
+    )
+    return orchestrator.run_replicates(prompt, seeds=seeds)
