@@ -106,13 +106,27 @@ MODEL_ID=openai/gpt-oss-120b      # must be a model your Groq account serves
 
 `.env` is gitignored. Never commit it.
 
-### 4. Build the ERENO generator (only to generate new traffic)
+### 4. Get the ERENO generator (only to generate new traffic)
 
 Without the generator, every run uses the bundled dataset (`cached` mode). That
 exercises the whole pipeline, but the traffic does not change with the attack
 configuration, and only `masquerade_fault` can be measured. To generate real
-variants you need Java 11+ and the ERENO jar, built from the `feat/journal`
-branch:
+variants you need Java 11+ and the ERENO jar.
+
+Download the prebuilt jar from the
+[latest release](https://github.com/sequincozes/ereno-ai/releases/latest):
+
+```bash
+curl -L -o generator_runtime/ereno-generator.jar \
+  https://github.com/sequincozes/ereno-ai/releases/latest/download/ereno-generator.jar
+```
+
+Its SHA-256 is
+`dfe25fd818178aea315b8a033963e3ab2591c1445462d6fe9c8fc63e5251658c`
+(`sha256sum generator_runtime/ereno-generator.jar`; on PowerShell,
+`Get-FileHash generator_runtime/ereno-generator.jar`).
+
+Or build it yourself from the `feat/journal` branch of ERENO:
 
 ```bash
 git clone -b feat/journal https://github.com/sequincozes/ereno-2.0.git ../ERENO-2.0

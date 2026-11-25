@@ -60,7 +60,29 @@ The JAR is an uber-jar (~25 MB) kept **outside code version control**
 (gitignored, because of its size and because it is a build artifact). It is needed **only**
 for the `jar` mode; the `cached`/`demo` modes, the tests and the golden run without it.
 
-Build it from source. This requires Java 11+:
+Running it requires Java 11+. The prebuilt jar is attached to every
+[release](https://github.com/sequincozes/ereno-ai/releases/latest) of this
+repository:
+
+```bash
+curl -L -o generator_runtime/ereno-generator.jar \
+  https://github.com/sequincozes/ereno-ai/releases/latest/download/ereno-generator.jar
+```
+
+Check its integrity (SHA-256):
+
+```text
+dfe25fd818178aea315b8a033963e3ab2591c1445462d6fe9c8fc63e5251658c  ereno-generator.jar
+```
+
+```bash
+# Linux/macOS
+sha256sum generator_runtime/ereno-generator.jar
+# PowerShell
+Get-FileHash generator_runtime/ereno-generator.jar -Algorithm SHA256
+```
+
+Alternatively, build it from source:
 
 ```bash
 git clone -b feat/journal https://github.com/sequincozes/ereno-2.0.git ../ERENO-2.0
